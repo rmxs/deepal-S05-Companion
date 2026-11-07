@@ -217,6 +217,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelectorAll("deepal-companion-card").length),1);
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").settings.shadowRoot.querySelectorAll("[data-tab]").length),7);
   const p=page.locator("deepal-companion-panel");
+  if(process.env.NOTIFY_MOBILE_ONLY){await require('./test_notification_mobile.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_PERSISTENCE_ONLY){await require('./test_notification_persistence.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGING_BLOCKS_ONLY){await require('./test_charging_blocks.cjs')(page);await require('./test_charge_reminder.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGING_EDITS_ONLY){await require('./test_charging_edits.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
@@ -364,6 +365,7 @@ const server=http.createServer((req,res)=>{
   await require("./test_dashboard_add.cjs")(page);
   await require("./test_local_notifications.cjs")(page);
   await require("./test_notification_persistence.cjs")(page);
+  await require("./test_notification_mobile.cjs")(page);
   await require("./test_field_choices.cjs")(page);
   await require("./test_energy_loading.cjs")(page);
   await require("./test_end_user_qa.cjs")(page);

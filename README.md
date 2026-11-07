@@ -10,6 +10,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 - Switch the card’s **Charging costs** and **Charging reminder** blocks on or off independently.
 - Preview guidance appears in a coloured information box.
+- Notification buttons use consistent, readable labels, and mobile alert settings open at the top.
 - The dashboard remembers your selected card profile after reopening.
 - Saved notification preferences retain their values across updates, including values that matched earlier defaults.
 

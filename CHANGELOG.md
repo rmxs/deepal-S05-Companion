@@ -4,6 +4,8 @@
 
 - Control Charging costs and Charging reminder independently in Layout → Sections.
 - Show preview guidance in a coloured information box.
+- Keep selected notification button labels readable and open mobile alert settings at the top.
+- Keep the notification header stationary when the Unsaved changes pill appears or clears.
 - Restore the selected card profile when reopening the dashboard.
 - Save complete notification preferences and recover omitted values from older saved rules.
 - Preserve saved profiles, locations, receipts and notification settings during database upgrades.
