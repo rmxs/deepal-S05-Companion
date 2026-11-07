@@ -39,6 +39,7 @@ energy=energy.replace('this.sensorHistory={};','if(this.archiveOnly)return;\n   
 fs.writeFileSync(front+"/energy/energy.js",energy);
 for(const file of ["charging-curve.js","companion-card.js","energy/energy.js","notification-rules.js","companion-panel.js","companion-dashboard.js","companion-notifications.js","companion-notifications-design.js","notification-design.js","profile-field.js","notification-layout.js","notification-activity.js","cost-design.js","companion-cost-design.js","loader.js",...fs.readdirSync(front+"/lang").filter(x=>x.endsWith(".js")).map(x=>"lang/"+x)]){
  if(file.startsWith("lang/"))fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replaceAll("__DEEPAL_S05_","__DEEPAL_COMPANION_"));
+ fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replace(/\?v=\d+\.\d+\.\d+/g,'?v='+version));
  cp.execFileSync(process.execPath,["--check",front+"/"+file]);
  fs.writeFileSync(front+"/"+file+".gz",z.gzipSync(fs.readFileSync(front+"/"+file)));
 }

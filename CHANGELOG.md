@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 — Setup and first-load fixes
+
+- A clear setup screen with step-by-step instructions and a setup link when no vehicle is available.
+- Vehicle menus, profile controls and previews stay hidden until vehicle setup succeeds.
+- The dashboard recovers when the vehicle becomes available, without requiring a page refresh.
+- Car View image layers retry temporary loading failures automatically.
+- Frontend resource URLs follow the installed version so updates load the matching files.
+
 ## 0.1.0 — First release
 
 ### Release highlights

@@ -217,6 +217,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelectorAll("deepal-companion-card").length),1);
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").settings.shadowRoot.querySelectorAll("[data-tab]").length),7);
   const p=page.locator("deepal-companion-panel");
+  if(process.env.FIRST_RUN_ONLY){await require('./test_first_run.cjs')(page);await require('./test_image_loading.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.TILE_ONLY){await require('./test_tile_settings.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.MEMORY_ONLY){await require('./test_memory.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.MOBILE_SHELL_ONLY){await require('./test_mobile_shell.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
@@ -352,6 +353,8 @@ const server=http.createServer((req,res)=>{
   assert.deepEqual(await page.evaluate(()=>[...document.querySelector("deepal-companion-panel").shadowRoot.querySelector("main").children].map(n=>n.className)),["box profile-setup","box live-preview","stage"]);
   assert.equal(await page.evaluate(()=>window.serviceCalls.length),0);
   await require("./test_charging_dashboard.cjs")(page);
+  await require("./test_first_run.cjs")(page);
+  await require("./test_image_loading.cjs")(page);
   await require("./test_charge_reminder.cjs")(page);
   await require("./test_dashboard_add.cjs")(page);
   await require("./test_local_notifications.cjs")(page);

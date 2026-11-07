@@ -9,7 +9,7 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "0.1.0";
+const CARD_VERSION = "0.1.1";
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-companion-card";
 const SETTINGS_TAG = "deepal-companion-settings";
@@ -1443,6 +1443,7 @@ class DeepalS05Card extends HTMLElement {
   }
 
   disconnectedCallback() {
+    for (const image of this.shadowRoot.querySelectorAll("img")) { clearTimeout(image._retryTimer); image._retryTimer = null; }
     clearInterval(this._skyTick); this._skyTick = 0;
     for (const p of Object.values(this._pending || {})) clearTimeout(p.timer); this._pending = {}; for (const f of Object.values(this._flashes || {})) clearTimeout(f.timer); this._flashes = {};
     /* timers that concern only the screen (not the saving ones) */
@@ -2094,6 +2095,7 @@ class DeepalS05Card extends HTMLElement {
 
   /* Layers are not all loaded together: the src is set only when a layer is needed for the first time (e.g. "open door"). DOM writes happen only if something changed. */
   _lazyOn(im, on) {
+    this._watchLayerImage(im);
     if (im._on === on) return;
     im._on = on; im.classList.toggle("on", on);
     if (on && !im.getAttribute("src") && im.dataset.src) im.setAttribute("src", im.dataset.src);
@@ -2223,18 +2225,33 @@ class DeepalS05Card extends HTMLElement {
       if (v.unlocked) this._hdlSync(el.cva);
     }
   }
-  /* If the layers are missing (e.g. the images folder was not copied) the hero falls back to the photos. Before deciding for good it retries once
+  /* If the layers are missing (e.g. the images folder was not copied) the hero falls back to the photos. Before deciding for good it retries briefly
      (a temporary network error must not close Car View). If only the top-view image is missing, Car View stays in 3/4 and only the button is hidden. */
   _cvBaseGuard(box, top) {
     const base = box.querySelector('img[data-n="base"]');
     if (!base) return;
-    let tries = 0;
-    base.addEventListener("error", () => {
-      if (!base.isConnected) return;
-      if (tries++ < 1) { setTimeout(() => { if (base.isConnected) base.setAttribute("src", base.dataset.src + (base.dataset.src.includes("?") ? "&" : "?") + "r=" + Date.now()); }, 1200); return; }
+    this._watchLayerImage(base, () => {
       try { console.warn(`deepal-companion-card: image could not be loaded ${base.dataset.src}`); } catch (_) {}
       if (top) this._topFail = true; else this._cvFail = true;
       this._force && this._force();
+    });
+  }
+  _watchLayerImage(im, failed) {
+    if (failed) im._layerFailed = failed;
+    if (im._layerWatched) return;
+    im._layerWatched = true;
+    let attempts = 0;
+    im.addEventListener("load", () => { attempts = 0; clearTimeout(im._retryTimer); im._retryTimer = null; });
+    im.addEventListener("error", () => {
+      if (im._retryTimer) return;
+      const delay = [400, 1200, 3000][attempts++];
+      if (delay === undefined) { if (im.isConnected) im._layerFailed?.(); return; }
+      im._retryTimer = setTimeout(() => {
+        im._retryTimer = null;
+        if (!im.isConnected || im._on === false) return;
+        const src = im.dataset.src;
+        if (src) im.src = src + (src.includes("?") ? "&" : "?") + "retry=" + attempts;
+      }, delay);
     });
   }
   /* New image/colour/folder: we retry from the start */
@@ -4017,7 +4034,7 @@ DeepalS05Card.prototype._render=function(...args){
   if(this._chargingCurve){this._chargingCurve.update();return result;}
   if(!this._curveLoad){
     const token={};this._curveLoad=token;
-    import('/deepal_companion/frontend/charging-curve.js?v=0.1.0').then(module=>{
+    import('/deepal_companion/frontend/charging-curve.js?v=0.1.1').then(module=>{
       if(this._curveLoad!==token||!this.isConnected)return;
       this._curveLoad=null;this._chargingCurve=module.mountCurve(this);this._chargingCurve.update();
     }).catch(()=>{if(this._curveLoad===token){this._curveLoad=null;this._toast('Charging curve could not be loaded.','error');}});
