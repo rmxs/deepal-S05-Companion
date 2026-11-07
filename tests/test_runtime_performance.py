@@ -12,6 +12,26 @@ Runtime = importlib.import_module("companion_lifecycle.runtime").VehicleRuntime
 
 
 class RuntimePerformanceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_removed_profile_marker_preserves_cost_and_clears_on_reassignment(self):
+        runtime = self.runtime(1)
+        original_db = runtime.hub.db
+        settings = await original_db("get", "car", "costs", {})
+        async def db(method, *args):
+            return deepcopy(settings) if method == "get" else await original_db(method, *args)
+        runtime.hub.db = db
+        before = (await runtime.priced_sessions())[0]
+        settings["profiles"] = []
+        removed = (await runtime.priced_sessions())[0]
+        self.assertTrue(removed["profile_removed"])
+        self.assertEqual(removed["pricing"], before["pricing"])
+        self.assertEqual(removed["assignment"], before["assignment"])
+        assignment = next(iter(settings["sessions"].values()))
+        assignment["profile"]["id"] = "manual"
+        self.assertFalse((await runtime.priced_sessions())[0]["profile_removed"])
+        assignment["profile"]["id"] = "work"
+        settings["profiles"] = [deepcopy(assignment["profile"])]
+        self.assertFalse((await runtime.priced_sessions())[0]["profile_removed"])
+
     async def test_snapshot_does_not_treat_restored_current_as_live_charging(self):
         runtime = self.runtime(0)
         runtime.entities = {'ac': 'sensor.ac', 'batt': 'sensor.battery'}

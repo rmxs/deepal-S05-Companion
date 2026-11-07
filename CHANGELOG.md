@@ -4,6 +4,7 @@
 
 - Delete charging profiles with a confirmation and preservation notice; earlier charging sessions and saved costs stay intact.
 - Keep deleted presets removed after reload, including an empty profile list.
+- Mark charges using a removed profile with an icon to assign another profile; saved costs stay unchanged until edited.
 - Automatically select Manual charge when entering a total payment.
 - Suggest charging-network names as you type, with custom names supported.
 - Test charging-detected reminders in the card preview without changing real charging data.

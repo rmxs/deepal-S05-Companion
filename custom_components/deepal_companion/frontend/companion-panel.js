@@ -363,6 +363,7 @@ class DeepalCompanionPanel extends HTMLElement {
     manager.decorate=()=>{
       manager.renderEditor();const result=manager.result(record),assignment=manager.record(record);
       record.pricing=result;record.assignment=assignment;
+      record.profile_removed=manager.profileRemoved(assignment?.profile);
       if(this.sessionLocation&&revision===this.mountRevision)this.filterSessions(this.sessionLocation);
       const row=[...this.shadowRoot.querySelectorAll(".charge-session")].find(n=>n.dataset.sessionStart===String(record.s));
       if(row)renderSessionList(this);

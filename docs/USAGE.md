@@ -101,6 +101,8 @@ Home, Work, Free, Ionity and Public are provided as starting locations. Work and
 
 Existing charging sessions and their saved costs remain unchanged. You can delete all profiles and continue recording one-off manual charges.
 
+Charges linked to a deleted profile show a **Profile removed** icon beside their saved location. Select it to choose another profile, then save. Cancel keeps the original location and cost. Manual charges do not show this warning.
+
 Suggested network names include Zunder, Iberdrola | bp pulse, Repsol, Wenea and Atlante for Spain; Plenitude On the Road, Ewiva, Free To X and A2A E-moving for Italy; and PPC blue, incharge, EKO Charge & Go, Blink Charging, EV Loader and Electrip for Greece. IONITY and Tesla Supercharger are included too. You can always use your own name and tariff.
 
 ## 8. Assign a cost to a charge

@@ -280,6 +280,9 @@ class VehicleRuntime:
         cache_ids = {row["id"] for row in rows[-1000:]}
         for row in rows:
             record = assignments.get(str(int(row["s"] / 1000 + .5)))
+            profile_id = (record.get("profile") or {}).get("id") if record else None
+            row["profile_removed"] = bool(profile_id and profile_id != "manual" and
+                                          not any(p.get("id") == profile_id for p in settings.get("profiles", [])))
             if row.get("recovered_pricing") and row.get("recovered_assignment") == record:
                 row["pricing"], row["assignment"] = row["recovered_pricing"], record
                 continue

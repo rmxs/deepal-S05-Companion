@@ -6,6 +6,16 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 [Installation](docs/INSTALLATION.md) · [User guide](docs/USAGE.md) · [All settings](docs/SETTINGS.md) · [Notifications and Live charging](docs/NOTIFICATIONS.md) · [Changelog](CHANGELOG.md)
 
+## Latest release — v0.1.2
+
+- Delete charging profiles while keeping earlier sessions, saved locations and costs.
+- A **Profile removed** icon identifies affected charges. Select it to assign another profile.
+- Entering **Total paid** automatically selects **Manual charge**.
+- Find charging-network names as you type, or enter your own name.
+- Try assignment and dismissal with the **Charging detected** card preview scenario.
+
+[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.2) · [Full changelog](CHANGELOG.md)
+
 ## Release highlights
 
 - **Live charging notifications:** follow charging progress on your phone’s Lock Screen with iPhone Live Activities or Android Live Updates. Battery progress and optional remaining time follow the car’s reported readings, even while the dashboard is closed.

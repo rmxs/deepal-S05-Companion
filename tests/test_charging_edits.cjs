@@ -18,8 +18,14 @@ module.exports=async page=>{
    await panel.evaluate(async root=>{await root.costs.load();root.costs.renderEditor();});assert.equal(await panel.locator('.cc-profile').count(),0,'Deleted presets must not return on reload');
    assert.deepEqual(await page.evaluate(()=>window.costs.sessions),saved.sessions,'Deleting profiles leaves saved receipts unchanged');
    await panel.locator('[data-cc=add]').click();assert.equal(await panel.locator('.cc-profile').count(),1);await panel.locator('[data-cc=cancel]').click();
-   await page.evaluate(value=>{window.costs=structuredClone(value);},saved);await panel.evaluate(async root=>{await root.costs.load();root.costs.renderEditor();});
-   await nav('history');await panel.locator('[data-action=edit-session]').first().click();const dialog=panel.locator('.session-price-dialog');
+   await page.evaluate(async()=>{const rows=await window.testHass.callWS({type:'deepal_companion/request',op:'sessions',data:{}}),key=String(Math.round(rows[0].s/1000));window.costs.sessions[key]={profile:{id:'home',name:'Old Home',source:'battery',price:.22,free:false,efficiency:90},capacity:18.4};});
+   await nav('history');const removed=panel.locator('.removed-profile-action').first();await removed.waitFor();const retained=await page.evaluate(()=>JSON.stringify(window.costs.sessions));
+   await removed.click();assert((await panel.locator('.session-price-dialog .cc-removed-profile').textContent()).includes('Saved location and cost are kept'));await panel.locator('.session-price-dialog [data-cc=cancel]').click();assert.equal(await page.evaluate(()=>JSON.stringify(window.costs.sessions)),retained);
+   await panel.locator('[data-action=session-view-table]').click();await panel.locator('td[data-label=Location] .removed-profile-action').waitFor();await panel.locator('[data-action=session-view-grid]').click();
+   await page.evaluate(value=>{window.costs.profiles=[structuredClone(value.profiles.find(p=>p.id==='work'))];},saved);
+   await panel.locator('.removed-profile-action').first().click();await panel.locator('.session-price-dialog [name=profile]').evaluate(select=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value:'work'},bubbles:true})));await panel.locator('.session-price-dialog [data-cc=save-session]').click();await panel.locator('.session-price-dialog').waitFor({state:'detached'});assert.equal(await panel.locator('.removed-profile-action').count(),0);
+   await page.evaluate(value=>{window.costs=structuredClone(value);},saved);
+   await nav('chargers');await nav('history');await panel.locator('[data-action=edit-session]').first().click();const dialog=panel.locator('.session-price-dialog');
    await dialog.locator('[name=profile]').evaluate(select=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value:'work'},bubbles:true})));
    if(await dialog.locator('.cc-advanced').getAttribute('open')===null)await dialog.locator('.cc-advanced summary').click();await dialog.locator('[name=total]').fill('12.34');
    assert.equal(await dialog.locator('[name=profile]').inputValue(),'__manual__');assert.equal(await dialog.locator('[name=free]').isChecked(),false);
@@ -41,5 +47,5 @@ module.exports=async page=>{
    await page.evaluate(value=>{window.costs=structuredClone(value);},saved);
    await panel.evaluate(async root=>{root.sessionDialog?.remove();if(root.costs)root.costs.dirty=false;root.mode='settings';root.render();await root.mount();});
  }
- console.log('PASS: network suggestions/custom names, confirmed/cancelled profile deletion, empty profiles after reload, preserved receipts, automatic manual totals and safe reminder demo.');
+ console.log('PASS: name suggestions, profile deletion, preserved receipts, removed-profile icons in grid/table, cancellation/reassignment, manual totals and safe reminder demo.');
 };
