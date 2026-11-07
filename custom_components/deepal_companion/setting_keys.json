@@ -45,6 +45,7 @@
   "iso_wheels",
   "charge_style",
   "charge_curve",
+  "charging_reminder",
   "energy_sheet",
   "battery_kwh",
   "status_sub",

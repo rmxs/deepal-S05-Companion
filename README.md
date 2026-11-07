@@ -6,15 +6,14 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 [Installation](docs/INSTALLATION.md) · [User guide](docs/USAGE.md) · [All settings](docs/SETTINGS.md) · [Notifications and Live charging](docs/NOTIFICATIONS.md) · [Changelog](CHANGELOG.md)
 
-## Latest release — v0.1.2
+## Latest release — v0.1.3
 
-- Delete charging profiles while keeping earlier sessions, saved locations and costs.
-- A **Profile removed** icon identifies affected charges. Select it to assign another profile.
-- Entering **Total paid** automatically selects **Manual charge**.
-- Find charging-network names as you type, or enter your own name.
-- Try assignment and dismissal with the **Charging detected** card preview scenario.
+- Switch the card’s **Charging costs** and **Charging reminder** blocks on or off independently.
+- Preview guidance appears in a coloured information box.
+- The dashboard remembers your selected card profile after reopening.
+- Saved notification preferences retain their values across updates, including values that matched earlier defaults.
 
-[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.2) · [Full changelog](CHANGELOG.md)
+[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.3) · [Full changelog](CHANGELOG.md)
 
 ## Release highlights
 

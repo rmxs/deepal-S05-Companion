@@ -16,7 +16,7 @@ Open **Deepal Companion** from the sidebar. The paths below use the English menu
 
 | Setting | Available choices |
 | --- | --- |
-| Sections | Show/hide and reorder Vehicle image, Control buttons, Status, Charging, Charging curve, Temperature & battery, Info, Diagnostics and Charging costs |
+| Sections | Show/hide and reorder Vehicle image, Control buttons, Status, Charging, Charging curve, Temperature & battery, Info, Diagnostics, Charging costs and Charging reminder |
 | On the image | Show/hide Name, Plate, Total range, Cloud connection and Last update |
 | Message under the status | None, Rolling or With dots |
 | Top-right buttons | Show/hide and reorder Notifications, View, Diagnostics and Refresh |
@@ -200,3 +200,5 @@ See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup
 In **Charging Profiles**, start typing a network name to see suggestions, or enter any custom name. Choose **Delete profile** inside an expanded profile, confirm, then save. Earlier sessions retain their saved location and cost. **Total paid** in a session selects **Manual charge** automatically.
 
 To test the on-card cost reminder, choose **Charging detected** under **Card Settings → Live preview**, enable **Charging costs** in Layout and turn on **Allow clicks**. The scenario uses sample data and never saves real assignments.
+
+**Independent card blocks:** In Layout → Sections, Charging costs controls the cost block and Charging reminder controls charging-detected assignment reminders. These choices are saved per card profile and do not remove charging history.

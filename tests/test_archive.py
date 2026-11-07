@@ -125,6 +125,26 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(result["car_color"], "blue")
         self.assertNotIn("_configured_prefix", result)
 
+    def test_update_initialize_preserves_all_saved_settings(self):
+        for i, view in enumerate(self.views):
+            self.db.patch_config("one", view["id"], {"car_color": "white", "hidden": [],
+                "lvl_green": "#123abc", "charge_curve": False, "battery_kwh": 22,
+                "custom_future_setting": {"enabled": False, "value": 0}, "name": "Custom " + str(i)})
+        costs = {"profiles": [], "sessions": {"1700000000": {"profile": {"id": "deleted", "name": "Old Home"}, "total": 0}}}
+        notifications = {"enabled": True, "devices": ["notify.my_phone"], "rules": [{"id": "custom", "enabled": False, "title": "My alert"}]}
+        self.db.put("one", "costs", costs)
+        self.db.put("one", "local_notifications", notifications)
+        before = [self.db.config("one", v["id"]) for v in self.views]
+        with self.db.connect() as connection:
+            connection.execute("PRAGMA user_version=1")
+        updated = Database(self.path)
+        updated.initialize()
+        updated.ensure_vehicle("one", "Car", {**self.source, "car_color": "black", "powertrain": "ev"})
+        self.assertEqual([updated.config("one", v["id"]) for v in self.views], before)
+        self.assertEqual(updated.get("one", "costs"), costs)
+        self.assertEqual(updated.get("one", "local_notifications"), notifications)
+        self.assertEqual([v["id"] for v in updated.list_vehicles()[0]["views"]], [v["id"] for v in self.views])
+
     def test_clone_rename_and_delete(self):
         view = self.views[0]["id"]
         self.db.patch_config("one", view, {"car_color": "silver", "hero_style": "carview"})

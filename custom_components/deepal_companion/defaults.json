@@ -26,7 +26,8 @@
     "stats",
     "info",
     "diagnostics",
-    "costs"
+    "costs",
+    "reminder"
   ],
   "hidden": [
     "charge",
@@ -97,6 +98,7 @@
   "iso_wheels": "cover",
   "charge_style": "beside",
   "charge_curve": true,
+  "charging_reminder": true,
   "energy_sheet": true,
   "battery_kwh": 0,
   "status_sub": "roll",

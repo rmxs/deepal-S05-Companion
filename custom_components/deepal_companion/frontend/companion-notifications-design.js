@@ -1,8 +1,8 @@
-import {createNotificationRules} from './notification-rules.js?v=0.1.2';
-import {mountActivity} from './notification-activity.js?v=0.1.2';
+import {createNotificationRules} from './notification-rules.js?v=0.1.3';
+import {mountActivity} from './notification-activity.js?v=0.1.3';
 /* Bind the supplied notification-design.html to the existing HA engine. */
-import {notificationLayoutCss,compactNotificationCss,notificationTitleCss,arrangeNotifications,compactIconPicker} from './notification-layout.js?v=0.1.2';
-import {designHtml,designCss,designIcons,createDesignController} from './notification-design.js?v=0.1.2';
+import {notificationLayoutCss,compactNotificationCss,notificationTitleCss,arrangeNotifications,compactIconPicker} from './notification-layout.js?v=0.1.3';
+import {designHtml,designCss,designIcons,createDesignController} from './notification-design.js?v=0.1.3';
 const buttonLabels={dismiss:'Dismiss',lock:'Lock vehicle',open:'Open dashboard'};
 const categoryLabels={charge:'Charging Events',security:'Security & Openings',tires:'Tyres',vehicle:'Vehicle Warnings',energy:'Battery & Range',other:'Other Alerts'};
 const categoryStyles={charge:["ok","mdi:lightning-bolt"],security:["info","mdi:shield-lock-outline"],tires:["warn","mdi:tire"],vehicle:["bad","mdi:car-info"],energy:["ok","mdi:battery-medium"],other:["info","mdi:bell-outline"]};
@@ -59,8 +59,11 @@ export async function mountNotifications(panel,host){
   if(!host.isConnected)return null;
   const NF=createNotificationRules(UI.notificationContext),recipients=response.recipients||[],hass={...panel._hass,__companionNotifyDevices:recipients};
   let expected=structuredClone(response.value),extras=expected.rules.filter(rule=>!NF.EV[rule.preset||rule.id]),dead=false,previewTimer,previewSequence=0,selected='charge_done',view='overview';
-  let n=NF.norm({...expected.ui||{},local:true});n.on=expected.enabled;
-  if(!expected.ui&&expected.rules.length){n.devices=[...new Set(expected.rules.flatMap(rule=>rule.devices||[]))];const quiet=expected.rules[0].quiet;if(quiet)n.quiet={on:quiet.enabled,from:quiet.from,to:quiet.to,mode:quiet.mode};for(const rule of expected.rules){const id=rule.preset||rule.id,sp=NF.EV[id];if(sp)n.events[id]={...n.events[id],...rule.preset_options,on:rule.enabled,delay:rule.delay/60,repeat:rule.repeat/60,max:rule.max_sends,sev:rule.severity,title:rule.title===sp.title?'':rule.title,text:rule.message===sp.text?'':rule.message,icon:rule.data?.notification_icon||sp.icon,actions:rule.buttons||[]};}}
+  const storedUI=expected.ui||{},firstRule=expected.rules[0],quiet=firstRule?.quiet;
+  let n=NF.norm({devices:[...new Set(expected.rules.flatMap(rule=>rule.devices||[]))],fresh:firstRule?.fresh,...storedUI,quiet:{...(quiet?{on:quiet.enabled,from:quiet.from,to:quiet.to,mode:quiet.mode}:{}),...storedUI.quiet},local:true});n.on=expected.enabled;
+  // Older saves omit fields equal to their defaults. Recover those fields from
+  // the saved rules instead of silently adopting a new release's defaults.
+  for(const rule of expected.rules){const id=rule.preset||rule.id,sp=NF.EV[id];if(sp){n.events[id]={...n.events[id],on:rule.enabled,delay:rule.delay/60,repeat:rule.repeat/60,max:rule.max_sends,sev:rule.severity,title:rule.title,text:rule.message,icon:rule.data?.notification_icon||sp.icon,actions:rule.buttons||[],...rule.preset_options,...storedUI.events?.[id]};n.events[id].title ||= rule.title;n.events[id].text ||= rule.message;}}
   n.devices=n.devices.map(value=>{const match=recipients.filter(row=>row.legacy_service===value);return match.length===1?match[0].svc:value;});
   let live={enabled:false,devices:[],min_interval:300,battery_step:5,show_timer:true,max_age:1800,...expected.live_charging},saved=JSON.stringify([NF.norm(n),extras,live]),muteToasts=false;
   const surface=document.createElement('div');surface.className='local-notifications supplied-notification-design';surface.attachShadow({mode:'open'});UI.applyPalette(surface,panel.config);
@@ -145,7 +148,7 @@ export async function mountNotifications(panel,host){
   function changeEditor(){if(readEditor()){controller.updateCalculations();hintNumbers();updatePreview();refreshOverview();}updateDirty();}
   function updatePreview(){const e=currentEvent(),sp=spec(),v=values(),fill=text=>String(text).replace(/\{(\w+)\}/g,(all,key)=>v[key]??all);$('preview-title').textContent=fill(e.title||sp.title);$('preview-body').textContent=fill(e.text||sp.text);for(const id of ['icon-picker-preview','header-icon','preview-mini-icon']){const node=$(id);node.className='design-icon text-emerald-400';const icon=document.createElement('ha-icon');icon.setAttribute('icon',e.icon||sp.icon);node.replaceChildren(icon);}if(picker.value!==(e.icon||sp.icon)){picker.value=e.icon||sp.icon;compactIconPicker(picker);}const actions=e.actions||[];$('preview-action-row').hidden=!actions.length;$('preview-action-btn').textContent=actions.map(action=>buttonLabels[action]).join(' · ');
     clearTimeout(previewTimer);const sequence=++previewSequence,id=selected;previewTimer=setTimeout(async()=>{if(dead||!readEditor())return;try{const rule=compile().rules.find(rule=>(rule.preset||rule.id)===id);if(!rule)return;const result=await request('notifications_preview',{rule:{...rule,enabled:false}});if(dead||sequence!==previewSequence||id!==selected)return;$('preview-title').textContent=result.title;$('preview-body').textContent=result.message;}catch(_){/* The local live preview remains usable while disconnected. */}},250);}
-  function compile(){if(n.devices.some(value=>!recipients.some(row=>row.svc===value)))throw Error('Select your current Mobile App phone again. A saved recipient is unavailable.');return {enabled:n.on,ui:NF.compact(n),live_charging:{...live,devices:n.devices.slice()},rules:[...presetRules().map(rule=>({...rule,enabled:n.events[rule.preset].on&&n.devices.length>0,clear_on_resolve:true})),...extras]};}
+  function compile(){if(n.devices.some(value=>!recipients.some(row=>row.svc===value)))throw Error('Select your current Mobile App phone again. A saved recipient is unavailable.');const ui=NF.norm(n);for(const [id,event]of Object.entries(ui.events)){event.title ||= NF.EV[id].title;event.text ||= NF.EV[id].text;}return {enabled:n.on,ui,live_charging:{...live,devices:n.devices.slice()},rules:[...presetRules().map(rule=>({...rule,enabled:n.events[rule.preset].on&&n.devices.length>0,clear_on_resolve:true})),...extras]};}
   function reset(){if(NF.EV[selected])n.events[selected]=NF.norm({local:true}).events[selected];else{const old=expected.rules.find(rule=>rule.id===selected);extras=extras.map(rule=>rule.id===selected?structuredClone(old):rule);}loadEditor();refreshOverview();updateDirty();toast('Alert defaults restored. Save to apply.');}
   function toast(message,error=false){if(dead)return;$('toast').dataset.kind=error?'error':'success';controller.showToast(message);icons($('toast'));}
   function drawHistory(){activity.set(response.activity||{rows:(response.history||[]).slice(0,5),total:(response.history||[]).length,has_more:false,readonly:true});}

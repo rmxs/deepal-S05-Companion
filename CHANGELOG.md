@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 — Independent card blocks and saved preferences
+
+- Control Charging costs and Charging reminder independently in Layout → Sections.
+- Show preview guidance in a coloured information box.
+- Restore the selected card profile when reopening the dashboard.
+- Save complete notification preferences and recover omitted values from older saved rules.
+- Preserve saved profiles, locations, receipts and notification settings during database upgrades.
+
 ## 0.1.2 — Charging profiles and reminder preview
 
 - Delete charging profiles with a confirmation and preservation notice; earlier charging sessions and saved costs stay intact.

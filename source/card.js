@@ -35,7 +35,7 @@ const SCRIPT_BASE = (() => {
 })();
 
 /* ───────────────────────── Defaults ───────────────────────── */
-const SECTIONS = ["hero", "actions", "status", "charge", "curve", "stats", "info", "diagnostics", "costs"];
+const SECTIONS = ["hero", "actions", "status", "charge", "curve", "stats", "info", "diagnostics", "costs", "reminder"];
 const SECTION_LABELS = {
   hero: "Vehicle image",
   actions: "Control buttons",
@@ -45,6 +45,7 @@ const SECTION_LABELS = {
   diagnostics: "Diagnostics",
   charge: "Charging (when plugged in)",
   costs: "Charging costs",
+  reminder: "Charging reminder",
   curve: "Charging curve (while charging)",
 };
 const HERO_SHOW_OPTS = [["name", "Name"], ["plate", "Plate"], ["range", "Total range"], ["cloud", "Cloud connection"], ["updated", "Last update"]];
@@ -113,6 +114,7 @@ const DEFAULTS = {
   iso_wheels: "cover", // wheels in Car View: cover (20" with caps) · open (20" without caps) · pro (18")
   charge_style: "beside", // line · text · big · beside
   charge_curve: true,
+  charging_reminder: true,
   energy_sheet: true, // tapping the Energy/Battery tile opens the history sheet (false = opens the sensor)
   battery_kwh: 0, // battery capacity in kWh; 0 = automatic by vehicle type (PHEV 18.4 / electric 68.8); used for the kWh estimate of charges in the Energy sheet
   status_sub: "roll", // message under "Locked/Unlocked": off · roll (rolling) · ticker (rolling with dots)
@@ -3060,7 +3062,7 @@ class DeepalS05Settings extends HTMLElement {
         return `${this._datalist()}
       <h4>Sections</h4>
       <p class="hint">${T("Put the sections in the order you want (e.g. buttons first, then the image, then the range) and hide the ones you don't need.")}</p>
-      ${this._orderList(SECTIONS, c.order, c.charge_curve?c.hidden:[...c.hidden,'curve'], (i) => SECTION_LABELS[i], "sec")}
+      ${this._orderList(SECTIONS, c.order, [...c.hidden,...(c.charge_curve?[]:['curve']),...(c.charging_reminder?[]:['reminder'])], (i) => SECTION_LABELS[i], "sec")}
       <h4>On the image</h4>
       <div class="list">${HERO_SHOW_OPTS.map(([k, l]) => `<button class="row tg ${(c.hero_show || []).includes(k) ? "on" : ""}" data-hs="${k}"><span>${l}</span><i class="sw ${(c.hero_show || []).includes(k) ? "on" : ""}"></i></button>`).join("")}</div>
       ${this._opt("Message under the status", this._seg("status_sub", c.status_sub === "off" || c.status_sub === "ticker" ? c.status_sub : "roll", [["off", "None"], ["roll", "Rolling"], ["ticker", "With dots"]]), "Under “Locked / Unlocked”: a rolling line (lock time, all closed) or 3 facts (time, parked, range) with dots.")}
@@ -3319,6 +3321,7 @@ class DeepalS05Settings extends HTMLElement {
       if (d.vis) {
         const [kind, id] = d.vis.split("|"), key = kind === "sec" ? "hidden" : kind === "top" ? "top_buttons_hidden" : "buttons_hidden", s = new Set(c[key]);
         if(kind==='sec'&&id==='curve')return this._emit({charge_curve:!(c.charge_curve&&!c.hidden.includes('curve')),hidden:c.hidden.filter(id=>id!=='curve')});
+        if(kind==='sec'&&id==='reminder')return this._emit({charging_reminder:!(c.charging_reminder&&!c.hidden.includes('reminder')),hidden:c.hidden.filter(id=>id!=='reminder')});
         s.has(id) ? s.delete(id) : s.add(id);
         return this._emit({ [key]: [...s] });
       }

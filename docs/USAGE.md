@@ -116,11 +116,11 @@ Suggested network names include Zunder, Iberdrola | bp pulse, Repsol, Wenea and 
 
 You can enter a one-off payment without creating a location. Entering **Total paid** automatically selects **Manual charge (no profile)** and clears the free-charging selection. A total payment overrides the calculated amount. **Not priced** means a price has not been assigned; **Free charging** means zero cost. Changing a location’s tariff does not reprice charges already assigned to it.
 
-If a **Charging detected** reminder appears on the card, select a profile and assign it, open charging costs, or dismiss it until the next charge. Assigning the cost from the Sessions page clears the reminder too. Enable **Card Settings → Layout → Sections → Charging costs** to use this part of the card.
+If a **Charging detected** reminder appears on the card, select a profile and assign it, open charging costs, or dismiss it until the next charge. Assigning the cost from the Sessions page clears the reminder too. Enable **Card Settings → Layout → Sections → Charging reminder** to show these reminders. **Charging costs** controls the separate cost block. Either block can stay off while the other is on; your saved sessions and costs are kept.
 
 ### Test the charging-detected reminder
 
-1. Open **Card Settings → Layout → Sections** and enable **Charging costs**.
+1. Open **Card Settings → Layout → Sections** and enable **Charging reminder**. Charging costs can stay off.
 2. In **Live preview**, select **Charging detected**.
 3. Enable **Allow clicks**.
 4. Choose a sample profile and select **Assign**, or try **Dismiss until next charge**.
@@ -182,3 +182,7 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 4. Send a test and confirm it reaches the phone.
 5. Configure quiet hours and save.
 6. Follow the [notification guide](NOTIFICATIONS.md) to customise individual alerts and enable Live charging.
+
+## Saved settings and updates
+
+Your card profiles, notification preferences, charging locations and saved sessions are stored in Home Assistant and retained during updates. The dashboard remembers the selected card profile in your browser for your Home Assistant account. After changing Notifications, choose **Save Changes** and wait for the confirmation before leaving.

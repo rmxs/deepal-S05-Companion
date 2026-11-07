@@ -5,4 +5,4 @@ window.__DEEPAL_COMPANION_UI.mountAppSettings=(panel,stage,widget)=>{
   widget._render();
   stage.querySelector('.app-settings-editor').append(widget);
 };
-window.__DEEPAL_COMPANION_UI.updateAppSettings=()=>{};
+window.__DEEPAL_COMPANION_UI.updateAppSettings=panel=>panel.updatePreviewNote?.();

@@ -2,7 +2,7 @@ const assert=require('assert');
 module.exports=async page=>{
  const panel=page.locator('deepal-companion-panel');
  const sectionDefaults=await page.evaluate(()=>window.__DEEPAL_COMPANION_UI.normalize({prefix:'s05'}));
- assert.deepEqual(sectionDefaults.order,['hero','actions','status','charge','curve','stats','info','diagnostics','costs']);assert.deepEqual(sectionDefaults.hidden,['charge','costs']);assert.equal(sectionDefaults.charge_curve,true);
+ assert.deepEqual(sectionDefaults.order,['hero','actions','status','charge','curve','stats','info','diagnostics','costs','reminder']);assert.deepEqual(sectionDefaults.hidden,['charge','costs']);assert.equal(sectionDefaults.charge_curve,true);
  assert.equal(await panel.locator('header [data-action=add-dashboard]').count(),1);assert.equal(await panel.locator('.dashboard-guide,.legacy-card-note').count(),0);
  const defaults=await page.evaluate(()=>{const widget=document.createElement(window.__DEEPAL_COMPANION_UI.settingsTag);widget.mode='app';widget.hass=window.testHass;widget.yamlBase={prefix:'s05'};widget.cfg=window.__DEEPAL_COMPANION_UI.normalize({prefix:'s05'});widget.tab='colours';let last;widget.onPatch=patch=>{last=patch;};document.body.append(widget);widget._setTab('colours');const input=widget.shadowRoot.querySelector('[data-set=air_t1]'),hint=input.placeholder,empty=input.value==='';input.value='23';input.dispatchEvent(new Event('change',{bubbles:true}));const changed=last.air_t1;input.value='';input.dispatchEvent(new Event('change',{bubbles:true}));const reset=last.air_t1;widget.remove();return {hint,empty,changed,reset};});assert.deepEqual(defaults,{hint:'22',empty:true,changed:23,reset:22},'Numeric hints allow overrides and clearing restores the actual default');
  await page.evaluate(()=>{
