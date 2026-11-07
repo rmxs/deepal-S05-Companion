@@ -44,7 +44,7 @@ Made for my car, shared for yours.
 - Select Photos or Car View, backgrounds, image zoom, spacing, aspect ratio and custom photos.
 - Green, Grey and Blue tile icon presets, plus a custom colour picker.
 - Custom airflow colours, battery/fuel colours and percentage thresholds.
-- Interactive preview with live data and simulated vehicle states.
+- Interactive preview with live data and simulated vehicle states, including a charging-detected reminder demo.
 - Settings updates shared between Companion and cards using the same profile.
 - Add to dashboard button and visual Home Assistant card editor.
 - English interface with Greek and Spanish translations on supported screens.
@@ -59,6 +59,7 @@ Made for my car, shared for yours.
 - Optional on-card charging curve while charging.
 - Charging details, cable flow, charge-port pulse and light-sweep effects.
 - Charging locations with individual tariffs, free charging and optional charger entities.
+- Searchable charging-network name suggestions, custom names and profile deletion that preserves saved charges.
 - Energy calculation from battery estimates, total energy meters, session energy meters or charger power.
 - Per-session location, price per kWh, measured energy and total-payment editing.
 - Euro cost totals and energy/cost charts with historical date navigation.

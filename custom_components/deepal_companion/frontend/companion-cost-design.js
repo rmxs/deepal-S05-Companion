@@ -1,4 +1,4 @@
-import {costHtml,costCss} from './cost-design.js?v=0.1.1';
+import {costHtml,costCss} from './cost-design.js?v=0.1.2';
 let templates;
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const iconNames={'bolt-lightning':'mdi:lightning-bolt',bolt:'mdi:lightning-bolt','charging-station':'mdi:ev-station',coins:'mdi:cash-multiple','grip-vertical':'mdi:view-grid-outline',list:'mdi:format-list-bulleted','chevron-down':'mdi:chevron-down',pen:'mdi:pencil-outline','location-dot':'mdi:map-marker-outline'};

@@ -194,3 +194,9 @@ See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup
 - Live charging start/update/end handling from reported charging state.
 - Settings updates across cards using the same profile.
 - Date and time display using Home Assistant preferences.
+
+## Charging profile names and deletion
+
+In **Charging Profiles**, start typing a network name to see suggestions, or enter any custom name. Choose **Delete profile** inside an expanded profile, confirm, then save. Earlier sessions retain their saved location and cost. **Total paid** in a session selects **Manual charge** automatically.
+
+To test the on-card cost reminder, choose **Charging detected** under **Card Settings → Live preview**, enable **Charging costs** in Layout and turn on **Allow clicks**. The scenario uses sample data and never saves real assignments.

@@ -38,7 +38,7 @@ const server=http.createServer((req,res)=>{
    window.dashboardConfigs={lovelace:{views:[{title:'Home',cards:[{type:'markdown',content:'Keep this card'}]}]},phone:{views:[{title:'Car',type:'sections',sections:[{type:'grid',cards:[{type:'markdown',content:'Keep section'}]}]}]},auto:{strategy:{type:'original-states'}}};
    window.viewNames={};window.views={mobile:{car_color:"black",hero_style:"carview"},tablet:{car_color:"white",hero_style:"carview"},energy:{car_color:"silver",hero_style:"carview"}};
    window.common={prefix:"s05",entities:{"sensor.battery_level":"sensor.s05_battery_level"}};
-   window.costs={profiles:[{id:"home",name:"Home",price:.22,free:false,source:"battery",efficiency:90},{id:"work",name:"Work",price:null,free:true,source:"battery",efficiency:90},{id:"public",name:"Public",price:null,free:false,source:"battery",efficiency:90}],sessions:{}};
+   window.costs={profiles:[{id:"home",name:"Home",price:.22,free:false,source:"battery",efficiency:90},{id:"work",name:"Work",price:null,free:true,source:"battery",efficiency:90},{id:"free",name:"Free",price:null,free:true,source:"battery",efficiency:90},{id:"ionity",name:"Ionity",price:null,free:false,source:"battery",efficiency:90},{id:"public",name:"Public",price:null,free:false,source:"battery",efficiency:90}],sessions:{}};
    let revision=0;const shared=new Set(["battery_kwh","fuel_tank_liters","prefix","entities","powertrain","fuel_max"]);
    const publish=()=>queueMicrotask(()=>window.subscribers.forEach(fn=>fn({vehicle_id:'car'})));
    const reminder=()=>{const p=window.promptFixture;if(!p||(window.dismissedPrompts||[]).includes(p.id)||window.costs.sessions[String(Math.round(p.s/1000))]?.profile)return null;return {...p,profiles:window.costs.profiles};};
@@ -217,6 +217,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelectorAll("deepal-companion-card").length),1);
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").settings.shadowRoot.querySelectorAll("[data-tab]").length),7);
   const p=page.locator("deepal-companion-panel");
+  if(process.env.CHARGING_EDITS_ONLY){await require('./test_charging_edits.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.FIRST_RUN_ONLY){await require('./test_first_run.cjs')(page);await require('./test_image_loading.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.TILE_ONLY){await require('./test_tile_settings.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.MEMORY_ONLY){await require('./test_memory.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
@@ -353,6 +354,7 @@ const server=http.createServer((req,res)=>{
   assert.deepEqual(await page.evaluate(()=>[...document.querySelector("deepal-companion-panel").shadowRoot.querySelector("main").children].map(n=>n.className)),["box profile-setup","box live-preview","stage"]);
   assert.equal(await page.evaluate(()=>window.serviceCalls.length),0);
   await require("./test_charging_dashboard.cjs")(page);
+  await require("./test_charging_edits.cjs")(page);
   await require("./test_first_run.cjs")(page);
   await require("./test_image_loading.cjs")(page);
   await require("./test_charge_reminder.cjs")(page);

@@ -51,6 +51,18 @@ class Connection:
 
 
 class ApiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_deleting_all_profiles_keeps_receipt_snapshot(self):
+        import copy
+        settings=self.db.get('car','costs')
+        receipt={'profile':copy.deepcopy(settings['profiles'][0]),'total':7.25,'capacity':18.4}
+        settings['sessions']={'1700000000':receipt}
+        self.db.put('car','costs',settings)
+        result=await self.request('costs_set',{'changes':{'profiles':[]},'expected_changes':{'profiles':settings['profiles']}})
+        self.assertFalse(result.errors)
+        saved=self.db.get('car','costs')
+        self.assertEqual(saved['profiles'],[])
+        self.assertEqual(saved['sessions']['1700000000'],receipt)
+
     async def test_history_requests_have_a_bounded_time_window(self):
         result = await self.request('history', {'entity_ids': ['sensor.batt'], 'start_time': 0, 'end_time': 4*365*86400})
         self.assertTrue(result.errors)
@@ -95,7 +107,7 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_cost_deltas_require_admin_valid_fields_and_expected_values(self):
         data = {'changes': {'profiles': DEFAULT_PROFILES}, 'expected_changes': {'profiles': DEFAULT_PROFILES}}
         self.assertEqual((await self.request('costs_set', data, Connection(admin=False))).errors[0][0], 'unauthorized')
-        for invalid in ({'changes': {}}, {'changes': {'unknown': 1}}, {'changes': {'profiles': []}},
+        for invalid in ({'changes': {}}, {'changes': {'unknown': 1}}, {'changes': {'profiles': None}},
                         {'changes': {'profiles': DEFAULT_PROFILES}}, {'changes': {'sessions': None}}):
             self.assertTrue((await self.request('costs_set', invalid)).errors)
 

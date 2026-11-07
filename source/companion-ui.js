@@ -126,7 +126,11 @@ window.__DEEPAL_COMPANION_UI = {
     }});
   },
   applyPreview(card,hass,mode='live',interactive=card?._previewCanClick||false){
-    if(!card||!hass)return;card._previewSourceHass=hass;card._previewMode=mode;
+    if(!card||!hass)return;
+    if(card._previewMode!==mode)card._previewChargePromptDone=false;
+    if(mode==='charge-detected'&&!card._previewChargePromptDone){if(!card._compChargePrompt)card._compChargePrompt={id:'preview-charge',s:Date.now()-3600000,e:Date.now(),from:58,to:68,gain:10,kwh:1.84,live:false,profiles:[{id:'home',name:'Home',price:.25,free:false},{id:'work',name:'Work',price:0,free:true},{id:'ionity',name:'IONITY',price:.5,free:false}]};}
+    else card._compChargePrompt=null;
+    card._previewSourceHass=hass;card._previewMode=mode;
     card._last={...(mode==='live'?card._previewInitialLast:{})};card._previewCanClick=interactive;card._isCompanionPreview=true;
     card.inert=!interactive;card.toggleAttribute('aria-hidden',!interactive);card.style.pointerEvents=interactive?'auto':'none';
     card.hass=this.previewHass(hass,card._c,mode,interactive,card);

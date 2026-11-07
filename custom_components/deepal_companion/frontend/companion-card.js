@@ -9,7 +9,7 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "0.1.1";
+const CARD_VERSION = "0.1.2";
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-companion-card";
 const SETTINGS_TAG = "deepal-companion-settings";
@@ -3876,7 +3876,11 @@ window.__DEEPAL_COMPANION_UI = {
     }});
   },
   applyPreview(card,hass,mode='live',interactive=card?._previewCanClick||false){
-    if(!card||!hass)return;card._previewSourceHass=hass;card._previewMode=mode;
+    if(!card||!hass)return;
+    if(card._previewMode!==mode)card._previewChargePromptDone=false;
+    if(mode==='charge-detected'&&!card._previewChargePromptDone){if(!card._compChargePrompt)card._compChargePrompt={id:'preview-charge',s:Date.now()-3600000,e:Date.now(),from:58,to:68,gain:10,kwh:1.84,live:false,profiles:[{id:'home',name:'Home',price:.25,free:false},{id:'work',name:'Work',price:0,free:true},{id:'ionity',name:'IONITY',price:.5,free:false}]};}
+    else card._compChargePrompt=null;
+    card._previewSourceHass=hass;card._previewMode=mode;
     card._last={...(mode==='live'?card._previewInitialLast:{})};card._previewCanClick=interactive;card._isCompanionPreview=true;
     card.inert=!interactive;card.toggleAttribute('aria-hidden',!interactive);card.style.pointerEvents=interactive?'auto':'none';
     card.hass=this.previewHass(hass,card._c,mode,interactive,card);
@@ -3997,13 +4001,21 @@ DeepalS05Card.prototype._renderChargePrompt=function(){
   if(!this._el?.card)return;
   let node=this._el.card.querySelector('.charge-assignment-prompt');
   const prompt=this._compChargePrompt;
-  if(this._isCompanionPreview||!prompt||this._c.hidden.includes('costs')){node?.remove();return;}
+  const demo=this._isCompanionPreview&&this._previewMode==='charge-detected';
+  if((this._isCompanionPreview&&!demo)||!prompt||this._c.hidden.includes('costs')){node?.remove();return;}
   if(!node){
     node=document.createElement('section');node.className='charge-assignment-prompt';
     node.addEventListener('change',()=>{const button=node.querySelector('[data-charge-prompt=assign]');if(button)button.disabled=!node.querySelector('select').value;});
     node.addEventListener('click',async event=>{
       const button=event.target.closest('[data-charge-prompt]');if(!button)return;
       const action=button.dataset.chargePrompt,record=this._compChargePrompt,generation=this._compGeneration;if(!record)return;
+      if(this._isCompanionPreview){
+        if(this._previewMode!=='charge-detected')return;
+        if(action==='costs'){this._toast('Demo: open Sessions to enter a charging cost. No data was changed.','ok');return;}
+        if(action==='assign'&&!node.querySelector('select').value)return;
+        this._previewChargePromptDone=true;this._compChargePrompt=null;this._renderChargePrompt();
+        this._toast(action==='assign'?'Demo: profile assigned. No costs were saved.':'Demo: reminder dismissed. Change the preview state to test again.','ok');return;
+      }
       if(action==='costs'){this._compOpenCosts=true;this._enSheet=true;this._force();return;}
       node.querySelectorAll('button').forEach(item=>item.disabled=true);
       try{
@@ -4034,7 +4046,7 @@ DeepalS05Card.prototype._render=function(...args){
   if(this._chargingCurve){this._chargingCurve.update();return result;}
   if(!this._curveLoad){
     const token={};this._curveLoad=token;
-    import('/deepal_companion/frontend/charging-curve.js?v=0.1.1').then(module=>{
+    import('/deepal_companion/frontend/charging-curve.js?v=0.1.2').then(module=>{
       if(this._curveLoad!==token||!this.isConnected)return;
       this._curveLoad=null;this._chargingCurve=module.mountCurve(this);this._chargingCurve.update();
     }).catch(()=>{if(this._curveLoad===token){this._curveLoad=null;this._toast('Charging curve could not be loaded.','error');}});

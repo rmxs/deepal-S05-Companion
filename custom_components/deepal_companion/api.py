@@ -41,8 +41,8 @@ def check_json(value, max_bytes=2_000_000):
 def validate_costs(data):
     if not isinstance(data, dict) or not isinstance(data.get("profiles"), list) or not isinstance(data.get("sessions"), dict):
         raise ValueError("Expected profiles and session assignments")
-    if not 1 <= len(data["profiles"]) <= 12:
-        raise ValueError("Use 1–12 charging profiles")
+    if not 0 <= len(data["profiles"]) <= 12:
+        raise ValueError("Use at most 12 charging profiles")
     ids = set()
     def profile(p):
         if not isinstance(p, dict) or not isinstance(p.get("id"), str) or not 1 <= len(p["id"]) <= 100:

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 — Charging profiles and reminder preview
+
+- Delete charging profiles with a confirmation and preservation notice; earlier charging sessions and saved costs stay intact.
+- Keep deleted presets removed after reload, including an empty profile list.
+- Automatically select Manual charge when entering a total payment.
+- Suggest charging-network names as you type, with custom names supported.
+- Test charging-detected reminders in the card preview without changing real charging data.
+
 ## 0.1.1 — Setup and first-load fixes
 
 - A clear setup screen with step-by-step instructions and a setup link when no vehicle is available.

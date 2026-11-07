@@ -5,13 +5,21 @@ DeepalS05Card.prototype._renderChargePrompt=function(){
   if(!this._el?.card)return;
   let node=this._el.card.querySelector('.charge-assignment-prompt');
   const prompt=this._compChargePrompt;
-  if(this._isCompanionPreview||!prompt||this._c.hidden.includes('costs')){node?.remove();return;}
+  const demo=this._isCompanionPreview&&this._previewMode==='charge-detected';
+  if((this._isCompanionPreview&&!demo)||!prompt||this._c.hidden.includes('costs')){node?.remove();return;}
   if(!node){
     node=document.createElement('section');node.className='charge-assignment-prompt';
     node.addEventListener('change',()=>{const button=node.querySelector('[data-charge-prompt=assign]');if(button)button.disabled=!node.querySelector('select').value;});
     node.addEventListener('click',async event=>{
       const button=event.target.closest('[data-charge-prompt]');if(!button)return;
       const action=button.dataset.chargePrompt,record=this._compChargePrompt,generation=this._compGeneration;if(!record)return;
+      if(this._isCompanionPreview){
+        if(this._previewMode!=='charge-detected')return;
+        if(action==='costs'){this._toast('Demo: open Sessions to enter a charging cost. No data was changed.','ok');return;}
+        if(action==='assign'&&!node.querySelector('select').value)return;
+        this._previewChargePromptDone=true;this._compChargePrompt=null;this._renderChargePrompt();
+        this._toast(action==='assign'?'Demo: profile assigned. No costs were saved.':'Demo: reminder dismissed. Change the preview state to test again.','ok');return;
+      }
       if(action==='costs'){this._compOpenCosts=true;this._enSheet=true;this._force();return;}
       node.querySelectorAll('button').forEach(item=>item.disabled=true);
       try{

@@ -76,7 +76,7 @@ To change confirmation prompts, open **Card Settings → Controls**. That menu a
 
 1. Open **Charging Profiles**.
 2. Expand a location, such as **Home** or **Work**, or choose **Add location**.
-3. Enter its name.
+3. Enter its name. Start typing to choose a suggested charging network, or enter your own name. Suggestions do not set a tariff.
 4. For a free location, enable **Free charging**.
 5. For a paid location, enter the **€/kWh** price.
 6. Choose its energy source:
@@ -92,6 +92,17 @@ Each location can use a different charger sensor. Energy sensors use Wh or kWh; 
 
 Home, Work, Free, Ionity and Public are provided as starting locations. Work and Free start as free charging. Set the other tariffs before using them.
 
+### Delete a charging profile
+
+1. Expand the profile in **Charging Profiles**.
+2. Choose **Delete profile** and read the confirmation.
+3. Confirm deletion, then choose **Save profiles**.
+4. Use **Cancel changes** before saving if you want to restore it.
+
+Existing charging sessions and their saved costs remain unchanged. You can delete all profiles and continue recording one-off manual charges.
+
+Suggested network names include Zunder, Iberdrola | bp pulse, Repsol, Wenea and Atlante for Spain; Plenitude On the Road, Ewiva, Free To X and A2A E-moving for Italy; and PPC blue, incharge, EKO Charge & Go, Blink Charging, EV Loader and Electrip for Greece. IONITY and Tesla Supercharger are included too. You can always use your own name and tariff.
+
 ## 8. Assign a cost to a charge
 
 1. Open **Sessions** and find the charging session.
@@ -101,9 +112,21 @@ Home, Work, Free, Ionity and Public are provided as starting locations. Work and
 5. Enter a price per kWh, measured energy, total paid or free charging as appropriate.
 6. Save the charge.
 
-You can enter a one-off payment without creating a location. A total payment overrides the calculated amount. **Not priced** means a price has not been assigned; **Free charging** means zero cost. Changing a location’s tariff does not reprice charges already assigned to it.
+You can enter a one-off payment without creating a location. Entering **Total paid** automatically selects **Manual charge (no profile)** and clears the free-charging selection. A total payment overrides the calculated amount. **Not priced** means a price has not been assigned; **Free charging** means zero cost. Changing a location’s tariff does not reprice charges already assigned to it.
 
 If a **Charging detected** reminder appears on the card, select a profile and assign it, open charging costs, or dismiss it until the next charge. Assigning the cost from the Sessions page clears the reminder too. Enable **Card Settings → Layout → Sections → Charging costs** to use this part of the card.
+
+### Test the charging-detected reminder
+
+1. Open **Card Settings → Layout → Sections** and enable **Charging costs**.
+2. In **Live preview**, select **Charging detected**.
+3. Enable **Allow clicks**.
+4. Choose a sample profile and select **Assign**, or try **Dismiss until next charge**.
+5. Switch to another preview state and back to reset the demo.
+
+Preview actions do not save costs, dismiss real reminders or send vehicle commands. The sample profiles and prices are demonstration values.
+
+On the real card, the reminder needs a recorded charge with at least a **10 percentage-point battery increase**, without a data gap, and no location assigned. It is an on-card reminder. Assigning a location from Sessions clears it; dismissal lasts until the next charge for that user.
 
 ## 9. Browse sessions and charts
 
