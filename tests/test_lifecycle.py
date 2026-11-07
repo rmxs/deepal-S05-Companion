@@ -22,6 +22,7 @@ module("homeassistant.components.panel_custom", async_register_panel=register_pa
 module("homeassistant.components.lovelace")
 module("homeassistant.components.lovelace.const", LOVELACE_DATA="lovelace")
 module("homeassistant.helpers.entity_registry", async_get=lambda hass: hass.registry)
+module("homeassistant.helpers.config_validation", config_entry_only_config_schema=lambda domain: {"config_entry_only": domain})
 module("homeassistant.helpers.device_registry", async_get=lambda hass: getattr(
     hass, "device_registry", types.SimpleNamespace(async_get=lambda ident: None)))
 module("homeassistant.helpers.event", async_track_state_change_event=lambda *args: lambda: None,
