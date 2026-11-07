@@ -132,6 +132,7 @@ class ArchiveTests(unittest.TestCase):
                 "custom_future_setting": {"enabled": False, "value": 0}, "name": "Custom " + str(i)})
         costs = {"profiles": [], "sessions": {"1700000000": {"profile": {"id": "deleted", "name": "Old Home"}, "total": 0}}}
         notifications = {"enabled": True, "devices": ["notify.my_phone"], "rules": [{"id": "custom", "enabled": False, "title": "My alert"}]}
+        notifications["live_charging"] = {"enabled": True, "devices": ["notify.my_phone"], "min_interval": 300, "battery_step": 5, "show_timer": False, "max_age": 1800}
         self.db.put("one", "costs", costs)
         self.db.put("one", "local_notifications", notifications)
         before = [self.db.config("one", v["id"]) for v in self.views]
