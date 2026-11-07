@@ -1,0 +1,319 @@
+"""Database, restart and pricing checks runnable without a Home Assistant installation."""
+import copy
+from contextlib import closing
+import importlib
+import json
+from pathlib import Path
+import sqlite3
+import sys
+import tempfile
+import types
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+package = types.ModuleType("companion_test")
+package.__path__ = [str(ROOT / "custom_components" / "deepal_companion")]
+sys.modules["companion_test"] = package
+Database = importlib.import_module("companion_test.database").Database
+ChargingEngine = importlib.import_module("companion_test.charging").ChargingEngine
+calculate = importlib.import_module("companion_test.pricing").calculate
+
+
+class ArchiveTests(unittest.TestCase):
+    def test_database_sorts_all_records_before_selecting_a_page(self):
+        rows=[]
+        for index, cost in enumerate([5, 0, None, 5, 30, 1, None, 8, 2, 30, 3, 4]):
+            row={"id": str(index), "s": 1000000+index*100000, "e": 1050000+index*100000, "live": False, "pricing": {"cost": cost}}
+            self.db.save_session("one", row)
+            rows.append(row)
+        self.db.index_session_costs("one", rows)
+        for order in ("newest", "oldest", "highest", "lowest"):
+            found, cursor=[],None
+            while True:
+                page=self.db.session_page("one", cursor, limit=5, sort=order)
+                found.extend(row["id"] for row in page["rows"])
+                if not page["has_more"]:
+                    break
+                cursor=page["next_before"]
+            if order in {"newest", "oldest"}:
+                expected=sorted(rows,key=lambda row:row["s"],reverse=order=="newest")
+            else:
+                expected=sorted(rows,key=lambda row:(row["pricing"]["cost"] is None, (-(row["pricing"]["cost"] or 0) if order=="highest" else row["pricing"]["cost"] or 0),-row["s"]))
+            self.assertEqual(found,[row["id"] for row in expected],order)
+            self.assertEqual(len(set(found)),12)
+
+    def test_location_filter_applies_before_pagination_and_keeps_unassigned_separate(self):
+        costs = self.db.get("one", "costs")
+        for index in range(12):
+            start = 1000000+index*100000
+            self.db.save_session("one", {"id": str(index), "s": start, "e": start+50000, "live": False})
+            if index < 10:
+                costs["sessions"][str(start//1000)] = {"profile": {"id": "work" if index < 6 else "old_location", "name": "Work" if index < 6 else "Old location"}}
+        self.db.put("one", "costs", costs)
+        first = self.db.session_page("one", location="work")
+        second = self.db.session_page("one", first["next_before"], location="work")
+        self.assertEqual(first["total"], 6)
+        self.assertEqual(len(first["rows"]), 5)
+        self.assertEqual(len(second["rows"]), 1)
+        self.assertEqual(self.db.session_page("one", location="__unset__")["total"], 2)
+        self.assertEqual(self.db.session_page("one", location="old_location")["total"], 4)
+        self.assertIn("old_location", [item["id"] for item in first["locations"]])
+        self.assertEqual(self.db.session_page("one", location="missing")["rows"], [])
+
+    def test_session_pages_use_stable_cursors_and_do_not_repeat_rows(self):
+        for index in range(12):
+            self.db.save_session("one", {"id": str(index), "s": 1000000+index*100000, "e": 1050000+index*100000, "live": False})
+        first = self.db.session_page("one")
+        self.assertEqual(len(first["rows"]), 5)
+        self.assertEqual(first["total"], 12)
+        self.assertTrue(first["has_more"])
+        second = self.db.session_page("one", first["next_before"])
+        third = self.db.session_page("one", second["next_before"])
+        self.assertEqual(len(third["rows"]), 2)
+        self.assertFalse(third["has_more"])
+        self.assertEqual(len({row["id"] for page in (first,second,third) for row in page["rows"]}), 12)
+
+    def test_recovered_sessions_survive_recorder_loss_without_duplicates(self):
+        row = {"s": 1000000, "e": 2000000, "from": 20, "to": 80, "kwh": 11.04, "capacity": 18.4,
+               "pricing": {"energy": 12.2, "cost": 3.66, "estimated": False}, "assignment": None}
+        self.assertEqual(self.db.import_sessions("one", [row]), 1)
+        self.assertEqual(self.db.import_sessions("one", [row]), 0)
+        self.assertEqual(self.db.import_sessions("one", [{**row, "s": 1100000}]), 0)
+        with self.db.connect() as db:
+            db.execute("DELETE FROM readings")
+        reopened = Database(self.path)
+        rows = reopened.sessions("one")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["recovered_pricing"]["cost"], 3.66)
+        self.assertEqual(rows[0]["origin"], "recorder")
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = str(Path(self.tmp.name) / "archive.sqlite")
+        self.db = Database(self.path)
+        self.db.initialize()
+        self.source = {"prefix": "s05", "battery_entity": "sensor.s05_battery_level",
+                       "entities": {"sensor.battery_level": "sensor.s05_battery_level"}}
+        self.db.ensure_vehicle("one", "Το αυτοκίνητό μου", self.source)
+        self.views = self.db.list_vehicles()[0]["views"]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_three_independent_views(self):
+        ids = [v["id"] for v in self.views]
+        for view, color in zip(ids, ("black", "blue", "white")):
+            self.db.patch_config("one", view, {"car_color": color, "hero_space": "airy"})
+        self.assertEqual([self.db.config("one", v)["config"]["car_color"] for v in ids], ["black", "blue", "white"])
+
+    def test_common_capacities_and_independent_layout(self):
+        self.db.patch_config("one", self.views[0]["id"], {"battery_kwh": 22, "fuel_tank_liters": 51,
+                                                         "buttons_hidden": ["honk"], "lvl_green": "#123abc"})
+        other = self.db.config("one", self.views[1]["id"])["config"]
+        self.assertEqual(other["battery_kwh"], 22)
+        self.assertNotIn("buttons_hidden", other)
+        self.assertNotIn("lvl_green", other)
+
+    def test_configuration_survives_restart(self):
+        view = self.views[0]["id"]
+        self.db.patch_config("one", view, {"prefix": "custom", "entities": {"sensor.battery_level": "sensor.custom_batt"},
+                                          "images": {"parked": "/local/mycar.webp"}, "car_color": "blue"})
+        self.db.ensure_vehicle("one", "Car", self.source)
+        result = Database(self.path).config("one", view)["config"]
+        self.assertEqual(result["prefix"], "custom")
+        self.assertEqual(result["entities"]["sensor.battery_level"], "sensor.custom_batt")
+        self.assertEqual(result["car_color"], "blue")
+        self.assertNotIn("_configured_prefix", result)
+
+    def test_clone_rename_and_delete(self):
+        view = self.views[0]["id"]
+        self.db.patch_config("one", view, {"car_color": "silver", "hero_style": "carview"})
+        clone = self.db.view("one", "create", name="Δεύτερη κάρτα", source=view)["view_id"]
+        self.assertEqual(self.db.config("one", clone)["config"]["car_color"], "silver")
+        self.db.view("one", "rename", clone, "Renamed")
+        self.assertEqual(self.db.config("one", clone)["view_name"], "Renamed")
+        self.db.view("one", "delete", clone)
+        with self.assertRaises(ValueError):
+            self.db.config("one", clone)
+
+    def test_cross_vehicle_view_is_rejected(self):
+        self.db.ensure_vehicle("two", "Other", self.source)
+        with self.assertRaises(ValueError):
+            self.db.patch_config("two", self.views[0]["id"], {"car_color": "red"})
+
+    def test_profile_reset_keeps_other_views(self):
+        self.db.patch_config("one", self.views[0]["id"], {"car_color": "blue"})
+        self.db.patch_config("one", self.views[1]["id"], {"car_color": "white"})
+        self.db.patch_config("one", self.views[0]["id"], {}, True)
+        self.assertNotIn("car_color", self.db.config("one", self.views[0]["id"])["config"])
+        self.assertEqual(self.db.config("one", self.views[1]["id"])["config"]["car_color"], "white")
+
+    def test_persistent_readings_and_boundary(self):
+        for stamp, state in ((100, 80), (200, 79), (300, 78)):
+            self.db.sample("one", "sensor.batt", stamp, state, "%")
+        rows = self.db.history("one", ["sensor.batt"], 150, 250)["sensor.batt"]
+        self.assertEqual([r["s"] for r in rows], ["80", "79"])
+        self.assertEqual(self.db.reading_unit("one", "sensor.batt"), "%")
+
+    def test_archive_and_pricing_not_tied_to_recorder(self):
+        session = {"id": "charge", "s": 100000, "e": 4000000, "live": False, "from": 20, "to": 80, "kwh": 11.04}
+        self.db.save_session("one", session)
+        self.db.put("one", "costs", {"profiles": [], "sessions": {"100": {"profile": {"price": .2}}}})
+        reopened = Database(self.path)
+        self.assertEqual(reopened.summary("one")["sessions"], 1)
+        self.assertEqual(reopened.export("one")["sessions"][0]["kwh"], 11.04)
+        self.assertEqual(reopened.get("one", "costs")["sessions"]["100"]["profile"]["price"], .2)
+
+    def test_sqlite_backup_is_complete(self):
+        self.db.put("one", "example", {"unicode": "Δοκιμή", "color": "#22cc99"})
+        target = str(Path(self.tmp.name) / "copy.sqlite")
+        self.db.backup(target)
+        self.assertEqual(Database(target).get("one", "example")["unicode"], "Δοκιμή")
+
+    def test_unknown_future_schema_rejected(self):
+        with closing(sqlite3.connect(self.path)) as sql:
+            sql.execute("PRAGMA user_version=999")
+            sql.commit()
+        with self.assertRaises(RuntimeError):
+            self.db.initialize()
+
+    def test_record_update_is_atomic_on_session_failure(self):
+        with self.assertRaises(KeyError):
+            self.db.record_update("one", [("sensor.ac", 100, "8", "A")], [{}], {"new": "checkpoint"})
+        self.assertEqual(self.db.history("one", ["sensor.ac"], 0, 200)["sensor.ac"], [])
+        self.assertIsNone(self.db.get("one", "engine"))
+
+    def test_record_update_commits_session_and_engine_together(self):
+        session = {"id": "atomic", "s": 100000, "e": 200000, "live": True, "kwh": 2}
+        engine = {"session": session, "last": 200}
+        self.db.record_update("one", [("sensor.ac", 100, "8", "A")], [session], engine)
+        self.assertEqual(self.db.sessions("one")[0]["id"], "atomic")
+        self.assertEqual(self.db.get("one", "engine"), engine)
+        values = self.db.pricing_inputs("one", [("atomic", "sensor.ac", 90, 200)])
+        self.assertEqual(values["atomic"], {"readings": [[100000, "8"]], "unit": "A"})
+
+
+class ChargingTests(unittest.TestCase):
+    def test_complete_session_and_capacity_snapshot(self):
+        engine = ChargingEngine()
+        first = engine.feed(1000, 20, True, 18.4)[0]
+        engine.feed(1600, 50, True, 22)
+        engine.feed(1700, 50, False, 22)
+        ended = engine.feed(2600, 50, False, 22)[0]
+        self.assertFalse(ended["live"])
+        self.assertEqual(ended["id"], first["id"])
+        self.assertAlmostEqual(ended["kwh"], 5.52)
+
+    def test_pause_and_resume_same_identity(self):
+        engine = ChargingEngine()
+        first = engine.feed(1000, 20, True, 18.4)[0]
+        engine.feed(1300, 30, False, 18.4)
+        resumed = engine.feed(1500, 40, True, 18.4)[0]
+        self.assertEqual(resumed["id"], first["id"])
+
+    def test_restart_recovers_active_session(self):
+        engine = ChargingEngine()
+        first = engine.feed(1000, 20, True, 18.4)[0]
+        restarted = ChargingEngine(json.loads(json.dumps(engine.state)))
+        current = restarted.feed(1100, 30, True, 18.4)[0]
+        self.assertEqual(current["id"], first["id"])
+        self.assertEqual(current["from"], 20)
+
+    def test_long_outage_is_not_counted_as_observed_charge(self):
+        engine = ChargingEngine()
+        first = engine.feed(1000, 20, True, 18.4)[0]
+        rows = engine.feed(10000, 80, True, 18.4)
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(rows[0]["gap"])
+        self.assertFalse(rows[0]["live"])
+        self.assertNotEqual(rows[1]["id"], first["id"])
+
+    def test_invalid_and_zero_spikes(self):
+        engine = ChargingEngine()
+        engine.feed(1000, 50, True, 18.4)
+        row = engine.feed(1100, 0, True, 18.4)[0]
+        self.assertEqual(row["to"], 50)
+        row = engine.feed(1200, "unavailable", True, 18.4)[0]
+        self.assertEqual(row["to"], 50)
+
+    def test_dc_is_remembered(self):
+        engine = ChargingEngine()
+        engine.feed(1000, 20, True, 18.4, True)
+        self.assertTrue(engine.feed(1100, 30, True, 18.4, False)[0]["dc"])
+
+    def test_unknown_charging_state_is_marked_as_gap(self):
+        engine = ChargingEngine()
+        engine.feed(1000, 20, True, 18.4)
+        self.assertTrue(engine.feed(1100, 20, None, 18.4)[0]["gap"])
+
+
+class PricingTests(unittest.TestCase):
+    def setUp(self):
+        self.g = {"s": 0, "e": 3600000, "from": 0, "to": 50, "kwh": 9}
+        self.profile = {"id": "home", "price": .2, "free": False, "source": "battery", "efficiency": 90}
+        self.record = {"profile": self.profile}
+
+    def test_estimated_wall_energy(self):
+        value = calculate(self.g, self.record)
+        self.assertEqual(value["energy"], 10)
+        self.assertEqual(value["cost"], 2)
+        self.assertTrue(value["cost_estimated"])
+
+    def test_free_is_exact_zero(self):
+        value = calculate(self.g, {"profile": {**self.profile, "free": True}})
+        self.assertEqual(value["cost"], 0)
+        self.assertFalse(value["cost_estimated"])
+
+    def test_receipt_overrides_tariff(self):
+        value = calculate(self.g, {**self.record, "energy": 12, "total": 7.5})
+        self.assertEqual(value["energy"], 12)
+        self.assertEqual(value["cost"], 7.5)
+
+    def test_no_tariff_does_not_mean_free(self):
+        self.assertIsNone(calculate(self.g, {"profile": {**self.profile, "price": None}})["cost"])
+        self.assertIsNone(calculate(self.g)["cost"])
+
+    def test_total_and_session_meters(self):
+        rows = [[i * 600000, 100 + i] for i in range(7)]
+        for kind in ("total", "session"):
+            record = {"profile": {**self.profile, "source": kind}}
+            value = calculate(self.g, record, rows, "kWh")
+            self.assertEqual(value["energy"], 6)
+            self.assertEqual(value["source"], "meter")
+            self.assertFalse(value["estimated"])
+
+    def test_power_integration(self):
+        rows = [[i * 600000, 2000] for i in range(7)]
+        value = calculate(self.g, {"profile": {**self.profile, "source": "power"}}, rows, "W")
+        self.assertAlmostEqual(value["energy"], 2)
+        self.assertAlmostEqual(value["cost"], .4)
+
+    def test_extreme_meter_values_fall_back_to_battery(self):
+        rows = [[i * 600000, i * 1e300] for i in range(7)]
+        value = calculate(self.g, {"profile": {**self.profile, "source": "total"}}, rows, "kWh")
+        self.assertEqual(value["source"], "fallback")
+        self.assertEqual(value["energy"], 10)
+
+    def test_reset_or_missing_meter_falls_back(self):
+        for rows in ([], [[0, 100], [600000, 0], [3600000, 10]]):
+            value = calculate(self.g, {"profile": {**self.profile, "source": "total"}}, rows, "kWh")
+            self.assertEqual(value["source"], "fallback")
+            self.assertEqual(value["energy"], 10)
+
+    def test_snapshot_uses_saved_capacity(self):
+        value = calculate(self.g, {**self.record, "capacity": 20})
+        self.assertAlmostEqual(value["energy"], 10 / .9)
+
+    def test_snapshot_is_independent_of_profile_changes(self):
+        snapshot = copy.deepcopy(self.record)
+        self.profile["price"] = .8
+        self.assertEqual(calculate(self.g, snapshot)["cost"], 2)
+
+    def test_free_and_paid_receipt_priority_is_explicit(self):
+        # Validation rejects conflicting free+paid writes; the arithmetic preserves an explicit receipt.
+        value = calculate(self.g, {"profile": {**self.profile, "free": True}, "total": 3})
+        self.assertEqual(value["cost"], 3)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

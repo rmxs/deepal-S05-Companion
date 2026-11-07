@@ -1,0 +1,97 @@
+{
+  "title": "Deepal Companion",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Choose your vehicle",
+        "description": "Select the vehicle provided by Deepal Alternative. Its sensors are detected automatically.",
+        "data": {
+          "vehicle": "Vehicle"
+        }
+      },
+      "confirm": {
+        "title": "Confirm your vehicle",
+        "description": "Found **{vehicle}**. Check the detected vehicle type and confirm it below. Choose your paint colour and wheels once; these can be changed later in Advanced → Vehicle. Sensors are configured automatically.",
+        "data": {
+          "name": "Vehicle name",
+          "powertrain": "Vehicle type",
+          "car_color": "Paint colour",
+          "iso_wheels": "Wheels"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "The sensor was not found.",
+      "battery_percent": "Choose a battery sensor with unit %.",
+      "invalid_prefix": "Use lowercase letters, numbers and underscores.",
+      "name_required": "Enter a vehicle name.",
+      "not_deepal_battery": "Select the vehicle battery sensor provided by Deepal Alternative.",
+      "vehicle_missing": "Choose an available vehicle.",
+      "invalid_selection": "Choose one of the available options."
+    },
+    "abort": {
+      "already_configured": "This vehicle is already configured.",
+      "no_deepal_vehicle": "No supported Deepal vehicle was found. Configure Deepal Alternative first and make sure the vehicle is enabled.",
+      "vehicle_unavailable": "This vehicle is no longer available. Check Deepal Alternative and try again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Deepal Companion",
+        "description": "Configure appearance, controls and charging profiles in [Deepal Companion]({panel_url}).",
+        "data": {
+          "name": "Vehicle name"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "The sensor was not found.",
+      "battery_percent": "Choose a battery sensor with unit %.",
+      "invalid_prefix": "Use lowercase letters, numbers and underscores.",
+      "name_required": "Enter a vehicle name.",
+      "not_deepal_battery": "Select the vehicle battery sensor provided by Deepal Alternative."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "sessions": {
+        "name": "Completed charges"
+      },
+      "battery_kwh": {
+        "name": "Energy added to battery"
+      },
+      "cost": {
+        "name": "Recorded charging cost"
+      },
+      "unpriced": {
+        "name": "Unpriced charges"
+      }
+    }
+  },
+  "selector": {
+    "powertrain": {
+      "options": {
+        "auto": "Automatic (check sensors)",
+        "phev": "Plug-in hybrid",
+        "ev": "Electric"
+      }
+    },
+    "car_color": {
+      "options": {
+        "black": "Black",
+        "blue": "Blue",
+        "grey": "Grey",
+        "silver": "Silver",
+        "white": "White"
+      }
+    },
+    "iso_wheels": {
+      "options": {
+        "cover": "20″ with covers",
+        "open": "20″ without covers",
+        "pro": "18″ Pro"
+      }
+    }
+  }
+}

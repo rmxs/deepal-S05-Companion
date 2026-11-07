@@ -1,0 +1,97 @@
+{
+  "title": "Deepal Companion",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Selecciona tu vehículo",
+        "description": "Selecciona el vehículo de Deepal Alternative. Sus sensores se detectan automáticamente.",
+        "data": {
+          "vehicle": "Vehículo"
+        }
+      },
+      "confirm": {
+        "title": "Confirma tu vehículo",
+        "description": "Se ha encontrado **{vehicle}**. Comprueba y confirma el tipo de vehículo. Elige el color y las llantas; se pueden cambiar más adelante en Avanzado → Vehículo. Los sensores se configuran automáticamente.",
+        "data": {
+          "name": "Nombre del vehículo",
+          "powertrain": "Tipo de vehículo",
+          "car_color": "Color de carrocería",
+          "iso_wheels": "Llantas"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "No se encontró el sensor.",
+      "battery_percent": "Selecciona un sensor de batería con unidad %.",
+      "invalid_prefix": "Usa letras minúsculas, números y guion bajo.",
+      "name_required": "Introduce un nombre.",
+      "not_deepal_battery": "Selecciona el sensor de batería del vehículo de Deepal Alternative.",
+      "vehicle_missing": "Selecciona un vehículo disponible.",
+      "invalid_selection": "Elige una de las opciones disponibles."
+    },
+    "abort": {
+      "already_configured": "Este vehículo ya está configurado.",
+      "no_deepal_vehicle": "No se encontró un vehículo Deepal compatible. Configura Deepal Alternative y comprueba que el vehículo esté habilitado.",
+      "vehicle_unavailable": "El vehículo ya no está disponible. Comprueba Deepal Alternative e inténtalo de nuevo."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Deepal Companion",
+        "description": "Configure appearance, controls and charging profiles in [Deepal Companion]({panel_url}).",
+        "data": {
+          "name": "Nombre del vehículo"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "No se encontró el sensor.",
+      "battery_percent": "Selecciona un sensor de batería con unidad %.",
+      "invalid_prefix": "Usa letras minúsculas, números y guion bajo.",
+      "name_required": "Introduce un nombre.",
+      "not_deepal_battery": "Selecciona el sensor de batería del vehículo de Deepal Alternative."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "sessions": {
+        "name": "Cargas completadas"
+      },
+      "battery_kwh": {
+        "name": "Energía añadida a la batería"
+      },
+      "cost": {
+        "name": "Coste de carga registrado"
+      },
+      "unpriced": {
+        "name": "Cargas sin precio"
+      }
+    }
+  },
+  "selector": {
+    "powertrain": {
+      "options": {
+        "auto": "Automático (comprobar sensores)",
+        "phev": "Híbrido enchufable",
+        "ev": "Eléctrico"
+      }
+    },
+    "car_color": {
+      "options": {
+        "black": "Negro",
+        "blue": "Azul",
+        "grey": "Gris",
+        "silver": "Plata",
+        "white": "Blanco"
+      }
+    },
+    "iso_wheels": {
+      "options": {
+        "cover": "20″ con tapacubos",
+        "open": "20″ sin tapacubos",
+        "pro": "18″ Pro"
+      }
+    }
+  }
+}

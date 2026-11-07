@@ -1,0 +1,29 @@
+const assert=require('assert');
+module.exports=async page=>{
+  const panel=page.locator('deepal-companion-panel');
+  await panel.locator('[data-mode=settings]').click();await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').settings);
+  assert.equal(await panel.locator('.profile-name input').count(),1);
+  await panel.locator('[data-profile-choose]').click();
+  await panel.locator('.profile-selector deepal-companion-choice').getByRole('option',{name:/^tablet$/i}).click();
+  await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').selected.view_id==='tablet'&&!!document.querySelector('deepal-companion-panel').preview);
+  assert.equal(await panel.locator('[name=profile_name]').inputValue(),'tablet');
+  await panel.locator('[data-profile-choose]').click();await panel.locator('.profile-selector deepal-companion-choice').getByRole('option',{name:/Everyday|Mobile/i,exact:false}).first().click();
+  await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').selected.view_id==='mobile'&&!!document.querySelector('deepal-companion-panel').preview);
+  assert.equal(await panel.locator('.vehicle-management,details.profile-management').count(),0);
+  const choice=panel.locator('[name=preview_mode]').locator('..').locator('deepal-companion-choice'),button=choice.locator('.field');
+  await button.click();assert.equal(await choice.locator('.menu').evaluate(n=>n.matches(':popover-open')),true);
+  await choice.getByRole('option',{name:'AC charging',exact:true}).click();
+  assert.equal(await panel.locator('[name=preview_mode]').inputValue(),'ac');assert.equal(await button.textContent(),'AC charging');
+  await button.focus();await page.keyboard.press('ArrowDown');await page.keyboard.press('Escape');
+  assert.equal(await choice.locator('.menu').evaluate(n=>n.matches(':popover-open')),false);
+  await button.click();await choice.locator('.menu').evaluate(menu=>menu.dispatchEvent(new Event('scroll')));assert.equal(await choice.locator('.menu').evaluate(n=>n.matches(':popover-open')),true,'Scrolling the option list keeps it open');
+  await panel.evaluate(root=>root.dispatchEvent(new Event('scroll')));assert.equal(await choice.locator('.menu').evaluate(n=>n.matches(':popover-open')),false,'Scrolling an ancestor closes the dropdown');
+  await button.click();await panel.evaluate(root=>root.shadowRoot.querySelector('.live-preview').dispatchEvent(new Event('scroll')));assert.equal(await choice.locator('.menu').evaluate(n=>n.matches(':popover-open')),false,'Scrolls inside HA shadow roots close the dropdown');
+  for(const width of [1440,430,360]){await page.setViewportSize({width,height:900});await button.click();const fits=await choice.locator('.menu').evaluate(n=>{const r=n.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;});assert(fits,'Choice menu overflows at '+width);await page.keyboard.press('Escape');}
+  await panel.locator('[name=preview_mode]').evaluate(n=>n._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value:'live'},bubbles:true})));
+  await page.evaluate(()=>window.notificationUnavailable=true);
+  await panel.locator('[data-mode=notifications]').click();await panel.getByRole('alert').filter({hasText:'Restart Home Assistant'}).waitFor();
+  await page.evaluate(()=>window.notificationUnavailable=false);await panel.locator('[data-local-retry]').click();await panel.locator('.local-notifications').waitFor();
+  await panel.locator('[data-mode=settings]').click();await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').settings);await page.setViewportSize({width:1440,height:1050});
+  console.log('PASS: dropdown/text field design parity, pointer and keyboard selection, mobile popover bounds and restart/retry recovery.');
+};

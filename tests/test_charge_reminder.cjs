@@ -1,0 +1,25 @@
+const assert=require('assert');
+module.exports=async page=>{
+  await page.setViewportSize({width:1440,height:1050});
+  await page.evaluate(()=>document.querySelector('#cards').style.display='grid');
+  await page.evaluate(()=>{window.reminderHidden=window.views.mobile.hidden;window.views.mobile.hidden=[];window.promptFixture={id:'prompt-one',s:Date.now()-3*36e5,e:Date.now(),from:50,to:60,gain:10,kwh:1.84,live:true};window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+  const card=page.locator('#mobile');await card.locator('.charge-assignment-prompt').waitFor();
+  assert((await card.locator('.charge-assignment-prompt').textContent()).includes('+10%'));
+  assert.equal(await page.evaluate(()=>!!document.querySelector('deepal-companion-panel').preview.shadowRoot.querySelector('.charge-assignment-prompt')),false,'Preview must not request real cost assignment');
+  await card.locator('[data-charge-prompt=dismiss]').click();await card.locator('.charge-assignment-prompt').waitFor({state:'detached'});
+  await page.evaluate(()=>window.subscribers.forEach(fn=>fn({vehicle_id:'car'})));await page.waitForTimeout(50);
+  assert.equal(await card.locator('.charge-assignment-prompt').count(),0,'Dismissal survives a subscription refresh');
+  await page.evaluate(()=>{window.promptFixture={...window.promptFixture,id:'prompt-two',s:window.promptFixture.s+1000};window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+  await card.locator('.charge-assignment-prompt').waitFor();
+  await card.locator('.charge-prompt-profile > select').evaluate(select=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value:'work'},bubbles:true})));
+  await card.locator('[data-charge-prompt=assign]').click();await card.locator('.charge-assignment-prompt').waitFor({state:'detached'});
+  assert.equal(await page.evaluate(()=>window.costs.sessions[String(Math.round(window.promptFixture.s/1000))].profile.id),'work');
+  await page.evaluate(()=>{window.promptFixture={...window.promptFixture,id:'prompt-three',s:window.promptFixture.s+1000};window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+  await card.locator('.charge-assignment-prompt').waitFor();
+  await page.evaluate(async()=>{const value=structuredClone(window.costs);value.sessions[String(Math.round(window.promptFixture.s/1000))]={profile:value.profiles[0]};await window.testHass.callWS({type:'deepal_companion/request',op:'costs_set',vehicle_id:'car',data:{value}});});
+  await card.locator('.charge-assignment-prompt').waitFor({state:'detached'});
+  await page.evaluate(()=>{window.promptFixture=null;if(window.reminderHidden===undefined)delete window.views.mobile.hidden;else window.views.mobile.hidden=window.reminderHidden;window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+  await page.evaluate(()=>{document.querySelector('#cards').style.display='none';scrollTo(0,0);});
+  assert.equal(await page.evaluate(()=>window.serviceCalls.length),0,'Prompt actions must not call vehicle services');
+  console.log('PASS: charge reminder, dismiss until next session, quick profile assignment and clearing after an assignment on another surface.');
+};

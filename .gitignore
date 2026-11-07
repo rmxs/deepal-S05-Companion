@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+node_modules/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+companion-app-preview.png
+
+*-preview.png
+settings-colours-*.png
+costs-dashboard-overview.png
+layout-navigation-failure.png
+SETTINGS_VALIDATION.json
+LAYOUT_VALIDATION.json
+PERFORMANCE.json

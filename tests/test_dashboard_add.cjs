@@ -1,0 +1,24 @@
+const assert=require('assert');
+module.exports=async page=>{
+  const panel=page.locator('deepal-companion-panel');
+  const open=async()=>{await panel.evaluate(root=>root.shadowRoot.querySelector('[data-action=add-dashboard]').click());await panel.locator('.dashboard-add-dialog [data-dashboard-save]:not([disabled])').waitFor();};
+  const pick=async(name,value)=>panel.locator('.dashboard-add-dialog [name='+name+']').evaluate((select,value)=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value},bubbles:true})),value);
+  const before=await page.evaluate(()=>window.calls.filter(c=>c.type==='lovelace/config/save').length);
+  await open();await panel.locator('[data-dashboard-cancel]').click();
+  assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.type==='lovelace/config/save').length),before,'Cancel must not change a dashboard');
+  await open();await panel.locator('[data-dashboard-save]').click();await panel.locator('.dashboard-add-dialog').waitFor({state:'detached'});
+  const added=await page.evaluate(()=>window.dashboardConfigs.lovelace.views[0].cards);
+  assert.equal(added[0].content,'Keep this card');assert.equal(added[1].type,'custom:deepal-companion-card');
+  assert.equal(added[1].vehicle_id,'car');assert.equal(added[1].view_id,await panel.evaluate(root=>root.selected.view_id));
+  await open();await pick('dashboard','phone');await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.dashboard-placement').textContent.includes('new section'));
+  await panel.locator('[data-dashboard-save]').click();await panel.locator('.dashboard-add-dialog').waitFor({state:'detached'});
+  const sections=await page.evaluate(()=>window.dashboardConfigs.phone.views[0].sections);assert.equal(sections.length,2);assert.equal(sections[0].cards[0].content,'Keep section');assert.equal(sections[1].cards[0].type,'custom:deepal-companion-card');
+  await open();const writes=await page.evaluate(()=>window.calls.filter(c=>c.type==='lovelace/config/save').length);
+  await page.evaluate(()=>window.dashboardConfigs.lovelace.views[0].title='Changed elsewhere');
+  await panel.locator('[data-dashboard-save]').click();await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.dashboard-add-status').textContent.includes('dashboard changed'));
+  assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.type==='lovelace/config/save').length),writes,'Stale dialog must not replace concurrent dashboard changes');
+  await pick('dashboard','auto');await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.dashboard-add-status').textContent.includes('generated automatically'));
+  assert.equal(await panel.locator('[data-dashboard-save]').isDisabled(),true);await panel.locator('[data-dashboard-cancel]').click();
+  assert.equal(await page.evaluate(()=>window.serviceCalls.length),0);
+  console.log('PASS: Add to dashboard, cancel, selected card identifiers, masonry and sections placement, generated dashboards and concurrent edit protection.');
+};

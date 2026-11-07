@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deepal S05 · Charging Sessions</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#121316',
+                        cardbg: '#1b1d20',
+                        cardinner: '#222428',
+                        cardborder: '#32353b',
+                        accent: {
+                            emerald: '#34d399',
+                            emeraldGlow: 'rgba(52, 211, 153, 0.18)',
+                            yellow: '#facc15',
+                            rose: '#f87171',
+                            blue: '#38bdf8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121316;
+            color: #9ca3af;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121316;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #32353b;
+            border-radius: 4px;
+        }
+        .ha-card {
+            background-color: #1b1d20;
+            border: 1px solid #32353b;
+            border-radius: 20px;
+        }
+        .ha-inner-box {
+            background-color: #222428;
+            border: 1px solid #2d3036;
+            border-radius: 14px;
+        }
+        .emerald-glow {
+            box-shadow: 0 0 16px rgba(52, 211, 153, 0.22);
+        }
+        .emerald-focus:focus {
+            border-color: #34d399;
+            box-shadow: 0 0 10px rgba(52, 211, 153, 0.15);
+        }
+    </style>
+</head>
+<body class="min-h-screen text-xs antialiased p-3 sm:p-6 flex flex-col items-center justify-center selection:bg-emerald-500 selection:text-slate-950">
+
+    <div class="w-full max-w-6xl space-y-4">
+        
+        <!-- HEADER & VEHICLE CONTEXT -->
+        <div class="flex flex-wrap items-center justify-between gap-3 px-1">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center text-base shadow-lg emerald-glow font-bold shrink-0">
+                    <i class="fa-solid fa-bolt-lightning"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-gray-100 text-base tracking-tight">Charging sessions</h1>
+                        <span class="bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9.5px] font-bold px-2 py-0.5 rounded-full font-mono">14 SESSIONS</span>
+                    </div>
+                    <p class="text-[11px] text-gray-400">Deepal S05 · Live telemetry and historical charge metrics</p>
+                </div>
+            </div>
+
+            <!-- ANALYTICS QUICK STATS SUMMARY -->
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="bg-[#1b1d20] border border-[#32353b] px-3 py-1.5 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-charging-station text-emerald-400"></i>
+                    <div>
+                        <span class="text-[9px] text-gray-500 font-bold uppercase block">Total Energy</span>
+                        <span class="text-xs font-mono font-bold text-gray-100">142.8 kWh</span>
+                    </div>
+                </div>
+
+                <div class="bg-[#1b1d20] border border-[#32353b] px-3 py-1.5 rounded-xl flex items-center gap-2">
+                    <i class="fa-solid fa-coins text-yellow-400"></i>
+                    <div>
+                        <span class="text-[9px] text-gray-500 font-bold uppercase block">Total Cost</span>
+                        <span class="text-xs font-mono font-bold text-gray-100">€24.60</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTROLS & FILTER BAR -->
+        <div class="ha-card p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+            <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+                <!-- Location Filter -->
+                <div class="flex flex-col gap-1 w-full sm:w-auto">
+                    <span class="text-[9.5px] font-bold uppercase tracking-wider text-gray-400 pl-1">Location</span>
+                    <div class="relative">
+                        <select id="filter-location" onchange="filterSessions()" class="w-full sm:w-44 bg-[#222428] border border-[#32353b] text-gray-200 text-xs rounded-xl px-3 py-1.5 pr-8 appearance-none focus:outline-none emerald-focus cursor-pointer font-medium">
+                            <option value="all">All locations</option>
+                            <option value="work">Work</option>
+                            <option value="ionity">Ionity</option>
+                            <option value="home">New location 1</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down absolute right-3 top-2.5 text-[10px] text-gray-400 pointer-events-none"></i>
+                    </div>
+                </div>
+
+                <!-- Sort Filter -->
+                <div class="flex flex-col gap-1 w-full sm:w-auto">
+                    <span class="text-[9.5px] font-bold uppercase tracking-wider text-gray-400 pl-1">Sort by</span>
+                    <div class="relative">
+                        <select id="filter-sort" onchange="sortSessions()" class="w-full sm:w-44 bg-[#222428] border border-[#32353b] text-gray-200 text-xs rounded-xl px-3 py-1.5 pr-8 appearance-none focus:outline-none emerald-focus cursor-pointer font-medium">
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                            <option value="kwh">Highest Energy (kWh)</option>
+                            <option value="cost">Highest Cost (€)</option>
+                        </select>
+                        <i class="fa-solid fa-chevron-down absolute right-3 top-2.5 text-[10px] text-gray-400 pointer-events-none"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View Switcher (Grid vs List/Table) -->
+            <div class="flex items-center gap-1 bg-[#222428] border border-[#32353b] p-1 rounded-xl self-end">
+                <button onclick="setViewMode('grid')" id="view-grid-btn" class="px-3 py-1 rounded-lg text-slate-950 bg-emerald-400 font-bold text-xs shadow flex items-center gap-1.5 transition-all">
+                    <i class="fa-solid fa-grip-vertical"></i> Grid
+                </button>
+                <button onclick="setViewMode('list')" id="view-list-btn" class="px-3 py-1 rounded-lg text-gray-400 font-medium text-xs hover:text-gray-200 flex items-center gap-1.5 transition-all">
+                    <i class="fa-solid fa-list text-[11px]"></i> Table
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= GRID VIEW CONTAINER ================= -->
+        <div id="sessions-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5 transition-all duration-300">
+
+            <!-- SESSION CARD 1: Wed, Nov 4, 2026 -->
+            <div class="ha-card p-4 space-y-3 shadow-lg hover:border-gray-500 transition-all group" data-location="home" data-kwh="1.43" data-cost="0.54" data-date="2026-11-04">
+                <div class="flex items-center justify-between pb-2 border-b border-[#2d3036]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-emerald-400/15 text-emerald-400 border border-emerald-400/30 flex items-center justify-center text-xs shrink-0">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-100 text-xs group-hover:text-emerald-400 transition-colors">Wed, Nov 4, 2026</h3>
+                            <p class="text-[10px] text-gray-400 font-mono">08:09 AM – 09:32 AM</p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md bg-[#222428] border border-[#32353b] text-gray-300 text-[10px] font-mono font-bold">AC</span>
+                </div>
+
+                <!-- Metrics Box Grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Charged energy</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="text-sm font-bold text-gray-100 font-mono">≈ 1.43</span>
+                            <span class="text-[11px] font-bold text-emerald-400 font-mono">kWh</span>
+                        </div>
+                        <span class="text-[9px] text-gray-500 font-mono">Estimated</span>
+                    </div>
+
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Cost</span>
+                        <div class="text-sm font-bold text-gray-100 font-mono mt-0.5">€0.54</div>
+                        <span class="text-[9px] text-gray-500">Charging cost</span>
+                    </div>
+                </div>
+
+                <!-- Battery SOC Progress Bar -->
+                <div class="space-y-1 pt-0.5">
+                    <div class="flex justify-between text-[10px] font-mono">
+                        <span class="text-gray-400">Battery</span>
+                        <span class="font-bold text-gray-200">93% → <span class="text-emerald-400">100%</span></span>
+                    </div>
+                    <div class="w-full h-2 bg-[#121316] rounded-full border border-[#2d3036] overflow-hidden p-[1px]">
+                        <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-between pt-1">
+                    <button class="px-3 py-1 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-[10.5px] font-medium flex items-center gap-1.5 hover:border-emerald-400/50 transition-all">
+                        <i class="fa-solid fa-location-dot text-emerald-400 text-[10px]"></i> New location 1
+                    </button>
+                    <button onclick="editCharge('Wed, Nov 4, 2026')" class="px-3 py-1 rounded-full bg-[#222428] hover:bg-[#2d3036] text-gray-300 border border-[#32353b] text-[10.5px] font-medium flex items-center gap-1 transition-all">
+                        Edit charge <i class="fa-solid fa-pen text-[9px] text-gray-400 ml-0.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SESSION CARD 2: Tue, Nov 3, 2026 -->
+            <div class="ha-card p-4 space-y-3 shadow-lg hover:border-gray-500 transition-all group" data-location="work" data-kwh="14.72" data-cost="0.00" data-date="2026-11-03">
+                <div class="flex items-center justify-between pb-2 border-b border-[#2d3036]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-emerald-400/15 text-emerald-400 border border-emerald-400/30 flex items-center justify-center text-xs shrink-0">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-100 text-xs group-hover:text-emerald-400 transition-colors">Tue, Nov 3, 2026</h3>
+                            <p class="text-[10px] text-gray-400 font-mono">07:58 AM – 02:11 PM</p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md bg-[#222428] border border-[#32353b] text-emerald-400 text-[10px] font-mono font-bold">AC</span>
+                </div>
+
+                <!-- Metrics Box Grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Charged energy</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="text-sm font-bold text-gray-100 font-mono">≈ 14.72</span>
+                            <span class="text-[11px] font-bold text-emerald-400 font-mono">kWh</span>
+                        </div>
+                        <span class="text-[9px] text-gray-500 font-mono">Estimated</span>
+                    </div>
+
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Cost</span>
+                        <div class="text-sm font-bold text-emerald-400 font-mono mt-0.5">€0.00</div>
+                        <span class="text-[9px] text-emerald-400 font-semibold">Free charging</span>
+                    </div>
+                </div>
+
+                <!-- Battery SOC Progress Bar -->
+                <div class="space-y-1 pt-0.5">
+                    <div class="flex justify-between text-[10px] font-mono">
+                        <span class="text-gray-400">Battery</span>
+                        <span class="font-bold text-gray-200">28% → <span class="text-emerald-400">100%</span></span>
+                    </div>
+                    <div class="w-full h-2 bg-[#121316] rounded-full border border-[#2d3036] overflow-hidden p-[1px]">
+                        <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-between pt-1">
+                    <button class="px-3 py-1 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-[10.5px] font-medium flex items-center gap-1.5 hover:border-emerald-400/50 transition-all">
+                        <i class="fa-solid fa-briefcase text-emerald-400 text-[10px]"></i> Work
+                    </button>
+                    <button onclick="editCharge('Tue, Nov 3, 2026')" class="px-3 py-1 rounded-full bg-[#222428] hover:bg-[#2d3036] text-gray-300 border border-[#32353b] text-[10.5px] font-medium flex items-center gap-1 transition-all">
+                        Edit charge <i class="fa-solid fa-pen text-[9px] text-gray-400 ml-0.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SESSION CARD 3: Sat, Oct 31, 2026 -->
+            <div class="ha-card p-4 space-y-3 shadow-lg hover:border-gray-500 transition-all group" data-location="ionity" data-kwh="16.15" data-cost="4.85" data-date="2026-10-31">
+                <div class="flex items-center justify-between pb-2 border-b border-[#2d3036]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-emerald-400/15 text-emerald-400 border border-emerald-400/30 flex items-center justify-center text-xs shrink-0">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-100 text-xs group-hover:text-emerald-400 transition-colors">Sat, Oct 31, 2026</h3>
+                            <p class="text-[10px] text-gray-400 font-mono">04:35 PM – 10:20 PM</p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md bg-[#222428] border border-[#32353b] text-sky-400 text-[10px] font-mono font-bold">AC</span>
+                </div>
+
+                <!-- Metrics Box Grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Charged energy</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="text-sm font-bold text-gray-100 font-mono">≈ 16.15</span>
+                            <span class="text-[11px] font-bold text-emerald-400 font-mono">kWh</span>
+                        </div>
+                        <span class="text-[9px] text-gray-500 font-mono">Estimated</span>
+                    </div>
+
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Cost</span>
+                        <div class="text-sm font-bold text-gray-100 font-mono mt-0.5">€4.85</div>
+                        <span class="text-[9px] text-gray-500">Charging cost</span>
+                    </div>
+                </div>
+
+                <!-- Battery SOC Progress Bar -->
+                <div class="space-y-1 pt-0.5">
+                    <div class="flex justify-between text-[10px] font-mono">
+                        <span class="text-gray-400">Battery</span>
+                        <span class="font-bold text-gray-200">21% → <span class="text-emerald-400">100%</span></span>
+                    </div>
+                    <div class="w-full h-2 bg-[#121316] rounded-full border border-[#2d3036] overflow-hidden p-[1px]">
+                        <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-between pt-1">
+                    <button class="px-3 py-1 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-[10.5px] font-medium flex items-center gap-1.5 hover:border-emerald-400/50 transition-all">
+                        <i class="fa-solid fa-charging-station text-sky-400 text-[10px]"></i> Ionity
+                    </button>
+                    <button onclick="editCharge('Sat, Oct 31, 2026')" class="px-3 py-1 rounded-full bg-[#222428] hover:bg-[#2d3036] text-gray-300 border border-[#32353b] text-[10.5px] font-medium flex items-center gap-1 transition-all">
+                        Edit charge <i class="fa-solid fa-pen text-[9px] text-gray-400 ml-0.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SESSION CARD 4: Thu, Oct 29, 2026 -->
+            <div class="ha-card p-4 space-y-3 shadow-lg hover:border-gray-500 transition-all group" data-location="ionity" data-kwh="15.13" data-cost="4.54" data-date="2026-10-29">
+                <div class="flex items-center justify-between pb-2 border-b border-[#2d3036]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-emerald-400/15 text-emerald-400 border border-emerald-400/30 flex items-center justify-center text-xs shrink-0">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-100 text-xs group-hover:text-emerald-400 transition-colors">Thu, Oct 29, 2026</h3>
+                            <p class="text-[10px] text-gray-400 font-mono">08:08 AM – 04:45 PM</p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md bg-[#222428] border border-[#32353b] text-gray-300 text-[10px] font-mono font-bold">AC</span>
+                </div>
+
+                <!-- Metrics Box Grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Charged energy</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="text-sm font-bold text-gray-100 font-mono">≈ 15.13</span>
+                            <span class="text-[11px] font-bold text-emerald-400 font-mono">kWh</span>
+                        </div>
+                        <span class="text-[9px] text-gray-500 font-mono">Estimated</span>
+                    </div>
+
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Cost</span>
+                        <div class="text-sm font-bold text-gray-100 font-mono mt-0.5">€4.54</div>
+                        <span class="text-[9px] text-gray-500">Charging cost</span>
+                    </div>
+                </div>
+
+                <!-- Battery SOC Progress Bar -->
+                <div class="space-y-1 pt-0.5">
+                    <div class="flex justify-between text-[10px] font-mono">
+                        <span class="text-gray-400">Battery</span>
+                        <span class="font-bold text-gray-200">24% → <span class="text-emerald-400">98%</span></span>
+                    </div>
+                    <div class="w-full h-2 bg-[#121316] rounded-full border border-[#2d3036] overflow-hidden p-[1px]">
+                        <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full" style="width: 98%;"></div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-between pt-1">
+                    <button class="px-3 py-1 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-[10.5px] font-medium flex items-center gap-1.5 hover:border-emerald-400/50 transition-all">
+                        <i class="fa-solid fa-charging-station text-sky-400 text-[10px]"></i> Ionity
+                    </button>
+                    <button onclick="editCharge('Thu, Oct 29, 2026')" class="px-3 py-1 rounded-full bg-[#222428] hover:bg-[#2d3036] text-gray-300 border border-[#32353b] text-[10.5px] font-medium flex items-center gap-1 transition-all">
+                        Edit charge <i class="fa-solid fa-pen text-[9px] text-gray-400 ml-0.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SESSION CARD 5: Mon, Oct 26, 2026 -->
+            <div class="ha-card p-4 space-y-3 shadow-lg hover:border-gray-500 transition-all group" data-location="home" data-kwh="7.77" data-cost="3.00" data-date="2026-10-26">
+                <div class="flex items-center justify-between pb-2 border-b border-[#2d3036]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-emerald-400/15 text-emerald-400 border border-emerald-400/30 flex items-center justify-center text-xs shrink-0">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-100 text-xs group-hover:text-emerald-400 transition-colors">Mon, Oct 26, 2026</h3>
+                            <p class="text-[10px] text-gray-400 font-mono">03:20 PM – 04:05 PM</p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md bg-[#222428] border border-[#32353b] text-gray-300 text-[10px] font-mono font-bold">AC</span>
+                </div>
+
+                <!-- Metrics Box Grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Charged energy</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="text-sm font-bold text-gray-100 font-mono">≈ 7.77</span>
+                            <span class="text-[11px] font-bold text-emerald-400 font-mono">kWh</span>
+                        </div>
+                        <span class="text-[9px] text-gray-500 font-mono">Estimated</span>
+                    </div>
+
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Cost</span>
+                        <div class="text-sm font-bold text-gray-100 font-mono mt-0.5">€3.00</div>
+                        <span class="text-[9px] text-gray-500">Charging cost</span>
+                    </div>
+                </div>
+
+                <!-- Battery SOC Progress Bar -->
+                <div class="space-y-1 pt-0.5">
+                    <div class="flex justify-between text-[10px] font-mono">
+                        <span class="text-gray-400">Battery</span>
+                        <span class="font-bold text-gray-200">26% → <span class="text-emerald-400">64%</span></span>
+                    </div>
+                    <div class="w-full h-2 bg-[#121316] rounded-full border border-[#2d3036] overflow-hidden p-[1px]">
+                        <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full" style="width: 64%;"></div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-between pt-1">
+                    <button class="px-3 py-1 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-[10.5px] font-medium flex items-center gap-1.5 hover:border-emerald-400/50 transition-all">
+                        <i class="fa-solid fa-location-dot text-emerald-400 text-[10px]"></i> New location 1
+                    </button>
+                    <button onclick="editCharge('Mon, Oct 26, 2026')" class="px-3 py-1 rounded-full bg-[#222428] hover:bg-[#2d3036] text-gray-300 border border-[#32353b] text-[10.5px] font-medium flex items-center gap-1 transition-all">
+                        Edit charge <i class="fa-solid fa-pen text-[9px] text-gray-400 ml-0.5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SESSION CARD 6: Thu, Oct 22, 2026 -->
+            <div class="ha-card p-4 space-y-3 shadow-lg hover:border-gray-500 transition-all group" data-location="home" data-kwh="5.15" data-cost="0.00" data-date="2026-10-22">
+                <div class="flex items-center justify-between pb-2 border-b border-[#2d3036]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full bg-yellow-400/15 text-yellow-400 border border-yellow-400/30 flex items-center justify-center text-xs shrink-0">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-gray-100 text-xs group-hover:text-emerald-400 transition-colors">Thu, Oct 22, 2026</h3>
+                            <p class="text-[10px] text-gray-400 font-mono">08:03 AM – 10:14 AM</p>
+                        </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-md bg-[#222428] border border-[#32353b] text-yellow-400 text-[10px] font-mono font-bold">AC</span>
+                </div>
+
+                <!-- Metrics Box Grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="ha-inner-box p-2.5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Charged energy</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="text-sm font-bold text-gray-100 font-mono">≈ 5.15</span>
+                            <span class="text-[11px] font-bold text-emerald-400 font-mono">kWh</span>
+                        </div>
+                        <span class="text-[9px] text-gray-500 font-mono">Estimated</span>
+                    </div>
+
+                    <div class="ha-inner-box p-2.5 border-amber-500/30 bg-amber-500/5">
+                        <span class="text-[9.5px] text-gray-400 font-medium block">Cost</span>
+                        <div class="text-xs font-bold text-yellow-400 font-mono mt-1">Not priced</div>
+                        <span class="text-[9px] text-yellow-500/80">Add a tariff or receipt</span>
+                    </div>
+                </div>
+
+                <!-- Battery SOC Progress Bar -->
+                <div class="space-y-1 pt-0.5">
+                    <div class="flex justify-between text-[10px] font-mono">
+                        <span class="text-gray-400">Battery</span>
+                        <span class="font-bold text-gray-200">72% → <span class="text-emerald-400">100%</span></span>
+                    </div>
+                    <div class="w-full h-2 bg-[#121316] rounded-full border border-[#2d3036] overflow-hidden p-[1px]">
+                        <div class="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 rounded-full" style="width: 100%;"></div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-between pt-1">
+                    <button class="px-3 py-1 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-[10.5px] font-medium flex items-center gap-1.5 hover:border-emerald-400/50 transition-all">
+                        <i class="fa-solid fa-location-dot text-emerald-400 text-[10px]"></i> New location 1
+                    </button>
+                    <button onclick="editCharge('Thu, Oct 22, 2026')" class="px-3 py-1 rounded-full bg-[#222428] hover:bg-[#2d3036] text-gray-300 border border-[#32353b] text-[10.5px] font-medium flex items-center gap-1 transition-all">
+                        Edit charge <i class="fa-solid fa-pen text-[9px] text-gray-400 ml-0.5"></i>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================= DENSE TABLE VIEW (HIDDEN BY DEFAULT) ================= -->
+        <div id="sessions-table" class="hidden ha-card p-4 overflow-x-auto shadow-lg">
+            <table class="w-full text-left text-xs font-mono">
+                <thead>
+                    <tr class="border-b border-[#32353b] text-gray-400 text-[10px] uppercase tracking-wider">
+                        <th class="pb-3 font-semibold">Date & Time</th>
+                        <th class="pb-3 font-semibold">Energy (kWh)</th>
+                        <th class="pb-3 font-semibold">Cost (€)</th>
+                        <th class="pb-3 font-semibold">Battery SOC</th>
+                        <th class="pb-3 font-semibold">Location</th>
+                        <th class="pb-3 text-right font-semibold">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-[#2a2d33] text-gray-200">
+                    <tr class="hover:bg-[#222428]">
+                        <td class="py-2.5">
+                            <span class="font-bold block">Wed, Nov 4, 2026</span>
+                            <span class="text-[10px] text-gray-500">08:09 AM – 09:32 AM</span>
+                        </td>
+                        <td class="py-2.5 font-bold text-emerald-400">1.43 kWh</td>
+                        <td class="py-2.5">€0.54</td>
+                        <td class="py-2.5">93% → 100%</td>
+                        <td class="py-2.5"><span class="px-2 py-0.5 rounded-full bg-[#222428] border border-[#32353b] text-[10px]">New location 1</span></td>
+                        <td class="py-2.5 text-right"><button onclick="editCharge('Wed, Nov 4, 2026')" class="px-2.5 py-1 rounded-lg bg-[#222428] text-gray-300 hover:text-emerald-400 text-[10px]">Edit</button></td>
+                    </tr>
+                    <tr class="hover:bg-[#222428]">
+                        <td class="py-2.5">
+                            <span class="font-bold block">Tue, Nov 3, 2026</span>
+                            <span class="text-[10px] text-gray-500">07:58 AM – 02:11 PM</span>
+                        </td>
+                        <td class="py-2.5 font-bold text-emerald-400">14.72 kWh</td>
+                        <td class="py-2.5 text-emerald-400 font-bold">Free</td>
+                        <td class="py-2.5">28% → 100%</td>
+                        <td class="py-2.5"><span class="px-2 py-0.5 rounded-full bg-[#222428] border border-[#32353b] text-[10px]">Work</span></td>
+                        <td class="py-2.5 text-right"><button onclick="editCharge('Tue, Nov 3, 2026')" class="px-2.5 py-1 rounded-lg bg-[#222428] text-gray-300 hover:text-emerald-400 text-[10px]">Edit</button></td>
+                    </tr>
+                    <tr class="hover:bg-[#222428]">
+                        <td class="py-2.5">
+                            <span class="font-bold block">Sat, Oct 31, 2026</span>
+                            <span class="text-[10px] text-gray-500">04:35 PM – 10:20 PM</span>
+                        </td>
+                        <td class="py-2.5 font-bold text-emerald-400">16.15 kWh</td>
+                        <td class="py-2.5">€4.85</td>
+                        <td class="py-2.5">21% → 100%</td>
+                        <td class="py-2.5"><span class="px-2 py-0.5 rounded-full bg-[#222428] border border-[#32353b] text-[10px]">Ionity</span></td>
+                        <td class="py-2.5 text-right"><button onclick="editCharge('Sat, Oct 31, 2026')" class="px-2.5 py-1 rounded-lg bg-[#222428] text-gray-300 hover:text-emerald-400 text-[10px]">Edit</button></td>
+                    </tr>
+                    <tr class="hover:bg-[#222428]">
+                        <td class="py-2.5">
+                            <span class="font-bold block">Thu, Oct 29, 2026</span>
+                            <span class="text-[10px] text-gray-500">08:08 AM – 04:45 PM</span>
+                        </td>
+                        <td class="py-2.5 font-bold text-emerald-400">15.13 kWh</td>
+                        <td class="py-2.5">€4.54</td>
+                        <td class="py-2.5">24% → 98%</td>
+                        <td class="py-2.5"><span class="px-2 py-0.5 rounded-full bg-[#222428] border border-[#32353b] text-[10px]">Ionity</span></td>
+                        <td class="py-2.5 text-right"><button onclick="editCharge('Thu, Oct 29, 2026')" class="px-2.5 py-1 rounded-lg bg-[#222428] text-gray-300 hover:text-emerald-400 text-[10px]">Edit</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <!-- MODAL EDIT CHARGE -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="ha-card w-full max-w-md p-5 space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between pb-2 border-b border-[#32353b]">
+                <h3 id="modal-title" class="font-bold text-gray-100 text-sm">Edit Charge Details</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-200"><i class="fa-solid fa-xmark text-sm"></i></button>
+            </div>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="text-[10px] text-gray-400 font-bold uppercase block mb-1">Charging Location</label>
+                    <input type="text" value="New location 1" class="w-full bg-[#222428] border border-[#32353b] rounded-xl px-3 py-1.5 text-gray-100 font-medium focus:outline-none emerald-focus">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold uppercase block mb-1">Charged kWh</label>
+                        <input type="number" step="0.01" value="1.43" class="w-full bg-[#222428] border border-[#32353b] rounded-xl px-3 py-1.5 text-emerald-400 font-mono font-bold focus:outline-none emerald-focus">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-400 font-bold uppercase block mb-1">Cost (€)</label>
+                        <input type="number" step="0.01" value="0.54" class="w-full bg-[#222428] border border-[#32353b] rounded-xl px-3 py-1.5 text-gray-100 font-mono font-bold focus:outline-none emerald-focus">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2 border-t border-[#32353b]">
+                <button onclick="closeModal()" class="px-4 py-1.5 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-xs font-medium">Cancel</button>
+                <button onclick="saveModal()" class="px-4 py-1.5 rounded-full bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-400/20">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-emerald-400 text-slate-950 px-4 py-2 rounded-full font-bold text-xs shadow-2xl flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <i class="fa-solid fa-circle-check text-sm"></i>
+        <span id="toast-text">Session updated!</span>
+    </div>
+
+    <script>
+        function setViewMode(mode) {
+            const grid = document.getElementById('sessions-grid');
+            const table = document.getElementById('sessions-table');
+            const gridBtn = document.getElementById('view-grid-btn');
+            const listBtn = document.getElementById('view-list-btn');
+
+            if (mode === 'grid') {
+                grid.classList.remove('hidden');
+                table.classList.add('hidden');
+                gridBtn.className = "px-3 py-1 rounded-lg text-slate-950 bg-emerald-400 font-bold text-xs shadow flex items-center gap-1.5 transition-all";
+                listBtn.className = "px-3 py-1 rounded-lg text-gray-400 font-medium text-xs hover:text-gray-200 flex items-center gap-1.5 transition-all";
+            } else {
+                table.classList.remove('hidden');
+                grid.classList.add('hidden');
+                listBtn.className = "px-3 py-1 rounded-lg text-slate-950 bg-emerald-400 font-bold text-xs shadow flex items-center gap-1.5 transition-all";
+                gridBtn.className = "px-3 py-1 rounded-lg text-gray-400 font-medium text-xs hover:text-gray-200 flex items-center gap-1.5 transition-all";
+            }
+        }
+
+        function filterSessions() {
+            const loc = document.getElementById('filter-location').value;
+            const cards = document.querySelectorAll('#sessions-grid > div');
+
+            cards.forEach(card => {
+                if (loc === 'all' || card.dataset.location === loc) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            showToast(`Filtered by location: ${loc.toUpperCase()}`);
+        }
+
+        function sortSessions() {
+            const sortVal = document.getElementById('filter-sort').value;
+            const grid = document.getElementById('sessions-grid');
+            const cards = Array.from(grid.children);
+
+            cards.sort((a, b) => {
+                if (sortVal === 'kwh') return parseFloat(b.dataset.kwh) - parseFloat(a.dataset.kwh);
+                if (sortVal === 'cost') return parseFloat(b.dataset.cost) - parseFloat(a.dataset.cost);
+                if (sortVal === 'oldest') return a.dataset.date.localeCompare(b.dataset.date);
+                return b.dataset.date.localeCompare(a.dataset.date); // newest default
+            });
+
+            cards.forEach(card => grid.appendChild(card));
+            showToast(`Sorted by: ${sortVal}`);
+        }
+
+        function editCharge(sessionDate) {
+            document.getElementById('modal-title').innerText = `Edit Charge · ${sessionDate}`;
+            document.getElementById('edit-modal').classList.remove('hidden');
+            document.getElementById('edit-modal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+            document.getElementById('edit-modal').classList.remove('flex');
+        }
+
+        function saveModal() {
+            closeModal();
+            showToast("Session updated successfully!");
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-text').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2200);
+        }
+    </script>
+</body>
+</html>
