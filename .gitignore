@@ -13,3 +13,20 @@ layout-navigation-failure.png
 SETTINGS_VALIDATION.json
 LAYOUT_VALIDATION.json
 PERFORMANCE.json
+
+# Caches and test output
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Local tooling, editors and OS files
+.claude/
+.codex/
+.vscode/
+.idea/
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db

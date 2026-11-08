@@ -37,10 +37,18 @@ energy=energy.replace('if (off === 0) run(false);','if (costView || off === 0) r
 energy=energy.replace('if(g.pricing&&JSON.stringify(g.assignment||null)===JSON.stringify(r||null))','if(g.pricing&&JSON.stringify(g.assignment||null)===JSON.stringify(r||null))');
 energy=energy.replace('this.sensorHistory={};','if(this.archiveOnly)return;\n    this.sensorHistory={};');
 fs.writeFileSync(front+"/energy/energy.js",energy);
-for(const file of ["charging-curve.js","companion-card.js","energy/energy.js","notification-rules.js","companion-panel.js","companion-dashboard.js","companion-notifications.js","companion-notifications-design.js","notification-design.js","profile-field.js","notification-layout.js","notification-activity.js","cost-design.js","companion-cost-design.js","loader.js",...fs.readdirSync(front+"/lang").filter(x=>x.endsWith(".js")).map(x=>"lang/"+x)]){
+for(const file of ["charging-curve.js","companion-card.js","energy/energy.js","notification-rules.js","companion-panel.js","companion-dashboard.js","companion-notifications.js","companion-health.js","companion-live.js","companion-notifications-design.js","notification-design.js","profile-field.js","notification-layout.js","notification-activity.js","cost-design.js","companion-cost-design.js","loader.js",...fs.readdirSync(front+"/lang").filter(x=>x.endsWith(".js")).map(x=>"lang/"+x)]){
  if(file.startsWith("lang/"))fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replaceAll("__DEEPAL_S05_","__DEEPAL_COMPANION_"));
  fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replace(/\?v=\d+\.\d+\.\d+/g,'?v='+version));
  cp.execFileSync(process.execPath,["--check",front+"/"+file]);
  fs.writeFileSync(front+"/"+file+".gz",z.gzipSync(fs.readFileSync(front+"/"+file)));
 }
-console.log("Companion bundles built; all JavaScript syntax checks passed.");
+// Home Assistant serves a .gz next to a .js when one exists, so every .js must have a matching, current .gz and no .gz may be left without its .js.
+const walk=(dir)=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(dir+"/"+e.name):[dir+"/"+e.name]);
+const all=walk(front);
+for(const f of all.filter(x=>x.endsWith(".js.gz")&&!fs.existsSync(x.slice(0,-3))))fs.unlinkSync(f);
+for(const f of all.filter(x=>x.endsWith(".js")))fs.writeFileSync(f+".gz",z.gzipSync(fs.readFileSync(f)));
+for(const f of walk(front).filter(x=>x.endsWith(".js"))){
+ if(!z.gunzipSync(fs.readFileSync(f+".gz")).equals(fs.readFileSync(f)))throw new Error("Compressed copy differs from "+f);
+}
+console.log("Companion bundles built; all JavaScript syntax checks passed; every .gz matches its .js.");

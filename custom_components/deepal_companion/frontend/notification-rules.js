@@ -24,6 +24,26 @@ const EV = {
     delayHelp: "Minutes charging must stay stopped (cable connected) before you are notified.",
     vars: ["name", "battery", "range", "minutes"], title: "{name} · Charging interrupted", text: "Charging stopped at {battery}%, before reaching the limit, and the cable is still connected.",
   },
+  charge_started: {
+    g: "charge", icon: "mdi:battery-charging-high", label: "Charging started", sub: "Charging has just started, for example a scheduled charge. If it never starts, use “Plugged in, but not charging”.",
+    d: { on: false, delay: 0, repeat: 0, max: 1, sev: "info", away: false, parked: false, actions: ["dismiss"] }, ctl: ["delay", "sev", "actions"], acts: ["dismiss"],
+    delayHelp: "Minutes charging must keep running before you are notified.",
+    vars: ["name", "battery", "range"], title: "{name} · Charging started", text: "Charging has started. Battery {battery}%.",
+  },
+  charge_eta: {
+    g: "charge", icon: "mdi:timer-sand", label: "Charging almost finished", sub: "The estimated time left to finish charging is at or below your limit.", needsLeft: true,
+    d: { on: false, delay: 0, repeat: 0, max: 1, sev: "info", away: false, parked: false, actions: ["dismiss"], thr: 15 }, ctl: ["delay", "sev", "thr", "actions"], acts: ["dismiss"],
+    thr: { label: "Time left at or below", unit: "min", min: 5, max: 120, step: 5, sub: "A notification is sent while charging when the estimated time left is this many minutes or less." },
+    delayHelp: "Minutes the condition must last before you are notified.",
+    vars: ["name", "battery", "range", "left"], title: "{name} · Charging almost finished", text: "About {left} minutes left. Battery {battery}%.",
+  },
+  charge_target: {
+    g: "charge", icon: "mdi:battery-charging-80", label: "Charging reached target", sub: "The battery reached your target percentage while still charging.",
+    d: { on: false, delay: 0, repeat: 0, max: 1, sev: "info", away: false, parked: false, actions: ["dismiss"], thr: 80 }, ctl: ["delay", "sev", "thr", "actions"], acts: ["dismiss"],
+    thr: { label: "Target", unit: "%", min: 50, max: 100, step: 1, sub: "A notification is sent while charging when the battery reaches this percentage." },
+    delayHelp: "Minutes the battery must stay at the target before you are notified.",
+    vars: ["name", "battery", "range"], title: "{name} · Target reached", text: "Battery {battery}% (range {range} km). Target reached.",
+  },
   unlocked: {
     g: "security", icon: "mdi:lock-open-variant-outline", label: "Unlocked vehicle", sub: "The vehicle stays unlocked.",
     d: { on: true, delay: 15, repeat: 15, max: 3, sev: "important", away: false, parked: true, actions: ["lock", "dismiss"] }, ctl: ["delay", "repeat", "sev", "away", "parked", "actions"], acts: ["lock", "dismiss"],
@@ -184,7 +204,7 @@ function context(hass, cfg) {
     chg: id("binary_sensor.charging"), plug: id("binary_sensor.charger_plugged"), status: id("sensor.charge_status"), cloud: id("binary_sensor.cloud_connection"),
     low: id("binary_sensor.low_beam"), high: id("binary_sensor.high_beam"), clim: id("climate.cabin_climate"), climon: id("binary_sensor.climate_on"), odo: id("sensor.total_odometer"),
     tpw: id("binary_sensor.tire_pressure_warning"), power: id("sensor.power_status"), lockbin: id("binary_sensor.doors_lock_state"), upd: id("sensor.last_updated"), key: id("binary_sensor.key_fob_battery_low"),
-    ac: id("sensor.ac_charge_current"), dc: id("sensor.dc_charge_current"),
+    left: id("sensor.remaining_charge_time_h_mm"), ac: id("sensor.ac_charge_current"), dc: id("sensor.dc_charge_current"),
   };
   const devs = devices(hass), tracker = (svc) => { const d = devs.find((v) => v.svc === svc); return d && d.tracker ? eid(d.tracker) : ""; };
   return { hass, cfg, n, id, E, has: (e) => !!st[e], tracker, px: slug(cfg.prefix), name: String(cfg.name || "Deepal S05") };
@@ -192,9 +212,10 @@ function context(hass, cfg) {
 /* Does this update make sense for this vehicle? (e.g. fuel only on a plug-in hybrid) */
 function available(hass, cfg, evId) {
   const sp = EV[evId];
-  if (!sp.needsFuel && !sp.needsKey && !sp.needsComfort) return true;
+  if (!sp.needsFuel && !sp.needsKey && !sp.needsComfort && !sp.needsLeft) return true;
   const x = context(hass, cfg);
   if (sp.needsComfort) return COMFORT.some(([k]) => x.has(eid(x.id(k))));
+  if (sp.needsLeft) return x.has(x.E.left);
   if (sp.needsKey) return x.has(x.E.key); /* it makes no sense without the key sensor */
   return cfg.powertrain !== "ev" && x.has(x.E.fuelr);
 }
@@ -223,6 +244,10 @@ function logic(x, evId, e) {
       /* connected, not charging, below the limit AND charging stopped recently (otherwise it is just "connected but not charging") */
       return { expr: `${plugged} and ${bat} < ${n.events.charge_done.thr} and ${bat} > 0 and (now() - states.${ref}.last_changed).total_seconds() < 7200` };
     }
+    case "charge_started": return { expr: `${charging} and (now() - states.${x.has(E.chg) ? E.chg : ref}.last_changed).total_seconds() < 900` };
+    case "charge_target": return { expr: `${charging} and ${bat} >= ${e.thr}` };
+    case "charge_eta": return { pre: tags("set p = states('" + E.left + "').split(':')", "set mins = ((p[0] | int(0)) * 60 + (p[1] | int(0))) if p | count == 2 else 0"),
+      expr: `${charging} and mins > 0 and mins <= ${e.thr}`, left: "{{ mins }}" };
     case "comfort": {
       const list = COMFORT.filter(([k]) => x.has(eid(x.id(k)))).map(([k, nm, t]) => `[${jq(eid(x.id(k)))}, ${jq(T(nm))}, ${jq(t)}]`).join(", ");
       return { pre: tags("set ns = namespace(l=[])", `for e, nm, t in [${list}]`, "if (t == 'bin' and is_state(e, 'on')) or (t == 'num' and states(e) | float(0) > 0)", "set ns.l = ns.l + [nm]", "endif", "endfor"),
@@ -299,10 +324,10 @@ NF.localRules = (hass, cfg) => {
     const spec=EV[id],event=x.n.events[id],lg=logic(x,id,event);
     const variables={};
     const number=en=>`{{ states('${en}') | float(none) }}`;
-    Object.assign(variables,{name:x.name,battery:number(x.E.batt),range:number(x.E.range),fuel_range:number(x.E.fuelr),minutes:`{{ ${event.delay} + (repeat.index - 1) * ${event.repeat} }}`,items:lg.items?`${lg.pre}\n${lg.items}`:''});
+    Object.assign(variables,{name:x.name,battery:number(x.E.batt),range:number(x.E.range),fuel_range:number(x.E.fuelr),minutes:`{{ ${event.delay} + (repeat.index - 1) * ${event.repeat} }}`,items:lg.items?`${lg.pre}\n${lg.items}`:'',left:lg.left?`${lg.pre}\n${lg.left}`:''});
     return {id,name:spec.label,enabled:false,preset:id,preset_options:{...event},threshold:spec.thr||null,controls:spec.ctl,fresh:x.n.fresh,devices:[...x.n.devices],condition:ruleCondition(x,id),
       title:event.title||spec.title,message:event.text||spec.text,variables,
-      delay:event.delay*60,repeat:event.repeat*60,max_sends:cnt(event),cooldown:id==='charge_done'?1800:0,
+      delay:event.delay*60,repeat:event.repeat*60,max_sends:cnt(event),cooldown:id==='charge_done'||id==='charge_started'?1800:0,
       severity:event.sev,quiet:{enabled:x.n.quiet.on,from:x.n.quiet.from,to:x.n.quiet.to,mode:x.n.quiet.mode==='skip'?'skip':'silent'},
       url:x.n.url||'/deepal-companion',buttons:[...event.actions],data:{notification_icon:event.icon||spec.icon},
       recipient_conditions:event.away?Object.fromEntries(x.n.devices.map(service=>[service,x.tracker(service)?`{{ not is_state('${x.tracker(service)}', 'home') }}`:'true'])):{}};

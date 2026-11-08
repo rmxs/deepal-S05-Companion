@@ -11,7 +11,7 @@ import time
 import uuid
 
 DEFAULT = {"enabled": False, "devices": [], "min_interval": 300,
-           "battery_step": 5, "show_timer": True, "max_age": 1800}
+           "battery_step": 5, "show_timer": True, "max_age": 1800, "icon": "", "url": ""}
 
 
 def validate_live(value):
@@ -26,6 +26,10 @@ def validate_live(value):
     for key, low, high in (("min_interval", 60, 3600), ("battery_step", 1, 20), ("max_age", 300, 86400)):
         if type(result[key]) is not int or not low <= result[key] <= high:
             raise ValueError("Invalid live charging " + key)
+    if not isinstance(result["icon"], str) or (result["icon"] and (len(result["icon"]) > 84 or not re.fullmatch(r"mdi:[a-z0-9-]+", result["icon"]))):
+        raise ValueError("Invalid icon")
+    if not isinstance(result["url"], str) or (result["url"] and not re.fullmatch(r"/[\w\-./%]{0,160}", result["url"])):
+        raise ValueError("Invalid page to open when tapped")
     devices = result["devices"]
     if not isinstance(devices, list) or len(devices) > 20 or any(
         not isinstance(device, str) or not re.fullmatch(r"(?:notify\.[a-z0-9_]+|mobile_app_[a-z0-9_]+)", device) for device in devices
@@ -133,7 +137,7 @@ class LiveCharging:
         key = hashlib.sha256(self.runtime.vehicle.encode()).hexdigest()[:20]
         return "dc_test_" + key if test else "dc_charge_" + key + "_" + uuid.uuid4().hex[:16]
 
-    def payload(self, snapshot, options, tag, title, test=False):
+    def payload(self, snapshot, options, tag, test=False):
         updated = datetime.fromtimestamp(snapshot["updated"], timezone.utc).strftime("%d %b %H:%M UTC")
         status = "Charging" if snapshot["charging"] else "Not charging"
         parts = [("Test · " if test else "") + status, str(snapshot["battery"]) + "%"]
@@ -144,12 +148,15 @@ class LiveCharging:
         if not isinstance(color, str) or not re.fullmatch(r"#[a-fA-F0-9]{6}", color):
             color = "#63cba3"
         data = {"tag": tag, "live_update": True, "progress": snapshot["battery"], "progress_max": 100,
-                "critical_text": str(snapshot["battery"]) + "%", "notification_icon": "mdi:ev-station",
+                "critical_text": str(snapshot["battery"]) + "%", "notification_icon": options.get("icon") or "mdi:ev-station",
                 "color": color, "notification_icon_color": color, "progress_bar_color": color,
                 "silent": True, "alert_once": True, "chronometer": False}
+        if options.get("url"):
+            data.update(url=options["url"], clickAction=options["url"])
         if options["show_timer"] and snapshot["charging"] and snapshot["end"]:
-            data.update(chronometer=True, when=snapshot["end"], when_relative=False)
-        return {"title": title, "message": " · ".join(parts), "data": data}
+            data.update(chronometer=True, when=snapshot["end"], when_relative=False, text_color=color)
+        # The title is the information itself; the message carries the details.
+        return {"title": " · ".join(parts[:2]), "message": " · ".join(parts[2:]), "data": data}
 
     async def send(self, device, payload):
         try:
@@ -185,7 +192,7 @@ class LiveCharging:
             self.state = {"test_devices": self.state["test_devices"]} if self.state.get("test_devices") else {}
         elif enabled and snap and snap["charging"]:
             if not self.state.get("tag"):
-                self.state.update(tag=self.tag(), title=self.runtime.config.get("name", "Deepal S05") + " · Charging")
+                self.state.update(tag=self.tag())
             for device in options["devices"]:
                 previous = active.get(device, {})
                 if now - self.last_attempt.get(device, previous.get("sent", 0)) < options["min_interval"]:
@@ -197,7 +204,7 @@ class LiveCharging:
                 refreshed = now - previous.get("sent", 0) >= 300 and snap["updated"] > previous.get("updated", 0)
                 if previous and not changed and not refreshed:
                     continue
-                result = await self.send(device, self.payload(snap, options, self.state["tag"], self.state["title"]))
+                result = await self.send(device, self.payload(snap, options, self.state["tag"]))
                 self.last_attempt[device] = now
                 if result["status"] == "accepted":
                     active[device] = {"sent": now, "signature": signature, "end": end, "updated": snap["updated"]}
@@ -226,7 +233,7 @@ class LiveCharging:
                 targets = options["devices"]
                 if not targets:
                     raise ValueError("Choose a Mobile App phone first")
-                payload = self.payload(snap, options, self.tag(test=True), "Deepal Companion · Live test", test=True)
+                payload = self.payload(snap, options, self.tag(test=True), test=True)
             results = [await self.send(device, payload) for device in targets]
             tracked = set(self.state.get("test_devices", []))
             for result in results:

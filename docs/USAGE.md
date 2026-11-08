@@ -8,7 +8,7 @@
 2. Choose your vehicle if you have more than one configured.
 3. Use the four pages at the top:
    - **Card Settings** — customise the dashboard card.
-   - **Notifications** — choose phone alerts and Live charging.
+   - **Notifications** — choose phone alerts and Live notifications.
    - **Sessions** — browse charging sessions, curves and costs.
    - **Charging Profiles** — set up charging locations and prices.
 
@@ -37,7 +37,7 @@ Each dashboard card selects a profile. You can use a compact mobile profile and 
 8. Drag the Info rows, or use their up/down buttons, to set their order.
 9. Use the same controls to arrange your custom information tiles.
 
-New/reset profiles use this section order: Vehicle image → Control buttons → Status → Charging → Charging curve → Temperature & battery → Info → Diagnostics → Charging costs. The separate **Charging** and **Charging costs** sections start off; **Charging curve** starts on and appears while charging.
+New/reset profiles use this section order: Vehicle image → Control buttons → Status → Charging → Charging curve → Temperature & battery → Info → Charging costs. The separate **Charging** and **Charging costs** sections start off; **Charging curve** starts on and appears while charging.
 
 The charging text on the vehicle image is configured separately in **Card Settings → Charging**.
 
@@ -50,6 +50,12 @@ The charging text on the vehicle image is configured separately in **Card Settin
 5. Return to **Live** when finished.
 
 Simulated states use the same card display with example vehicle readings. Demo commands stay in the preview. With **Live** and **Allow clicks** selected, controls can send commands to your vehicle.
+
+### Read the card status
+
+- **Data age:** the small badge on the refresh button shows how old the vehicle data is (now, 1m, 3m, 1h …). It turns yellow after 2 hours and red after 4 hours. Turn it off with **Card Settings → Layout → On the image → Last update**.
+- **Lock line:** the car’s cloud is read about every 5 minutes and an unlock lasts only seconds, so the exact lock time cannot always be known. While the engine or power is on, the card shows **In use** instead of a lock state, because the car may lock itself while driving. If the car was driven since the last lock change (the engine turned off, or the odometer changed), it shows **Locked after 21:14** instead of a time it cannot know. Otherwise it shows **Locked at …**.
+- **Settings gear:** the gear at the bottom right of the image opens the Companion dashboard. It is shown to Home Assistant administrators only. Turn it off with **Card Settings → Layout → On the image → Settings button**.
 
 ## 5. Change the look
 
@@ -128,7 +134,9 @@ If a **Charging detected** reminder appears on the card, select a profile and as
 
 Preview actions do not save costs, dismiss real reminders or send vehicle commands. The sample profiles and prices are demonstration values.
 
-On the real card, the reminder needs a recorded charge with at least a **10 percentage-point battery increase**, without a data gap, and no location assigned. It is an on-card reminder. Assigning a location from Sessions clears it; dismissal lasts until the next charge for that user.
+On the real card, the reminder needs a finished charge that added at least the minimum set in **Card Settings → Advanced → Ask for a charging profile after at least (%)** (3 percentage points by default), without a data gap, and no location assigned. A charge that is still in progress does not ask. If you missed several charges, they are offered one at a time, oldest first, among the latest charges set in **Recent charges checked for the reminder** (10 by default). It is an on-card reminder. Assigning a location from Sessions clears it; dismissing a charge hides only that charge, for that user, and the next unanswered charge is shown.
+
+**Ignore one-off battery jumps above (%)** (default 20) protects the recorded charge: a single battery reading far above the charge so far is ignored until the next reading confirms it. A real fast jump is counted as soon as one more reading agrees.
 
 ## 9. Browse sessions and charts
 
@@ -181,7 +189,13 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 3. Choose a preset and review the alerts.
 4. Send a test and confirm it reaches the phone.
 5. Configure quiet hours and save.
-6. Follow the [notification guide](NOTIFICATIONS.md) to customise individual alerts and enable Live charging.
+6. Follow the [notification guide](NOTIFICATIONS.md) to customise individual alerts and enable Live notifications.
+
+## 13. Check that everything works
+
+Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. A problem says what is wrong and what to do. The page only reads; it never changes settings or sends a notification.
+
+In **Notifications**, choose **Why isn’t it sending?** on an alert to see why it is or is not being sent right now: switches, condition, delay, send limit, repeat, quiet hours and devices.
 
 ## Saved settings and updates
 

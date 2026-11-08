@@ -61,7 +61,12 @@ const companionOriginalConnected = DeepalS05Card.prototype.connectedCallback;
 const companionOriginalDisconnected = DeepalS05Card.prototype.disconnectedCallback;
 function companionQueueWrite(card,hass,owner,data){
   const queues=card._compWriteQueues||(card._compWriteQueues=new Map()),key=JSON.stringify(owner);
-  const request=(queues.get(key)||Promise.resolve()).catch(()=>{}).then(()=>companionRequest(hass,owner,"config_patch",data));
+  const revisions=card._compRevisions||(card._compRevisions=new Map());
+  // The revision is read when the write runs, so queued saves chain on the previous save's result.
+  const request=(queues.get(key)||Promise.resolve()).catch(()=>{}).then(async()=>{
+    const response=await companionRequest(hass,owner,"config_patch",{...data,expected_revision:revisions.get(key)});
+    revisions.set(key,response.revision);return response;
+  });
   queues.set(key,request);
   const clear=()=>{if(queues.get(key)===request)queues.delete(key);};request.then(clear,clear);
   return request;
@@ -79,7 +84,7 @@ DeepalS05Card.prototype.setConfig = function(config) {
   this._compGeneration=(this._compGeneration||0)+1;
   this._compChargePrompt=null;this.shadowRoot.querySelector('.charge-assignment-prompt')?.remove();
   this._compFetching=false;this._compAgain=false;this._compSaving=false;this._compDirty=false;this._compReset=false;
-  this._local={};this._remoteErr=false;this._compLastLoaded=false;this._uiDone=false;this._hview=null;
+  this._local={};this._remoteErr=false;this._compLastLoaded=false;this._hview=null;
   this._companion = { vehicle_id: config.vehicle_id, view_id: config.view_id };
   this._compInput = config;
   this._compConfigSignature = null;
@@ -114,11 +119,11 @@ DeepalS05Card.prototype._loadRemote = async function() {
     // Local unsaved edits are never replaced by a subscription response.
     if (!this._compSaving && !this._compDirty && signature !== this._compConfigSignature) {
       this._compConfigSignature = signature;
+      (this._compRevisions||(this._compRevisions=new Map())).set(JSON.stringify(this._companion),response.revision);
       this._yaml = { ...response.config, type:"custom:deepal-companion-card", ...this._companion };
       this._local = {};
       this._c = mergeConfig(this._yaml, {});
       if(!this._compLastLoaded){this._compLastLoaded=true;this._last=lsRead("deepal-s05-last:"+this._c.prefix)||this._last||{};}
-      if(!this._uiDone){this._uiDone=true;this._uiRestore();}
       this._built = false; this._sig = null; this._remoteLoaded = true;
       this._cvReset(); this._force();
       if(this._compPreviousSaveError){this._toast(this._compPreviousSaveError,"error");this._compPreviousSaveError=null;}
@@ -132,7 +137,11 @@ DeepalS05Card.prototype._loadRemote = async function() {
     }
   } catch (error) {
     if(generation!==this._compGeneration)return;
-    if (!this._c) this.shadowRoot.innerHTML = '<ha-card style="padding:18px">Deepal Companion: '+esc(error.message || String(error))+'</ha-card>';
+    if (!this._c) {
+      console.error("Deepal Companion could not load", error);
+      this.shadowRoot.innerHTML = '<ha-card style="padding:18px"><p style="margin:0 0 12px">Deepal Companion could not load. Check that Home Assistant is reachable, then try again.</p><button class="companion-retry" style="padding:8px 14px;cursor:pointer">Try again</button></ha-card>';
+      this.shadowRoot.querySelector(".companion-retry")?.addEventListener("click", () => this._loadRemote());
+    }
     else this._toast(error.message || String(error), "error");
   } finally {
     if(generation===this._compGeneration){this._compFetching = false;
@@ -140,7 +149,6 @@ DeepalS05Card.prototype._loadRemote = async function() {
   }
 };
 DeepalS05Card.prototype._lsKey = function() { return "deepal-companion-view:" + this._companion?.view_id; };
-DeepalS05Card.prototype._uiKey = function() { return "deepal-companion-ui:" + this._companion?.view_id; };
 DeepalS05Card.prototype._saveYaml = function(reset) {
   this._compDirty = true;
   if (reset) this._compReset = true;
@@ -165,18 +173,21 @@ DeepalS05Card.prototype._doSaveYaml = async function() {
     if(reset){this._built=false;this._force();}
   } catch (error) {
     if(generation!==this._compGeneration)return;
+    if(/changed elsewhere/i.test(error.message||"")){
+      // Another editor saved first: drop this stale copy and show what is stored now.
+      this._local={};this._compDirty=false;this._compReset=false;this._remoteErr=false;this._compConfigSignature=null;
+      this._toast(T("Settings were changed elsewhere. The latest settings were loaded; repeat your change."), "error");
+      queueMicrotask(()=>this._loadRemote());
+    } else {
     this._remoteErr = true; this._compDirty = true;
     this._toast(T("Settings could not be saved") + ": " + (error.message || String(error)), "error");
+    }
   } finally {
     if(generation===this._compGeneration){this._compSaving = false;
     if (this._compDirty && !this._remoteErr) this._saveYaml();}
   }
 };
 DeepalS05Card.prototype._saveRemote = function() { this._saveYaml(); };
-DeepalS05Card.prototype._resetLocal = function() {
-  this._local = {}; this._compReset = true; this._compDirty = true;
-  this._saveYaml(true); this._built = false; this._force();
-};
 DeepalS05Card.prototype.connectedCallback = function() {
   companionOriginalConnected.call(this);
   if (this._rawHass) this._loadRemote();

@@ -62,7 +62,20 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 4. Confirm the phone allows Home Assistant notifications.
 5. Check quiet hours, severity, away/parked conditions and old-data filtering.
 6. If the phone was replaced, recheck its Mobile App registration and recipient selection.
-7. For Live charging, follow the separate [requirements and test steps](NOTIFICATIONS.md#live-charging-on-the-lock-screen).
+7. For Live notifications, follow the separate [requirements and test steps](NOTIFICATIONS.md#live-notifications-on-the-lock-screen).
+
+## The lock time looks wrong
+
+1. The card reads the car’s cloud about every 5 minutes, and an unlock lasts only seconds, so a quick unlock and lock between two readings is never seen.
+2. While the engine or power is on, the card shows **In use** and makes no lock claim, because the car may lock itself while driving.
+3. **Locked after 21:14** means the car was driven since the last lock change, and it was locked some time after that moment. The odometer and the engine state are used to detect a drive.
+4. The lock and engine times come from the recorded history, so restarting Home Assistant or reloading the integration does not reset them. If the recorder has no history, the card falls back to the time Home Assistant last saw a change.
+5. Check the age badge on the refresh button. An old reading (yellow after 2 hours, red after 4) means the car has not reported recently; use the refresh button.
+
+## The Settings gear is missing
+
+1. The gear is shown to Home Assistant administrators only.
+2. Check **Card Settings → Layout → On the image → Settings button**.
 
 ## Duplicate alerts arrive
 

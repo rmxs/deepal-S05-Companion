@@ -30,7 +30,7 @@ DeepalS05Card.prototype._renderChargePrompt=function(){
         if(generation!==this._compGeneration)return;this._compChargePrompt=null;this._renderChargePrompt();await this._loadRemote();
       }catch(error){if(generation!==this._compGeneration)return;node.querySelectorAll('button').forEach(item=>item.disabled=false);this._toast(error.message||String(error),'error');await this._loadRemote();}
     });
-    (this._el.costs||this._el.foot).before(node);
+    if(this._el.costs)this._el.costs.before(node);else this._el.hero.parentNode.append(node); /* the Settings gear lives inside the image, so it is no longer a place to insert next to */
   }
   node.style.order=String(this._c.order.indexOf('reminder'));
   const signature=JSON.stringify(prompt);if(node.dataset.signature===signature)return;node.dataset.signature=signature;

@@ -141,10 +141,26 @@ class ArchiveTests(unittest.TestCase):
         updated = Database(self.path)
         updated.initialize()
         updated.ensure_vehicle("one", "Car", {**self.source, "car_color": "black", "powertrain": "ev"})
-        self.assertEqual([updated.config("one", v["id"]) for v in self.views], before)
+        # A vehicle saved before powertrain was stored takes the setup choice; everything else is untouched.
+        self.assertEqual([updated.config("one", v["id"]) for v in self.views],
+                         [{**b, "config": {**b["config"], "powertrain": "ev"}} for b in before])
         self.assertEqual(updated.get("one", "costs"), costs)
         self.assertEqual(updated.get("one", "local_notifications"), notifications)
         self.assertEqual([v["id"] for v in updated.list_vehicles()[0]["views"]], [v["id"] for v in self.views])
+
+    def test_setup_powertrain_keeps_only_explicit_settings_choice(self):
+        # A default "auto" from an older save is not a user choice: the setup type wins.
+        self.db.ensure_vehicle("two", "Second", {**self.source, "powertrain": "auto"})
+        view = self.db.list_vehicles()[1]["views"][0]["id"]
+        self.db.ensure_vehicle("two", "Second", {**self.source, "powertrain": "phev"})
+        self.assertEqual(self.db.config("two", view)["config"]["powertrain"], "phev")
+        # An explicit Settings choice, including Automatic, survives later setup values.
+        self.db.patch_config("two", view, {"powertrain": "auto"})
+        self.db.ensure_vehicle("two", "Second", {**self.source, "powertrain": "ev"})
+        self.assertEqual(self.db.config("two", view)["config"]["powertrain"], "auto")
+
+    def test_schema_version_is_read_from_the_database(self):
+        self.assertEqual(self.db.schema_version(), 2)
 
     def test_clone_rename_and_delete(self):
         view = self.views[0]["id"]
@@ -215,6 +231,26 @@ class ArchiveTests(unittest.TestCase):
 
 
 class ChargingTests(unittest.TestCase):
+    def test_single_high_reading_is_not_believed_until_it_repeats(self):
+        engine = ChargingEngine()
+        engine.feed(1000, 41, True, 18.4)
+        engine.feed(1060, 97, True, 18.4)
+        self.assertEqual(engine.feed(1120, 41, True, 18.4)[0]["to"], 41)
+        engine.feed(1180, 70, True, 18.4)
+        self.assertEqual(engine.feed(1240, 70, True, 18.4)[0]["to"], 70)
+
+    def test_spike_tolerance_is_adjustable(self):
+        engine = ChargingEngine()
+        engine.feed(1000, 41, True, 18.4, jump=60)
+        self.assertEqual(engine.feed(1060, 97, True, 18.4, jump=60)[0]["to"], 97)  # 56 points is within the allowed jump
+
+    def test_data_older_than_the_gap_limit_closes_the_session_as_a_gap(self):
+        engine = ChargingEngine()
+        first = engine.feed(1000, 20, True, 18.4)[0]
+        closed = engine.feed(1000 + 15 * 60 + 30, 25, True, 18.4)[0]
+        self.assertTrue(closed["gap"])
+        self.assertEqual(closed["id"], first["id"])
+
     def test_complete_session_and_capacity_snapshot(self):
         engine = ChargingEngine()
         first = engine.feed(1000, 20, True, 18.4)[0]

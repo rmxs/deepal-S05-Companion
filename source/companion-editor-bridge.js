@@ -40,7 +40,7 @@ DeepalS05CardEditor.prototype._editorLoad = async function() {
     const owner={...this._editorOwner};
     const response=await companionRequest(this._hass,owner,"config_get");
     if(generation!==this._editorGeneration)return;
-    this._editorOwner.view_id=response.view_id;this._editorViewName=response.view_name;
+    this._editorOwner.view_id=response.view_id;this._editorViewName=response.view_name;this._editorRevision=response.revision;
     this._config={...response.config,type:"custom:deepal-companion-card",...this._editorOwner};
     this._editorLoaded=true;this._editorError="";this._draw();
     this._editorEmit();
@@ -57,21 +57,20 @@ DeepalS05CardEditor.prototype._editorSelect = function(vehicle,view) {
   this._editorEmit();this._draw();this._editorLoad();
 };
 DeepalS05CardEditor.prototype._commit = function() {
-  const snapshot=onlySettings(this._config),reset=!!this._editorReset;
+  const snapshot=onlySettings(this._config);
   const owner={...this._editorOwner};
-  this._editorReset=false;
   this._editorSave=(this._editorSave||Promise.resolve()).catch(()=>{}).then(async()=>{
     if(!owner.vehicle_id)throw Error("Choose a vehicle in Deepal Companion first.");
-    const response=await companionRequest(this._hass,owner,"config_patch",{patch:snapshot,reset});
+    const response=await companionRequest(this._hass,owner,"config_patch",{patch:snapshot,expected_revision:this._editorRevision});
+    this._editorRevision=response.revision;
     if(this._editorOwner.vehicle_id===owner.vehicle_id&&this._editorOwner.view_id===owner.view_id){
       this._editorOwner.view_id=response.view_id;this._editorEmit();
     }
-  }).catch(error=>{console.error("Deepal Companion editor save",error);if(this._s){this._s._note=error.message||String(error);this._s._render();}});
+  }).catch(error=>{console.error("Deepal Companion editor save",error);if(/changed elsewhere/i.test(error.message||""))this._editorLoad();if(this._s){this._s._note=error.message||String(error);this._s._render();}});
   this._draw();
 };
 DeepalS05CardEditor.prototype._draw = function() {
   originalEditorDraw.call(this);
-  if(this._s)this._s.onReset=()=>{this._editorReset=true;this._config={type:"custom:deepal-companion-card",prefix:this._config.prefix,name:this._config.name,...this._editorOwner};this._commit();};
   if(!this._editorPicker){
     this._editorPicker=document.createElement("div");
     this._editorPicker.className="companion-card-picker";

@@ -44,10 +44,10 @@ DeepalS05Card.prototype._render=function(...args){
     const lang=this._hass?.locale?.language||"en";
     button.innerHTML='<span class="cost-icon" aria-hidden="true">€</span><span class="cost-label"><b>'+esc(T("Charging costs"))+'</b><small>'+esc(T("Sessions & prices"))+'</small></span>'+ico("chevr");
     button.addEventListener("click",()=>{const tab=this._enEl?.querySelector('[data-en-mode="costs"]');if(tab){tab.click();return;}this._compOpenCosts=true;this._enSheet=true;this._force();});
-    this._el.card.querySelector(".foot").before(button);
+    const foot=this._el.card.querySelector(":scope>.foot");if(foot)foot.before(button);else this._el.card.append(button); /* the Settings gear sits inside the image now, so it is not a direct child of the card */
   }
   const costs=this._el.card.querySelector('.companion-cost-launch');this._el.costs=costs;
-  costs.style.order=String(this._c.order.indexOf('costs'));costs.toggleAttribute('data-off',this._c.hidden.includes('costs'));
+  costs.style.order=String(this._c.order.indexOf('costs'));costs.toggleAttribute('data-off',this._c.hidden.includes('costs')||this._c.charging_cost===false);
   return result;
 };
 const designConnected=DeepalS05Card.prototype.connectedCallback,designDisconnected=DeepalS05Card.prototype.disconnectedCallback;
@@ -62,4 +62,4 @@ DeepalS05Card.prototype.disconnectedCallback=function(){
   designDisconnected.call(this);
 };
 const designKey=DeepalS05Card.prototype._key;
-DeepalS05Card.prototype._key=function(event){if(event.key!=="Tab")return designKey.call(this,event);};
+DeepalS05Card.prototype._key=function(event){return designKey.call(this,event);};/* Tab must reach the card's focus trap too */

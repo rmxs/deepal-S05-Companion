@@ -1,10 +1,10 @@
-import {bindProfileField,syncProfileDesign} from './profile-field.js?v=0.1.3';
-import {costFrame,costCardContent,applyCostDesign,updateCostHeader,renderSessionList} from './companion-cost-design.js?v=0.1.3';
-import "/deepal_companion/frontend/companion-card.js?v=0.1.3";
+import {bindProfileField,syncProfileDesign} from './profile-field.js?v=0.1.4';
+import {costFrame,costCardContent,applyCostDesign,updateCostHeader,renderSessionList} from './companion-cost-design.js?v=0.1.4';
+import "/deepal_companion/frontend/companion-card.js?v=0.1.4";
 
 const escape = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const SESSION_PAGE_SIZE = 6;
-const tabFragments={card:'settings',charging:'chargers',costs:'history',notifications:'notifications'};
+const tabFragments={card:'settings',charging:'chargers',costs:'history',notifications:'notifications',health:'health'};
 const modeFromHash=()=>tabFragments[location.hash.slice(1)]||null;
 class DeepalCompanionPanel extends HTMLElement {
   constructor(){
@@ -21,7 +21,7 @@ class DeepalCompanionPanel extends HTMLElement {
       if(e.target.name==="session_location")this.filterSessions(e.target.value);
       if(e.target.name==="session_sort")this.filterSessions(this.sessionLocation||"",e.target.value);
       if(e.target.name==="preview_clicks"){this.previewClicks=e.target.checked;window.__DEEPAL_COMPANION_UI.applyPreview(this.preview,this._hass,this.previewMode||"live",this.previewClicks);this.updatePreviewNote();}
-      if(e.target.name==="preview_mode"){this.previewMode=e.target.value;window.__DEEPAL_COMPANION_UI.applyPreview(this.preview,this._hass,this.previewMode);const note=this.shadowRoot.querySelector(".preview-mode-note");if(note)note.textContent=this.previewMode==="live"?this.t("Showing live vehicle data.","Ζωντανά δεδομένα οχήματος."):this.t("Simulated preview · the real vehicle is unchanged.","Προσομοίωση · το πραγματικό όχημα δεν αλλάζει.");}
+      if(e.target.name==="preview_mode"){this.previewMode=e.target.value;window.__DEEPAL_COMPANION_UI.applyPreview(this.preview,this._hass,this.previewMode);this.updatePreviewNote();}
       if(e.target.name==="simple_action"){const hidden=new Set(this.config.buttons_hidden||[]);e.target.checked?hidden.delete(e.target.value):hidden.add(e.target.value);this.patch({buttons_hidden:[...hidden]});}
       if(e.target.name==="simple_confirm"){if(!e.target.checked&&this.config.confirm?.length)this.lastConfirm=[...this.config.confirm];this.patch({confirm:e.target.checked?(this.lastConfirm||["unlock","trunk","windows","lock","climate"]):[]});}
       if(e.target.name==="simple_hero_style")this.patch({hero_style:e.target.value});
@@ -37,9 +37,11 @@ class DeepalCompanionPanel extends HTMLElement {
     });
   }
   syncModeHash(replace=false){const hash='#'+Object.keys(tabFragments).find(key=>tabFragments[key]===this.mode);if(location.hash!==hash)history[replace?'replaceState':'pushState'](history.state,'',location.pathname+location.search+hash);}
+  async flushAutosave(){try{await this.localBoard?.flush?.();await this.costs?.flush?.();}catch(_){}}
   async navigateMode(mode,fromHistory=false){
     if(!this.selected.vehicle_id||mode===this.mode)return;
     if(!Object.values(tabFragments).includes(mode))return;
+    await this.flushAutosave();
     if(this.pending||this.localBoard?.busy||this.localBoard?.dirty||this.costs?.dirty){this.status('Save or cancel your changes first.','warning');if(fromHistory)this.syncModeHash(true);return;}
     if(!fromHistory){const previous=this.mode;this.mode=mode;this.syncModeHash();this.mode=previous;}
     const request=this.navigationVersion=(this.navigationVersion||0)+1;this.mode=mode;this.render();this.scrollTop=0;
@@ -49,8 +51,8 @@ class DeepalCompanionPanel extends HTMLElement {
   }
   async renameProfile(field){
     const name=field.value.trim(),owner={...this.selected},current=this.vehicles.find(v=>v.id===owner.vehicle_id)?.views.find(v=>v.id===owner.view_id);
-    if(!name){field.value=current?.name||"";this.status(this.t("Enter a profile name.","Συμπλήρωσε όνομα προφίλ."));return;}
-    if(name===current?.name)return;this.pending=(this.pending||0)+1;this.status(this.t("Saving…","Αποθήκευση…"),"saving");
+    if(!name){field.value=current?.name||"";this.status(this.t("Enter a profile name.","Συμπλήρωσε όνομα προφίλ.","Introduce un nombre de perfil."));return;}
+    if(name===current?.name)return;this.pending=(this.pending||0)+1;this.status(this.t("Saving…","Αποθήκευση…","Guardando…"),"saving");
     this.queue=this.queue.catch(()=>{}).then(()=>this.request("view",{action:"rename",name},owner)).then(async()=>{this.listSignature=null;await this.refresh();this.status(this.t("Saved","Αποθηκεύτηκε","Guardado"),"success");}).catch(error=>{if(field.isConnected)field.value=current?.name||'';this.status(error.message||String(error));}).finally(()=>this.pending--);return this.queue;
   }
   t(en,el=en,es=en){const lang=this._hass?.locale?.language||"en";return lang.startsWith("el")?el:lang.startsWith("es")?es:en;}
@@ -93,8 +95,9 @@ class DeepalCompanionPanel extends HTMLElement {
     finally{this.fetching=false;if(this.refreshAgain){this.refreshAgain=false;queueMicrotask(()=>this.refresh());}}
   }
   async select(vehicle,view){
+    await this.flushAutosave();
     if(this.pending||this.localBoard?.busy||this.localBoard?.dirty||this.costs?.dirty){
-      this.status(this.t("Save your changes before switching profiles.","Αποθήκευσε τις αλλαγές πριν αλλάξεις προφίλ."));
+      this.status(this.t("Save your changes before switching profiles.","Αποθήκευσε τις αλλαγές πριν αλλάξεις προφίλ.","Guarda los cambios antes de cambiar de perfil."));
       const vehicle=this.shadowRoot.querySelector('[name=vehicle]'),profile=this.shadowRoot.querySelector('[name=view]');
       if(vehicle)vehicle.value=this.selected.vehicle_id;if(profile)profile.value=this.selected.view_id;
       return;
@@ -110,21 +113,22 @@ class DeepalCompanionPanel extends HTMLElement {
       ["settings",this.t("Card Settings","Ρυθμίσεις κάρτας","Ajustes de tarjeta"),"mdi:card-account-details-outline"],
       ["notifications",this.t("Notifications","Ειδοποιήσεις","Notificaciones"),"mdi:bell-outline"],
       ["history",this.t("Sessions","Συνεδρίες","Sesiones"),"mdi:history"],
-      ["chargers",this.t("Charging Profiles","Προφίλ φόρτισης","Perfiles de carga"),"mdi:ev-station"]
+      ["chargers",this.t("Charging Profiles","Προφίλ φόρτισης","Perfiles de carga"),"mdi:ev-station"],
+      ["health",this.t("Health","Υγεία","Estado"),"mdi:heart-pulse"]
     ];
     const vehicleField=this.vehicles.length===1?'<p class="vehicle-name">'+escape(car?.name)+'</p>':'<label>'+escape(this.t("Vehicle","Αυτοκίνητο","Vehículo"))+'<select name="vehicle">'+this.vehicles.map(v=>'<option value="'+escape(v.id)+'"'+(v.id===car?.id?" selected":"")+'>'+escape(v.name)+'</option>').join("")+'</select></label>';
     const selector='<label class="profile-selector">'+escape(this.t("Card profile","Προφίλ κάρτας","Perfil de tarjeta"))+'<select name="view">'+(car?.views||[]).map(v=>'<option value="'+escape(v.id)+'"'+(v.id===view?.id?' selected':'')+'>'+escape(v.name)+'</option>').join("")+'</select></label>';
-    const actions=[["duplicate","mdi:content-copy",this.t("Duplicate","Αντιγραφή")],["create","mdi:plus",this.t("New profile","Νέο προφίλ")],["delete","mdi:trash-can-outline",this.t("Delete","Διαγραφή")]];
-    const management=admin&&view?'<div class="profile-controls">'+selector+'<label class="profile-name">'+escape(this.t("Card profile","Προφίλ κάρτας"))+'<div class="profile-editable"><input name="profile_name" aria-label="Card profile" value="'+escape(view.name)+'" maxlength="100" autocomplete="off"><button type="button" data-profile-choose aria-label="Choose profile" aria-haspopup="listbox"><ha-icon icon="mdi:chevron-down"></ha-icon></button></div></label><div class="actions">'+actions.map(([action,icon,label])=>'<button data-action="'+action+'"><ha-icon icon="'+icon+'"></ha-icon>'+escape(label)+'</button>').join("")+'</div></div>':selector;
-    const profileDesign='<section class="profile-design"><h3><ha-icon icon="mdi:tune-variant"></ha-icon>Card design</h3><label><span>Design</span><select name="companion_design">'+[['','Profile default'],['mobile','Mobile'],['tablet','Tablet'],['energy','Energy']].map(([value,label])=>'<option value="'+value+'"'+((this.config?.companion_design||'')===value?' selected':'')+'>'+label+'</option>').join('')+'</select></label><label><span>Maximum width (px)</span><input name="companion_width" type="number" min="0" max="1600" step="1" placeholder="0" value="'+(this.config?.companion_width||'')+'"><small>0 = automatic · 280–1600 px</small></label></section>';
+    const actions=[["duplicate","mdi:content-copy",this.t("Duplicate","Αντιγραφή","Duplicar")],["create","mdi:plus",this.t("New profile","Νέο προφίλ","Nuevo perfil")],["delete","mdi:trash-can-outline",this.t("Delete","Διαγραφή","Eliminar")]];
+    const management=admin&&view?'<div class="profile-controls">'+selector+'<label class="profile-name">'+escape(this.t("Card profile","Προφίλ κάρτας","Perfil de tarjeta"))+'<div class="profile-editable"><input name="profile_name" aria-label="Card profile" value="'+escape(view.name)+'" maxlength="100" autocomplete="off"><button type="button" data-profile-choose aria-label="Choose profile" aria-haspopup="listbox"><ha-icon icon="mdi:chevron-down"></ha-icon></button></div></label><div class="actions">'+actions.map(([action,icon,label])=>'<button data-action="'+action+'"><ha-icon icon="'+icon+'"></ha-icon>'+escape(label)+'</button>').join("")+'</div></div>':selector;
+    const profileDesign='<section class="profile-design"><h3><ha-icon icon="mdi:tune-variant"></ha-icon>Card design</h3><label><span>Design</span><select name="companion_design">'+[['','Profile default'],['mobile','Mobile'],['tablet','Tablet'],['energy','Energy']].map(([value,label])=>'<option value="'+value+'"'+((this.config?.companion_design||'')===value?' selected':'')+'>'+label+'</option>').join('')+'</select></label><label><span>Maximum width (px)<small>0 = automatic</small></span><input name="companion_width" type="number" min="0" max="1600" step="1" placeholder="0" title="0 = automatic, otherwise 280–1600 px" value="'+(this.config?.companion_width||'')+'"></label></section>';
     const profileField=isSettings?management+profileDesign:"";
     let setup;
-    if(isSettings){setup='<section class="box profile-setup"><h2><ha-icon icon="mdi:card-account-details-outline" aria-hidden="true"></ha-icon>'+escape(this.t("Profile","Προφίλ κάρτας"))+'</h2>'+(this.vehicles.length>1?vehicleField:"")+profileField+'</section>';}else setup=this.vehicles.length>1?'<section class="box profile-setup">'+vehicleField+'</section>':"";
-    const preview=isSettings&&car?'<section class="box live-preview"><div class="preview-heading"><h2><ha-icon icon="mdi:eye-outline" aria-hidden="true"></ha-icon>'+escape(this.t("Live preview","Ζωντανή προεπισκόπηση"))+'</h2><label class="preview-click-toggle"><ha-icon icon="mdi:cursor-default-click-outline"></ha-icon><span>'+escape(this.t('Allow clicks','Να επιτρέπονται κλικ'))+'</span><input type="checkbox" name="preview_clicks"'+(this.previewClicks?' checked':'')+'></label></div><label class="preview-scenario">'+escape(this.t('Preview state','Κατάσταση προεπισκόπησης'))+'<select name="preview_mode">'+[['live','Live'],['parked','Parked'],['plugged','Plugged in'],['ac','AC charging'],['dc','DC charging'],['complete','Charge complete'],['charge-detected','Charging detected'],['alerts','Alerts'],['doors','Doors & boots open'],['climate','Climate on']].map(([value,label])=>'<option value="'+value+'"'+(value===(this.previewMode||'live')?' selected':'')+'>'+escape(label)+'</option>').join('')+'</select></label><p class="preview-mode-note note">'+escape(this.previewMode&&this.previewMode!=='live'?this.t('Simulated preview · the real vehicle is unchanged.','Προσομοίωση · το πραγματικό όχημα δεν αλλάζει.'):this.t('Showing live vehicle data.','Ζωντανά δεδομένα οχήματος.'))+'</p><div class="preview-window" role="img" aria-label="Card appearance preview"></div><p class="note preview-support-note">'+escape(this.t("Colours and buttons update immediately.","Τα χρώματα και τα κουμπιά ενημερώνονται αμέσως."))+'</p><div class="companion-support"><a href="https://buymeacoffee.com/leftk" target="_blank" rel="noopener noreferrer" aria-label="Support Lefteris on Buy Me a Coffee (opens in a new tab)"><img src="/deepal_companion/frontend/support/buy-me-a-coffee.png" alt="Buy me a coffee" width="157" height="44" loading="lazy" decoding="async"></a></div></section>':"";
-    if(!this.shadowRoot.querySelector('link[rel=stylesheet]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/deepal_companion/frontend/companion-panel.css?v=0.1.3&rev=support-2';link.addEventListener('load',()=>{this.stylesReady=true;window.__DEEPAL_COMPANION_UI.enhanceChoices(this.shadowRoot,this._hass);this.shadowRoot.querySelector('.companion-surface')?.removeAttribute('hidden');this.shadowRoot.querySelector('.companion-boot').hidden=true;this.previewWindowResize?.();});link.addEventListener('error',()=>{const boot=this.shadowRoot.querySelector('.companion-boot');boot.replaceChildren();const message=document.createElement('p'),retry=document.createElement('button');message.textContent='Dashboard styles could not be loaded.';retry.textContent='Try again';retry.onclick=()=>{link.remove();boot.innerHTML=window.__DEEPAL_COMPANION_UI.loaderHtml('sliders');this.render();this.mount();};boot.append(message,retry);});this.shadowRoot.append(link);}
+    if(isSettings){setup='<section class="box profile-setup"><h2><ha-icon icon="mdi:card-account-details-outline" aria-hidden="true"></ha-icon>'+escape(this.t("Profile","Προφίλ κάρτας","Perfil"))+'</h2>'+(this.vehicles.length>1?vehicleField:"")+profileField+'</section>';}else setup=this.vehicles.length>1?'<section class="box profile-setup">'+vehicleField+'</section>':"";
+    const preview=isSettings&&car?'<section class="box live-preview"><div class="preview-heading"><h2><ha-icon icon="mdi:eye-outline" aria-hidden="true"></ha-icon>'+escape(this.t("Live preview","Ζωντανή προεπισκόπηση","Vista en vivo"))+'</h2><label class="preview-click-toggle"><ha-icon icon="mdi:cursor-default-click-outline"></ha-icon><span>'+escape(this.t('Allow clicks','Να επιτρέπονται κλικ',"Permitir clics"))+'</span><input type="checkbox" name="preview_clicks"'+(this.previewClicks?' checked':'')+'></label></div><label class="preview-scenario">'+escape(this.t('Preview state','Κατάσταση προεπισκόπησης',"Estado de la vista previa"))+'<select name="preview_mode">'+[['live','Live'],['parked','Parked'],['plugged','Plugged in'],['ac','AC charging'],['dc','DC charging'],['complete','Charge complete'],['charge-detected','Charging detected'],['alerts','Alerts'],['doors','Doors & boots open'],['climate','Climate on']].map(([value,label])=>'<option value="'+value+'"'+(value===(this.previewMode||'live')?' selected':'')+'>'+escape(label)+'</option>').join('')+'</select></label><p class="preview-mode-note note">'+escape(this.previewMode&&this.previewMode!=='live'?this.t('Simulated preview · the real vehicle is unchanged.','Προσομοίωση · το πραγματικό όχημα δεν αλλάζει.',"Vista simulada · el vehículo real no cambia."):this.t('Showing live vehicle data.','Ζωντανά δεδομένα οχήματος.',"Mostrando datos reales del vehículo."))+'</p><div class="preview-window" role="img" aria-label="Card appearance preview"></div><p class="note preview-support-note">'+escape(this.t("Colours and buttons update immediately.","Τα χρώματα και τα κουμπιά ενημερώνονται αμέσως.","Los colores y botones se actualizan al instante."))+'</p><div class="companion-support"><a href="https://buymeacoffee.com/leftk" target="_blank" rel="noopener noreferrer" aria-label="Support Lefteris on Buy Me a Coffee (opens in a new tab)"><img src="/deepal_companion/frontend/support/buy-me-a-coffee.png" alt="Buy me a coffee" width="157" height="44" loading="lazy" decoding="async"></a></div></section>':"";
+    if(!this.shadowRoot.querySelector('link[rel=stylesheet]')){const link=document.createElement('link');link.rel='stylesheet';link.href='/deepal_companion/frontend/companion-panel.css?v=0.1.4&rev=nav-3';link.addEventListener('load',()=>{this.stylesReady=true;window.__DEEPAL_COMPANION_UI.enhanceChoices(this.shadowRoot,this._hass);this.shadowRoot.querySelector('.companion-surface')?.removeAttribute('hidden');this.shadowRoot.querySelector('.companion-boot').hidden=true;this.previewWindowResize?.();});link.addEventListener('error',()=>{const boot=this.shadowRoot.querySelector('.companion-boot');boot.replaceChildren();const message=document.createElement('p'),retry=document.createElement('button');message.textContent='Dashboard styles could not be loaded.';retry.textContent='Try again';retry.onclick=()=>{link.remove();boot.innerHTML=window.__DEEPAL_COMPANION_UI.loaderHtml('sliders');this.render();this.mount();};boot.append(message,retry);});this.shadowRoot.append(link);}
     let surface=this.shadowRoot.querySelector('.companion-surface');if(!surface){surface=document.createElement('div');surface.className='companion-surface';this.shadowRoot.append(surface);}
     surface.hidden=!this.stylesReady;
-    surface.innerHTML='<header><button class="menu" data-action="menu" aria-label="Menu">☰</button><h1><span class="app-title">Deepal Companion</span><span class="vehicle-title">'+escape(car?.name||"")+'</span></h1><ha-icon icon="mdi:car-electric"></ha-icon></header>'+(car&&view?'<nav>'+nav.map(([mode,label,icon])=>'<button data-mode="'+mode+'" aria-pressed="'+String(this.mode===mode)+'"><ha-icon icon="'+icon+'" aria-hidden="true"></ha-icon><span>'+escape(label)+'</span></button>').join("")+'</nav>':'')+'<p class="status" role="status">'+escape(this.message)+'</p><main class="'+(!car||!view?"setup-layout":isSettings?"settings-layout":"single-layout")+'">'+(car&&view?setup+preview+'<section class="stage"><p class="note">'+escape(car?this.t("Loading…","Φόρτωση…"):this.t("Add a Deepal vehicle to begin.","Πρόσθεσε ένα αυτοκίνητο Deepal για να ξεκινήσεις."))+'</p></section>':this.setupInstructions(admin))+'</main>';
+    surface.innerHTML='<header><button class="menu" data-action="menu" aria-label="Menu">☰</button><h1><span class="app-title">Deepal Companion</span><span class="vehicle-title">'+escape(car?.name||"")+'</span></h1><ha-icon icon="mdi:car-electric"></ha-icon></header>'+(car&&view?'<nav>'+nav.map(([mode,label,icon])=>'<button data-mode="'+mode+'" aria-pressed="'+String(this.mode===mode)+'"><ha-icon icon="'+icon+'" aria-hidden="true"></ha-icon><span>'+escape(label)+'</span></button>').join("")+'</nav>':'')+'<p class="status" role="status">'+escape(this.message)+'</p><main class="'+(!car||!view?"setup-layout":isSettings?"settings-layout":"single-layout")+'">'+(car&&view?setup+preview+'<section class="stage"><p class="note">'+escape(car?this.t("Loading…","Φόρτωση…","Cargando…"):this.t("Add a Deepal vehicle to begin.","Πρόσθεσε ένα αυτοκίνητο Deepal για να ξεκινήσεις.","Añade un vehículo Deepal para empezar."))+'</p></section>':this.setupInstructions(admin))+'</main>';
     const credit=document.createElement('div');credit.className='app-credit';credit.textContent='v'+window.__DEEPAL_COMPANION_UI.version+' · '+window.__DEEPAL_COMPANION_UI.credit;surface.querySelector('header').insertBefore(credit,surface.querySelector('header>ha-icon'));
     if(isSettings&&admin&&view){const add=document.createElement('button');add.className='header-add-dashboard';add.dataset.action='add-dashboard';add.title='Add to dashboard';add.innerHTML='<ha-icon icon="mdi:plus"></ha-icon><span>Add to dashboard</span>';surface.querySelector('header>ha-icon').replaceWith(add);}
     window.__DEEPAL_COMPANION_UI.enhanceChoices(this.shadowRoot,this._hass);bindProfileField(this);
@@ -150,6 +154,7 @@ class DeepalCompanionPanel extends HTMLElement {
     try{
       const response=await this.request("config_get");
       if(revision!==this.mountRevision)return;
+      (this.revisions||(this.revisions=new Map())).set(this.selected.vehicle_id+"|"+this.selected.view_id,response.revision);
       this.config=response.config;
       window.__DEEPAL_COMPANION_UI.applyPalette(this,this.config);
       this.context=window.__DEEPAL_COMPANION_UI.context(this._hass,this.selected,this.config);
@@ -162,15 +167,16 @@ class DeepalCompanionPanel extends HTMLElement {
         widget.onTab=tab=>{this.tab=tab;};
         const widgetOwner={...this.selected};
         widget.onPatch=patch=>this.patch(patch,false,widgetOwner);
-        widget.onReset=()=>this.patch({},true,widgetOwner);
         this.settings=widget;window.__DEEPAL_COMPANION_UI.mountAppSettings(this,stage,widget,response.view_name);this.setupPreview();syncProfileDesign(this);window.__DEEPAL_COMPANION_UI.updateAppSettings(this);
       }else if(this.mode==="notifications"){
-        const module=await import("./companion-notifications.js?v=0.1.3");if(revision!==this.mountRevision)return;const board=await module.mountNotifications(this,stage);if(revision!==this.mountRevision){board?.destroy();return;}this.localBoard=board;
+        const module=await import("./companion-notifications.js?v=0.1.4&rev=why-14");if(revision!==this.mountRevision)return;const board=await module.mountNotifications(this,stage);if(revision!==this.mountRevision){board?.destroy();return;}this.localBoard=board;
+      }else if(this.mode==="health"){
+        const module=await import("./companion-health.js?v=0.1.4");if(revision!==this.mountRevision)return;const page=await module.mountHealth(this,stage);if(revision!==this.mountRevision){page?.destroy();return;}this.localBoard=page;
       }else if(this.mode==="chargers"){
         await window.__DEEPAL_COMPANION_UI.loadEnergy();
         if(revision!==this.mountRevision)return;
         const energy=window.__DEEPAL_COMPANION_ENERGY;
-        if(!energy?.ChargingCosts)throw Error(this.t("Charging settings could not be loaded.","Δεν φορτώθηκαν οι ρυθμίσεις φόρτισης."));
+        if(!energy?.ChargingCosts)throw Error(this.t("Charging settings could not be loaded.","Δεν φορτώθηκαν οι ρυθμίσεις φόρτισης.","No se pudieron cargar los ajustes de carga."));
         const host=document.createElement("div");host.className="enpanel charging-settings";
         host.innerHTML="<style>"+energy.styles+'</style><div class="cc-editor"></div>';
         stage.append(host);
@@ -187,6 +193,7 @@ class DeepalCompanionPanel extends HTMLElement {
   async loadConfig(){
     const owner={...this.selected},response=await this.request("config_get");
     if(owner.vehicle_id!==this.selected.vehicle_id||owner.view_id!==this.selected.view_id||this.pending)return;
+    (this.revisions||(this.revisions=new Map())).set(owner.vehicle_id+"|"+owner.view_id,response.revision);
     if(JSON.stringify(this.config)===JSON.stringify(response.config))return;
     this.config=response.config;syncProfileDesign(this);
     window.__DEEPAL_COMPANION_UI.applyPalette(this,this.config);
@@ -195,7 +202,7 @@ class DeepalCompanionPanel extends HTMLElement {
   }
   updatePreviewNote(){
     const note=this.shadowRoot.querySelector('.preview-mode-note'),frame=this.shadowRoot.querySelector('.preview-window');
-    if(note)note.textContent=this.previewMode&&this.previewMode!=='live'?this.t('Demo preview · no vehicle commands.','Δοκιμαστική προεπισκόπηση · χωρίς εντολές στο όχημα.'):this.previewClicks?this.t('Live controls enabled · actions affect your vehicle.','Ζωντανά χειριστήρια · οι εντολές επηρεάζουν το όχημα.'):this.t('Showing live vehicle data.','Ζωντανά δεδομένα οχήματος.');
+    if(note)note.textContent=this.previewMode&&this.previewMode!=='live'?(this.previewClicks?this.t('Demo preview · clicks only change the simulation, no commands reach your vehicle.','Δοκιμαστική προεπισκόπηση · τα κλικ αλλάζουν μόνο την προσομοίωση, δεν στέλνονται εντολές στο όχημα.',"Vista de demostración · los clics solo cambian la simulación, no se envían comandos al vehículo."):this.t('Demo preview · no vehicle commands.','Δοκιμαστική προεπισκόπηση · χωρίς εντολές στο όχημα.',"Vista de demostración · sin comandos al vehículo.")):this.previewClicks?this.t('Live controls enabled · actions affect your vehicle.','Ζωντανά χειριστήρια · οι εντολές επηρεάζουν το όχημα.',"Controles reales activados · las acciones afectan a tu vehículo."):this.t('Showing live vehicle data.','Ζωντανά δεδομένα οχήματος.',"Mostrando datos reales del vehículo.");
     if(note){note.classList.toggle('preview-info',this.previewMode&&this.previewMode!=='live');note.setAttribute('role','note');}
     if(note&&this.previewMode==='charge-detected')note.textContent=this.config?.charging_reminder===false||this.config?.hidden?.includes('reminder')?'Enable Charging reminder in Layout → Sections to preview this reminder. Charging costs can stay off.':'Demo charging reminder · enable Allow clicks to test. No real costs are saved.';
     if(frame)frame.setAttribute('role',this.previewClicks?'group':'img');
@@ -204,7 +211,7 @@ class DeepalCompanionPanel extends HTMLElement {
     const frame=this.shadowRoot.querySelector(".preview-window");if(!frame)return;
     this.preview=window.__DEEPAL_COMPANION_UI.preview(this._hass,this.selected,{...this.config,companion_design:window.__DEEPAL_COMPANION_UI.design(this.config,this.vehicles.find(v=>v.id===this.selected.vehicle_id)?.views.find(v=>v.id===this.selected.view_id)?.name).kind});frame.append(this.preview);
     window.__DEEPAL_COMPANION_UI.applyPreview(this.preview,this._hass,this.previewMode||"live",!!this.previewClicks);
-    const previewOwner={...this.selected};this.preview._patch=patch=>this.patch(patch,false,previewOwner);this.preview._resetLocal=()=>this.patch({},true,previewOwner);this.updatePreviewNote();
+    const previewOwner={...this.selected};this.preview._patch=patch=>this.patch(patch,false,previewOwner);this.updatePreviewNote();
     const preview=this.preview;
     const resize=()=>{
       if(this.preview!==preview||!frame.isConnected)return;
@@ -227,9 +234,11 @@ class DeepalCompanionPanel extends HTMLElement {
     batch.pending++;this.pending=(this.pending||0)+1;
     const selected=owner.vehicle_id===this.selected.vehicle_id&&owner.view_id===this.selected.view_id;
     if(!reset&&selected){this.config={...this.config,...patch};syncProfileDesign(this);window.__DEEPAL_COMPANION_UI.applyPalette(this,this.config);if(this.settings)this.settings.cfg=window.__DEEPAL_COMPANION_UI.normalize(this.config);window.__DEEPAL_COMPANION_UI.updatePreview(this.preview,this.config);window.__DEEPAL_COMPANION_UI.updateAppSettings?.(this);}
-    this.status(this.t("Saving…","Αποθήκευση…"),"saving");
+    this.status(this.t("Saving…","Αποθήκευση…","Guardando…"),"saving");
     this.queue=this.queue.catch(()=>{}).then(async()=>{
-      const response=await this.request("config_patch",{patch,reset},owner);
+      const rk=owner.vehicle_id+"|"+owner.view_id,revisions=this.revisions||(this.revisions=new Map());
+      const response=await this.request("config_patch",{patch,reset,expected_revision:revisions.get(rk)},owner);
+      revisions.set(rk,response.revision);
       batch.confirmed=response.config;
       if(owner.vehicle_id===this.selected.vehicle_id&&owner.view_id===this.selected.view_id&&this.pending===1){
         this.config=response.config;
@@ -237,7 +246,7 @@ class DeepalCompanionPanel extends HTMLElement {
         window.__DEEPAL_COMPANION_UI.updatePreview(this.preview,this.config);window.__DEEPAL_COMPANION_UI.updateAppSettings?.(this);
       }
       this.status(this.t("Saved","Αποθηκεύτηκε","Guardado"),"success");
-    }).catch(error=>this.status(error.message||String(error))).finally(()=>{
+    }).catch(error=>{this.status(error.message||String(error));if(/changed elsewhere/i.test(error.message||""))batch.stale=true;}).finally(()=>{
       this.pending--;batch.pending--;
       if(!batch.pending){
         this.saveBatches.delete(key);
@@ -245,6 +254,7 @@ class DeepalCompanionPanel extends HTMLElement {
           this.config=batch.confirmed;syncProfileDesign(this);window.__DEEPAL_COMPANION_UI.applyPalette(this,this.config);
           if(this.settings){this.settings.yamlBase={...this.config,type:"custom:deepal-companion-card",...owner};this.settings.cfg=window.__DEEPAL_COMPANION_UI.normalize(this.config);}
           window.__DEEPAL_COMPANION_UI.updatePreview(this.preview,this.config);window.__DEEPAL_COMPANION_UI.updateAppSettings?.(this);
+          if(batch.stale)this.loadConfig().catch(()=>{});
         }
       }
     });
@@ -306,11 +316,11 @@ class DeepalCompanionPanel extends HTMLElement {
     const actions=stage.querySelector(".archive .actions");
     if(actions){
       const footer=document.createElement("footer");footer.className="archive-tools";
-      footer.innerHTML='<button data-action="data-menu" aria-expanded="false"><ha-icon icon="mdi:dots-horizontal"></ha-icon>'+escape(this.t("Data options","Επιλογές δεδομένων"))+'</button><div class="archive-data-menu" hidden></div>';
+      footer.innerHTML='<button data-action="data-menu" aria-expanded="false"><ha-icon icon="mdi:dots-horizontal"></ha-icon>'+escape(this.t("Data options","Επιλογές δεδομένων","Opciones de datos"))+'</button><div class="archive-data-menu" hidden></div>';
       stage.querySelector(".archive").append(footer);footer.querySelector(".archive-data-menu").append(actions);
     }
     const line=document.createElement("section");line.className="history-line-card";
-    line.innerHTML='<h2>'+escape(this.t("Battery & petrol history","Ιστορικό μπαταρίας και καυσίμου"))+'</h2>';
+    line.innerHTML='<h2>'+escape(this.t("Battery & petrol history","Ιστορικό μπαταρίας και καυσίμου","Historial de batería y combustible"))+'</h2>';
     const lineHost=document.createElement("div");lineHost.className="enpanel charging-settings history-line-chart";
     line.append(lineHost);graph.before(line);lineHost.addEventListener('energy-period',event=>this.loadCostChartPeriod(event.detail));window.__DEEPAL_COMPANION_ENERGY.panel(lineHost,this.context,{chartOnly:true});
   }
@@ -328,20 +338,22 @@ class DeepalCompanionPanel extends HTMLElement {
 
   locationLabel(assignment){
     if(assignment?.profile?.id==="manual")return this.t("Manual charge","Χειροκίνητη χρέωση","Cargo manual");
-    return assignment?.profile?.name||assignment?.profile?.id||this.t("Unassigned","Χωρίς τοποθεσία");
+    return assignment?.profile?.name||assignment?.profile?.id||this.t("Unassigned","Χωρίς τοποθεσία","Sin ubicación");
   }
   updateCostSummary(){updateCostHeader(this);}
 
   async showSessionCurve(ident){
+    await this.flushAutosave();
     if(this.costs?.dirty){this.status('Save or cancel your changes first.','warning');return;}
     const revision=this.mountRevision,owner=this.selected.vehicle_id;
-    const module=await import('./charging-curve.js?v=0.1.3');
+    const module=await import('./charging-curve.js?v=0.1.4');
     if(revision!==this.mountRevision||owner!==this.selected.vehicle_id||!this.isConnected)return;
     this.sessionDialog?.remove();this.sessionDialog=module.openCurveDialog(this.shadowRoot,this._hass,async()=>{const data=await this.request('session_curve',{session_id:ident}),record=this.archiveRows?.find(row=>row.id===ident);return {...data,mode:data.mode||(typeof record?.dc==='boolean'?(record.dc?'DC':'AC'):null)};},this.config);
   }
 
   async editSession(start){
-    if(this.costs?.dirty){this.status(this.t("Save your changes first.","Αποθήκευσε πρώτα τις αλλαγές σου."));return;}
+    await this.flushAutosave();
+    if(this.costs?.dirty){this.status(this.t("Save your changes first.","Αποθήκευσε πρώτα τις αλλαγές σου.","Guarda primero los cambios."));return;}
     const record=(this.archiveRows||[]).find(row=>String(row.s)===String(start));if(!record)return;
     const revision=this.mountRevision;
     await window.__DEEPAL_COMPANION_UI.loadEnergy();if(revision!==this.mountRevision)return;
@@ -378,7 +390,8 @@ class DeepalCompanionPanel extends HTMLElement {
     const button=event.target.closest("[data-action],[data-mode]");if(!button)return;
     try{
       if(button.dataset.mode){
-        if(this.pending||this.localBoard?.busy||this.localBoard?.dirty||this.costs?.dirty){this.status(this.t("Save or cancel your changes first.","Αποθήκευσε ή ακύρωσε πρώτα τις αλλαγές σου."));return;}
+        await this.flushAutosave();
+        if(this.pending||this.localBoard?.busy||this.localBoard?.dirty||this.costs?.dirty){this.status(this.t("Save or cancel your changes first.","Αποθήκευσε ή ακύρωσε πρώτα τις αλλαγές σου.","Guarda o cancela primero los cambios."));return;}
         await this.navigateMode(button.dataset.mode);return;
       }
       const action=button.dataset.action;
@@ -389,13 +402,14 @@ class DeepalCompanionPanel extends HTMLElement {
       if(action==='sync-recorder'){button.disabled=true;try{await window.__DEEPAL_COMPANION_ENERGY.syncRecorderCharges(this.context);await this.mount();}finally{button.disabled=false;}return;}
       if(action==="vehicle-settings"){this.settings?._setTab("vehicle");this.settings?.scrollIntoView({block:"start",behavior:"smooth"});return;}
       if(action==="dashboard-guide"){const guide=this.shadowRoot.querySelector(".dashboard-guide");if(guide){guide.open=true;guide.scrollIntoView({block:"nearest",behavior:"smooth"});}return;}
-      if(action==="add-dashboard"){const module=await import("./companion-dashboard.js?v=0.1.3");await module.showDashboardAdd(this);return;}
+      if(action==="add-dashboard"){const module=await import("./companion-dashboard.js?v=0.1.4");await module.showDashboardAdd(this);return;}
       if(action==="edit-session"){await this.editSession(button.dataset.start);return;}
       if(action==='view-curve'){await this.showSessionCurve(button.dataset.sessionId);return;}
       if(action==="menu"){this.dispatchEvent(new CustomEvent("hass-toggle-menu",{bubbles:true,composed:true}));return;}
       if(["rename","duplicate","create","delete"].includes(action)){
-        if(this.pending||this.localBoard?.busy||this.localBoard?.dirty||this.costs?.dirty){this.status(this.t("Save or cancel your changes first.","Αποθήκευσε ή ακύρωσε πρώτα τις αλλαγές σου."));return;}
-        if(action==="delete"&&!window.confirm(this.t("Delete this display profile? Vehicle history is kept.","Διαγραφή προφίλ εμφάνισης; Το ιστορικό διατηρείται.")))return;
+        await this.flushAutosave();
+        if(this.pending||this.localBoard?.busy||this.localBoard?.dirty||this.costs?.dirty){this.status(this.t("Save or cancel your changes first.","Αποθήκευσε ή ακύρωσε πρώτα τις αλλαγές σου.","Guarda o cancela primero los cambios."));return;}
+        if(action==="delete"&&!window.confirm(this.t("Delete this display profile? Vehicle history is kept.","Διαγραφή προφίλ εμφάνισης; Το ιστορικό διατηρείται.","¿Eliminar este perfil de visualización? Se conserva el historial del vehículo.")))return;
         const name=this.shadowRoot.querySelector('[name=profile_name]').value.trim()||"New profile";
         const result=await this.request("view",{action:action==="duplicate"?"create":action,name:action==="duplicate"?name+" (copy)":name,source:action==="duplicate"?this.selected.view_id:null});
         if(action==="create"||action==="duplicate")this.selected.view_id=result.view_id;
@@ -406,7 +420,7 @@ class DeepalCompanionPanel extends HTMLElement {
         const data=await this.request("export"),url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"})),link=document.createElement("a");
         link.href=url;link.download="deepal-companion-"+new Date().toISOString().slice(0,10)+".json";link.click();setTimeout(()=>URL.revokeObjectURL(url),10000);return;
       }
-      if(action==="backup"){const result=await this.request("backup");this.status(this.t("Backup saved: ","Αποθηκεύτηκε αντίγραφο: ")+result.file);}
+      if(action==="backup"){const result=await this.request("backup");this.status(this.t("Backup saved: ","Αποθηκεύτηκε αντίγραφο: ","Copia guardada: ")+result.file);}
     }catch(error){this.status(error.message||String(error));}
   }
 }

@@ -38,6 +38,9 @@ def validate(value):
     if "live_charging" in value:
         from .live_charging import validate_live
         result["live_charging"] = validate_live(value["live_charging"])
+    if "live_climate" in value or "live_open" in value:
+        from .live_status import validate_all
+        result.update(validate_all(value))
     if "ui" in value:
         if not isinstance(value["ui"], dict) or len(json.dumps(value["ui"], allow_nan=False)) > 100000:
             raise ValueError("Invalid notification preferences")
@@ -107,6 +110,37 @@ def validate(value):
     return result
 
 
+_MISSING = object()
+CONFLICT = "Notification settings changed elsewhere. Reload before saving."
+
+
+def merge3(base, theirs, mine):
+    """Three-way merge: keep what each side changed, reject only the same field changed in two ways."""
+    if mine == theirs or theirs == base:
+        return mine
+    if mine == base:
+        return theirs
+    if isinstance(base, dict) and isinstance(theirs, dict) and isinstance(mine, dict):
+        merged = {}
+        for key in dict.fromkeys([*theirs, *mine, *base]):
+            value = merge3(base.get(key, _MISSING), theirs.get(key, _MISSING), mine.get(key, _MISSING))
+            if value is not _MISSING:
+                merged[key] = value
+        return merged
+    raise ValueError(CONFLICT)
+
+
+def merge_config(base, theirs, mine):
+    """Merge a save made from an older copy (base) into the settings stored since (theirs)."""
+    def split(config):
+        return ({k: v for k, v in config.items() if k != "rules"}, {r["id"]: r for r in config.get("rules", [])})
+    (base_rest, base_rules), (their_rest, their_rules), (my_rest, my_rules) = split(base), split(theirs), split(mine)
+    merged = merge3(base_rest, their_rest, my_rest)
+    rules = merge3(base_rules, their_rules, my_rules)
+    order = [ident for ident in my_rules if ident in rules] + [ident for ident in their_rules if ident in rules and ident not in my_rules]
+    return {**merged, "rules": [rules[ident] for ident in order]}
+
+
 def quiet_now(quiet, minute):
     if not quiet["enabled"] or quiet["from"] == quiet["to"]:
         return False
@@ -135,8 +169,10 @@ class NotificationEngine:
                 item.setdefault("id", uuid.uuid4().hex)
             await self.db("put", self.runtime.vehicle, "local_notification_history", self.history)
         from .live_charging import LiveCharging
-        self.live = LiveCharging(self)
+        from .live_status import LiveStatus
+        self.live, self.live_status = LiveCharging(self), LiveStatus(self)
         await self.live.start()
+        await self.live_status.start()
         # A pending duration must be observed again after restart. Sent/dismissed latches survive.
         for state in self.state.values():
             state["since"] = None
@@ -196,21 +232,46 @@ class NotificationEngine:
     async def save(self, value, expected=None):
         config = validate(value)
         async with self.lock:
-            if expected is not None and expected != self.config:
-                raise ValueError("Notification settings changed elsewhere. Reload before saving.")
+            merged = expected is not None and expected != self.config
+            if merged:
+                # Another tab or device saved first: keep both sets of changes unless they collide.
+                config = validate(merge_config(expected, self.config, config))
             for rule in config["rules"]:
                 await self.preview(rule)
             await self.db("put", self.runtime.vehicle, "local_notifications", config)
             previous = {r["id"]: r for r in self.config["rules"]}
+            current = {r["id"]: r for r in config["rules"]}
+            # An alert that is switched off or removed can no longer clear itself, so clear it here.
+            stale = [old for old in self.config["rules"]
+                     if self.state.get(old["id"], {}).get("count") and old.get("clear_on_resolve", True)
+                     and (not config["enabled"] or old["id"] not in current or not current[old["id"]]["enabled"])]
+            last_sent = {old["id"]: self.state[old["id"]].get("last", 0) for old in stale}
             # Editing never rearms an already-sent issue. Restart only its pending duration.
             self.state = {r["id"]: self.state.get(r["id"], {}) for r in config["rules"]}
+            for old in stale:
+                if old["id"] in self.state:
+                    self.state[old["id"]] = {"last": last_sent[old["id"]]}
             for rule in config["rules"]:
                 if rule != previous.get(rule["id"]):
                     self.state[rule["id"]]["since"] = None
             self.config = config
+            for old in stale:
+                await self.clear_rule(old)
             if hasattr(self, "live"):
                 await self.live.tick()
+            if hasattr(self, "live_status"):
+                await self.live_status.tick()
             await self.persist()
+            return merged
+
+    async def clear_rule(self, rule):
+        """Remove this rule's delivered notification from its devices."""
+        for service in rule["devices"]:
+            try:
+                async with asyncio.timeout(2):
+                    await self.send_to_recipient(service, {"message": "clear_notification", "data": {"tag": notification_tag(self.runtime.vehicle, rule["id"])}})
+            except Exception as error:
+                await self.record(rule, "error", error="Could not clear notification: " + str(error)[:200])
 
     async def render(self, text, variables):
         from homeassistant.helpers.template import Template
@@ -219,10 +280,14 @@ class NotificationEngine:
         except Exception as error:
             raise ValueError("Notification template: " + str(error)[:300]) from error
 
-    async def preview(self, rule, index=1):
+    async def context(self, rule, index=1):
         context = {"repeat": {"index": index}}
         for key, template in rule["variables"].items():
             context[key] = await self.render(template, context)
+        return context
+
+    async def preview(self, rule, index=1):
+        context = await self.context(rule, index)
         active = str(await self.render(rule["condition"], context)).strip().lower() == "true"
         # Simple {name} placeholders coexist with advanced HA {{ templates }}.
         def simple(text):
@@ -265,7 +330,7 @@ class NotificationEngine:
         await self.db("put", self.runtime.vehicle, "local_notification_state", self.state)
         await self.db("put", self.runtime.vehicle, "local_notification_history", self.history)
 
-    async def deliver(self, rule, preview, token, test=False, silent=False):
+    async def deliver(self, rule, preview, token, test=False, silent=False, index=1):
         severity = rule["severity"]
         soft = silent or severity == "info"
         data = deepcopy(rule["data"])
@@ -297,7 +362,7 @@ class NotificationEngine:
         async def send(service):
             try:
                 if not test and service in rule.get("recipient_conditions", {}):
-                    allowed = str(await self.render(rule["recipient_conditions"][service], {})).strip().lower() == "true"
+                    allowed = str(await self.render(rule["recipient_conditions"][service], await self.context(rule, index))).strip().lower() == "true"
                     if not allowed:
                         return {"device": service, "status": "skipped"}
                 async with asyncio.timeout(15):
@@ -323,6 +388,9 @@ class NotificationEngine:
 
     async def action(self, event):
         token = event.data.get("action")
+        if isinstance(token, str) and token.startswith("DEEPAL_COMPANION_LIVE_") and hasattr(self, "live_status") and not self.stopped:
+            await self.live_status.action(token)
+            return
         if not isinstance(token, str) or not token.startswith(("DEEPAL_COMPANION_DISMISS_", "DEEPAL_COMPANION_LOCK_")) or not self.config["enabled"] or self.stopped:
             return
         lock_action = token.startswith("DEEPAL_COMPANION_LOCK_")
@@ -350,6 +418,90 @@ class NotificationEngine:
                     await self.persist()
                     return
 
+    async def explain(self, rule_id):
+        """Say why a saved alert is or is not being sent right now. Read-only: no state change, nothing is sent."""
+        rule = next((r for r in self.config["rules"] if r["id"] == rule_id), None)
+        if rule is None:
+            raise ValueError("Alert not found")
+        now = time.time()
+        state = self.state.get(rule_id, {})
+        steps = []
+
+        def step(ident, status, title, detail=""):
+            steps.append({"id": ident, "status": status, "title": title, "detail": detail})
+
+        def verdict(kind, summary, retry=None):
+            return {"rule_id": rule_id, "name": rule["name"], "verdict": kind, "summary": summary, "retry_in": retry,
+                    "steps": steps, "checked": int(now)}
+
+        def wait_text(seconds):
+            seconds = max(0, int(seconds + .999))
+            return str(seconds // 60) + " min " + str(seconds % 60) + " s" if seconds >= 60 else str(seconds) + " s"
+
+        if not self.config["enabled"]:
+            step("master", "block", "Notifications switch", "All vehicle notifications are switched off.")
+            return verdict("blocked", "The main notifications switch is off.")
+        step("master", "pass", "Notifications switch", "On.")
+        if not rule["enabled"]:
+            step("rule", "block", "Alert switch", "This alert is switched off.")
+            return verdict("blocked", "This alert is switched off.")
+        step("rule", "pass", "Alert switch", "On.")
+        index = state.get("count", 0) + 1
+        try:
+            preview = await self.preview(rule, index)
+        except Exception as error:
+            step("condition", "block", "Condition", "Could not be evaluated: " + str(error)[:200])
+            return verdict("blocked", "The condition has an error, so the alert cannot fire.")
+        if not preview["active"]:
+            step("condition", "block", "Condition", "The condition is not true right now.")
+            return verdict("inactive", "The condition is not true, so there is nothing to send.")
+        step("condition", "pass", "Condition", "True right now.")
+        if state.get("dismissed"):
+            step("dismissed", "block", "Dismissed", "You dismissed this alert. It fires again after the condition clears and returns.")
+            return verdict("blocked", "The alert was dismissed.")
+        since = state.get("since")
+        remaining = rule["delay"] - (now - since) if since is not None else rule["delay"]
+        if remaining > 0:
+            step("delay", "wait", "Delay", "The condition must stay true for " + wait_text(rule["delay"]) + "; " + wait_text(remaining) + " left.")
+            return verdict("waiting", "Waiting for the delay to pass.", remaining)
+        step("delay", "pass", "Delay", "Passed.")
+        count = state.get("count", 0)
+        if count >= rule["max_sends"]:
+            step("limit", "block", "Send limit", "Already sent " + str(count) + " of " + str(rule["max_sends"]) + " allowed. It resets when the condition clears.")
+            return verdict("blocked", "The send limit has been reached.")
+        if count and not rule["repeat"]:
+            step("repeat", "block", "Repeat", "Sent once and repeating is off. It resets when the condition clears.")
+            return verdict("blocked", "Already sent; repeating is off.")
+        if count:
+            left = rule["repeat"] - (now - state.get("last", 0))
+            if left > 0:
+                step("repeat", "wait", "Repeat", "Next repeat in " + wait_text(left) + ".")
+                return verdict("waiting", "Waiting for the next repeat.", left)
+        step("limit", "pass", "Send limit", str(count) + " of " + str(rule["max_sends"]) + " sent.")
+        if not count:
+            left = rule["cooldown"] - (now - state.get("last", 0))
+            if left > 0:
+                step("cooldown", "wait", "Cooldown", "This alert was sent recently. It can send again in " + wait_text(left) + ".")
+                return verdict("waiting", "Waiting for the cooldown.", left)
+            step("cooldown", "pass", "Cooldown", "Passed.")
+        from homeassistant.util import dt as dt_util
+        quiet = quiet_now(rule["quiet"], dt_util.now().strftime("%H:%M")) and rule["severity"] != "critical"
+        if quiet and rule["quiet"]["mode"] == "skip":
+            step("quiet", "wait", "Quiet hours", "Quiet hours are on (" + rule["quiet"]["from"] + "-" + rule["quiet"]["to"] + "). The alert is held until they end.")
+            return verdict("waiting", "Held until quiet hours end.")
+        step("quiet", "pass", "Quiet hours", "Delivered silently during quiet hours." if quiet else "Not in quiet hours." if rule["quiet"]["enabled"] else "Not used.")
+        reachable = {r["svc"] for r in self.recipients()}
+        devices = rule["devices"]
+        usable = [d for d in devices if d in reachable or not reachable]
+        if not devices:
+            step("devices", "block", "Devices", "No device is chosen for this alert.")
+            return verdict("no_recipient", "No device is chosen.")
+        if reachable and not usable:
+            step("devices", "block", "Devices", "None of the chosen devices is available in Home Assistant.")
+            return verdict("no_recipient", "The chosen devices are not available.")
+        step("devices", "pass", "Devices", str(len(usable)) + " of " + str(len(devices)) + " chosen device(s) available.")
+        return verdict("would_send", "Everything passes. It will be sent on the next check (within 15 seconds).", 15)
+
     async def tick(self, _now=None):
         if self.stopped or self.lock.locked():
             return
@@ -364,6 +516,15 @@ class NotificationEngine:
                         await self.record({"id": "live_charging", "name": "Live charging"}, "error", error=message)
                         self.live_error = message
                         await self.persist()
+            if hasattr(self, "live_status"):
+                try:
+                    await self.live_status.tick(now)
+                except Exception as error:
+                    message = str(error)[:300]
+                    if getattr(self, "live_status_error", None) != message:
+                        await self.record({"id": "live_status", "name": "Live notifications"}, "error", error=message)
+                        self.live_status_error = message
+                        await self.persist()
             if not self.config["enabled"]:
                 return
             before = json.dumps([self.state, self.history], sort_keys=True)
@@ -376,12 +537,7 @@ class NotificationEngine:
                     state.pop("error", None)
                     if not preview["active"]:
                         if state.get("count") and rule.get("clear_on_resolve", True):
-                            for service in rule["devices"]:
-                                try:
-                                    async with asyncio.timeout(2):
-                                        await self.send_to_recipient(service, {"message": "clear_notification", "data": {"tag": notification_tag(self.runtime.vehicle, rule["id"])}})
-                                except Exception as error:
-                                    await self.record(rule, "error", error="Could not clear notification: " + str(error)[:200])
+                            await self.clear_rule(rule)
                         self.state[rule["id"]] = {"last": state.get("last", 0)}
                         continue
                     if state.get("since") is None:
@@ -396,14 +552,17 @@ class NotificationEngine:
                     from homeassistant.util import dt as dt_util
                     quiet = quiet_now(rule["quiet"], dt_util.now().strftime("%H:%M")) and rule["severity"] != "critical"
                     if quiet and rule["quiet"]["mode"] == "skip":
-                        state.update(count=count + 1, last=now)
-                        await self.record(rule, "quiet_hours", message="Notification suppressed during quiet hours")
+                        # Hold, do not consume a send: a problem that outlasts quiet hours must still be reported.
+                        if not state.get("held"):
+                            state["held"] = True
+                            await self.record(rule, "quiet_hours", message="Notification held until quiet hours end")
                         continue
+                    state.pop("held", None)
                     state["token"] = "DEEPAL_COMPANION_DISMISS_" + uuid.uuid4().hex
                     state.update(count=count + 1, last=now)
                     # Persist the attempt before sending: a restart must not duplicate it.
                     await self.persist()
-                    await self.deliver(rule, preview, state["token"], silent=quiet)
+                    await self.deliver(rule, preview, state["token"], silent=quiet, index=count + 1)
                 except Exception as error:
                     message = str(error)[:300]
                     if state.get("error") != message:

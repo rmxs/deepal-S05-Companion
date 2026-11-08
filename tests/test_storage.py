@@ -22,6 +22,17 @@ class StorageTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_setup_vehicle_type_seeds_once_and_never_overwrites(self):
+        self.db.ensure_vehicle('typed', 'Typed', {'prefix': 's05', 'battery_entity': 'sensor.b', 'powertrain': 'phev'})
+        self.assertEqual(self.db.config('typed')['config']['powertrain'], 'phev')
+        self.db.patch_config('typed', self.db.config('typed')['view_id'], {'powertrain': 'auto'})
+        self.db.ensure_vehicle('typed', 'Typed', {'prefix': 's05', 'battery_entity': 'sensor.b', 'powertrain': 'phev'})
+        self.assertEqual(self.db.config('typed')['config']['powertrain'], 'auto', 'Explicit Automatic survives restarts')
+
+    def test_existing_vehicle_without_type_takes_the_setup_choice(self):
+        self.db.ensure_vehicle('car', 'Car', {'prefix': 's05', 'battery_entity': 'sensor.battery', 'powertrain': 'ev'})
+        self.assertEqual(self.db.config('car')['config']['powertrain'], 'ev')
+
     def seed(self, entity='sensor.current', hours=2, vehicle='car'):
         with self.db.connect() as db:
             db.executemany('INSERT INTO readings VALUES(?,?,?,?,?)',

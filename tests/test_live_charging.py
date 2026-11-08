@@ -64,6 +64,9 @@ class LiveCharging(unittest.IsolatedAsyncioTestCase):
         self.assertIn("16 A", self.calls[0][1]["message"])
         self.assertIn("Reported", self.calls[0][1]["message"])
         self.assertFalse(data["chronometer"])
+        self.assertEqual(data["notification_icon"], "mdi:ev-station")
+        self.assertEqual(live.validate_live({"icon": "mdi:flash"})["icon"], "mdi:flash")
+        self.assertEqual(self.activity.payload(self.activity.snapshot(self.now, self.activity.options()), {**self.activity.options(), "icon": "mdi:flash"}, "t")["data"]["notification_icon"], "mdi:flash")
         self.now += 600
         await self.activity.tick()
         self.assertEqual(len(self.calls), 1, "No push when sensor readings have not been reported again")
@@ -174,7 +177,7 @@ class LiveCharging(unittest.IsolatedAsyncioTestCase):
     async def test_parked_test_reports_real_status_and_no_fake_countdown(self):
         self.readings(charging=False)
         await self.activity.test(self.activity.options())
-        self.assertIn("Not charging", self.calls[-1][1]["message"])
+        self.assertIn("Not charging", self.calls[-1][1]["title"])
         self.assertFalse(self.calls[-1][1]["data"]["chronometer"])
 
     async def test_delivery_failure_retries_throttled_and_is_not_accepted(self):
@@ -202,7 +205,7 @@ class LiveCharging(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(live.validate_live({})["min_interval"], 300)
 
     def test_settings_validation(self):
-        for change in ({"min_interval": 0}, {"min_interval": True}, {"battery_step": 50}, {"enabled": "yes"}, {"devices": ["notify.bad-name"]}, {"extra": 1}, {"devices": []}):
+        for change in ({"min_interval": 0}, {"min_interval": True}, {"battery_step": 50}, {"enabled": "yes"}, {"devices": ["notify.bad-name"]}, {"extra": 1}, {"devices": []}, {"icon": "hass:flash"}, {"icon": 5}):
             with self.assertRaises(ValueError):
                 live.validate_live({**self.activity.options(), **change})
 

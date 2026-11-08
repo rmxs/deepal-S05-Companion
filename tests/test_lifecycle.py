@@ -127,6 +127,27 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         if self.runtime:
             await self.runtime.stop()
         self.tmp.cleanup()
+    async def test_spike_tolerance_follows_the_saved_setting(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        self.runtime.config = {**self.runtime.config, "charge_spike_jump": 35}
+        self.assertEqual(self.runtime.spike_jump(), 35)
+        for bad in (4, 51, "x", None):
+            self.runtime.config["charge_spike_jump"] = bad
+            self.assertEqual(self.runtime.spike_jump(), 20)
+
+    async def test_stop_does_not_hang_when_the_worker_never_finishes(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        self.runtime.stop_timeout = .1
+        self.runtime.queue._unfinished_tasks += 1  # an item whose task_done() never arrives
+        await asyncio.wait_for(self.runtime.stop(), 3)
+        self.assertIsNone(self.runtime.worker)
+        self.runtime = None
+
     async def test_setup_resources_and_backend_start_stop(self):
         self.assertTrue(await integration.async_setup(self.hass, {}))
         self.assertEqual(len(self.hass.commands), 2)
@@ -140,6 +161,8 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         active = summary["active"]
         self.hass.values["sensor.s05_battery_level"].state = "70"
         self.runtime._tick(clock[0])
+        await self.runtime.queue.join()
+        self.runtime._tick(clock[0])  # a large jump counts once the next reading confirms it
         await self.runtime.queue.join()
         updated = (await self.hass.data["deepal_companion"].db("summary", "vehicle"))["active"]
         self.assertEqual(updated["id"], active["id"])
@@ -223,6 +246,8 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["type"], "form")
         defaults = {key.schema: key.default() for key in result["data_schema"].schema}
         self.assertEqual(defaults["powertrain"], "phev")
+        # Discovery of a plug-in hybrid preselects the 18-inch Pro wheels.
+        self.assertEqual(defaults["iso_wheels"], "pro")
         self.assertNotIn("fuel_max", defaults)
         self.assertNotIn("fuel_tank_liters", defaults)
         result = await flow.async_step_confirm({"name": "Car", "powertrain": "ev",

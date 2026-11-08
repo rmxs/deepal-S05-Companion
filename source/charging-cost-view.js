@@ -6,7 +6,7 @@ function renderChargingCosts(m,ctx){
   html+='<div class="en-cost-list">';
   for(const g of rows){
     const date=ctx.fmt.dm(g.s)+" · "+ctx.fmt.hm(g.s)+" – "+ctx.fmt.hm(g.e);
-    html+='<div class="en-li"><span class="a"><span class="ic">'+ico("plug")+'</span><span class="mid">'+esc(date)+(g.live?' <span class="bd">'+esc(CT("Charging","Φορτίζει"))+'</span>':"")+'<small>'+esc(Number.isFinite(g.from)?g.from+"% → "+g.to+"%":"")+'</small></span></span><span class="b">'+(g.kwh>0?esc(new Intl.NumberFormat(ctx.lang,{maximumFractionDigits:1}).format(g.kwh))+" kWh":"—")+'</span></div>';
+    html+='<div class="en-li"><span class="a"><span class="ic">'+ico("plug")+'</span><span class="mid">'+esc(date)+(g.live?' <span class="bd">'+esc(CT("Charging","Φορτίζει","Cargando"))+'</span>':"")+'<small>'+esc(Number.isFinite(g.from)?(Number.isFinite(g.to)?g.from+"% → "+g.to+"%":g.from+"%"):"")+'</small></span></span><span class="b">'+(g.kwh>0?esc(new Intl.NumberFormat(ctx.lang,{maximumFractionDigits:1}).format(g.kwh))+" kWh":"—")+'</span></div>';
   }
   return html+"</div>";
 }

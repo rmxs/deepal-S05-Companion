@@ -13,7 +13,7 @@ from .const import DOMAIN, SIGNAL
 
 async def async_setup_entry(hass, entry, async_add_entities):
     runtime = entry.runtime_data
-    async_add_entities([CompanionSensor(runtime, key) for key in ("sessions", "battery_kwh", "cost", "unpriced")], True)
+    async_add_entities([CompanionSensor(runtime, key) for key in ("sessions", "battery_kwh", "cost", "unpriced")])  # async_added_to_hass loads the first value
 
 
 class CompanionSensor(SensorEntity):

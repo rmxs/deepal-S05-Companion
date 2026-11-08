@@ -554,7 +554,6 @@
                             <div class="pt-1">
                                 <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1 flex items-center justify-between">
                                     <span><i class="fa-solid fa-mobile-screen-button text-emerald-400"></i> iOS / Android Push</span>
-                                    <span class="text-[9px] text-gray-500 font-mono">NOW</span>
                                 </div>
                                 <div class="bg-[#121316] border border-[#24262c] rounded-2xl p-3 shadow-lg relative overflow-hidden">
                                     <div id="preview-accent-bar" class="absolute left-0 top-0 bottom-0 w-1 bg-emerald-400"></div>
@@ -750,17 +749,17 @@
 
             if (level === 'info') {
                 btnInfo.className = "sev-btn active py-1.5 rounded-lg text-[10px] font-bold bg-emerald-400 text-slate-950 shadow transition-all text-center";
-                feedbackText.innerText = "Silent notification. Delivered quietly without alert sound.";
+                feedbackText.innerText = "Silent. Delivered quietly, no sound.";
                 accentBar.className = "absolute left-0 top-0 bottom-0 w-1 bg-emerald-400";
                 iconBg.className = "w-4 h-4 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center text-[9px] font-bold";
             } else if (level === 'important') {
                 btnImp.className = "sev-btn active py-1.5 rounded-lg text-[10px] font-bold bg-emerald-400 text-slate-950 shadow transition-all text-center";
-                feedbackText.innerText = "Plays sound notification with high priority. Obeys quiet hours.";
+                feedbackText.innerText = "Plays a sound, high priority. Obeys quiet hours.";
                 accentBar.className = "absolute left-0 top-0 bottom-0 w-1 bg-emerald-400";
                 iconBg.className = "w-4 h-4 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center text-[9px] font-bold";
             } else if (level === 'critical') {
                 btnCrit.className = "sev-btn active py-1.5 rounded-lg text-[10px] font-bold bg-rose-500 text-slate-950 shadow transition-all text-center";
-                feedbackText.innerText = "Critical alarm! Bypasses do-not-disturb & device volume mute.";
+                feedbackText.innerText = "Critical. Bypasses Do Not Disturb and mute.";
                 accentBar.className = "absolute left-0 top-0 bottom-0 w-1 bg-rose-500";
                 iconBg.className = "w-4 h-4 rounded-full bg-rose-500 text-slate-950 flex items-center justify-center text-[9px] font-bold";
             }

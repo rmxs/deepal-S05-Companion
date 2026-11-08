@@ -18,6 +18,11 @@ def rule(**changes):
     return {"id": "battery", "name": "Low battery", "enabled": True, "devices": ["mobile_app_phone"], "condition": "true", "title": "Battery {battery}", "message": "Check {battery}", "variables": {"battery": "20"}, "delay": 30, "repeat": 60, "max_sends": 2, "cooldown": 1800, "severity": "info", "quiet": {"enabled": False, "from": "22:00", "to": "07:00", "mode": "silent"}, "buttons": ["dismiss", "open"], "url": "/deepal-companion", "data": {}, **changes}
 
 
+def json_state(engine):
+    import json
+    return json.dumps([engine.state, engine.history], sort_keys=True)
+
+
 class Notifications(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.store, self.calls = {}, []
@@ -107,6 +112,61 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         await self.engine.tick()
         self.assertEqual(self.calls[0][2]["data"]["push"]["sound"], "none")
 
+    async def test_quiet_skip_holds_alert_until_quiet_hours_end(self):
+        q = {"enabled": True, "from": "22:00", "to": "07:00", "mode": "skip"}
+        await self.enable(delay=0, max_sends=1, quiet=q)
+        await self.engine.tick()
+        self.time.return_value += 60
+        await self.engine.tick()
+        self.assertFalse(self.calls)
+        self.assertEqual(self.engine.state["battery"].get("count", 0), 0)
+        self.assertEqual([h["status"] for h in self.engine.history].count("quiet_hours"), 1)
+        sys.modules["homeassistant.util.dt"].now = lambda: datetime(2026, 11, 7, 10, 0)
+        self.time.return_value += 60
+        await self.engine.tick()
+        self.assertEqual(len(self.calls), 1)
+        self.assertNotIn("held", self.engine.state["battery"])
+
+    async def test_quiet_skip_does_not_hold_critical_alerts(self):
+        q = {"enabled": True, "from": "22:00", "to": "07:00", "mode": "skip"}
+        await self.enable(delay=0, severity="critical", quiet=q)
+        await self.engine.tick()
+        self.assertEqual(len(self.calls), 1)
+
+    async def test_disabling_or_removing_alert_clears_its_notification(self):
+        await self.enable(delay=0)
+        await self.engine.tick()
+        self.assertEqual(len(self.calls), 1)
+        await self.engine.save({"enabled": True, "rules": [rule(delay=0, enabled=False)]})
+        self.assertEqual(self.calls[-1][2]["message"], "clear_notification")
+        self.assertEqual(len(self.calls), 2)
+        await self.engine.tick()
+        self.assertEqual(len(self.calls), 2)
+        # An alert that never sent has nothing to clear.
+        await self.engine.save({"enabled": True, "rules": []})
+        self.assertEqual(len(self.calls), 2)
+
+    async def test_master_switch_off_and_removal_clear_sent_notifications(self):
+        await self.enable(delay=0)
+        await self.engine.tick()
+        await self.engine.save({"enabled": False, "rules": [rule(delay=0)]})
+        self.assertEqual(self.calls[-1][2]["message"], "clear_notification")
+        self.assertEqual(len(self.calls), 2)
+        self.engine.state = {}
+        await self.engine.save({"enabled": True, "rules": [rule(delay=0)]})
+        self.time.return_value += 3600
+        await self.engine.tick()
+        self.assertEqual(len(self.calls), 3)
+        await self.engine.save({"enabled": True, "rules": []})
+        self.assertEqual(self.calls[-1][2]["message"], "clear_notification")
+        self.assertEqual(len(self.calls), 4)
+
+    async def test_clear_on_resolve_false_keeps_notification_when_disabled(self):
+        await self.enable(delay=0, clear_on_resolve=False)
+        await self.engine.tick()
+        await self.engine.save({"enabled": True, "rules": [rule(delay=0, clear_on_resolve=False, enabled=False)]})
+        self.assertEqual(len(self.calls), 1)
+
     async def test_failed_device_does_not_block_other_devices(self):
         await self.enable(delay=0, devices=["mobile_app_broken", "mobile_app_phone"])
         await self.engine.tick()
@@ -119,6 +179,21 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([call[1] for call in self.calls], ["mobile_app_away"])
         await self.engine.test(self.engine.config["rules"][0])
         self.assertEqual(len(self.calls), 3)
+
+    async def test_recipient_condition_receives_rule_variables_and_repeat_index(self):
+        seen = []
+        original = self.engine.render
+        async def render(text, variables):
+            if text == "RC":
+                seen.append(dict(variables))
+                return "true"
+            return await original(text, variables)
+        self.engine.render = render
+        await self.enable(delay=0, devices=["mobile_app_phone"], variables={"level": "42"}, recipient_conditions={"mobile_app_phone": "RC"})
+        await self.engine.tick()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(seen[0]["level"], "42")
+        self.assertEqual(seen[0]["repeat"], {"index": 1})
 
     async def test_card_style_preferences_survive_save(self):
         value={"enabled":False,"rules":[],"ui":{"quiet":{"on":True},"events":{"unlocked":{"actions":["lock"],"icon":"mdi:lock"}}}}
@@ -236,8 +311,54 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         await self.engine.save({"enabled": True, "rules": [rule(delay=0, title="New")]})
         await self.engine.tick()
         self.assertEqual(len(self.calls), 1)
+        # A save made from an outdated copy that changes nothing keeps the newer settings.
+        stale = {"enabled": False, "rules": []}
+        self.assertTrue(await self.engine.save(stale, stale))
+        self.assertTrue(self.engine.config["enabled"])
+        self.assertEqual(self.engine.config["rules"][0]["title"], "New")
+
+    async def test_concurrent_saves_merge_different_changes(self):
+        await self.enable(delay=0)
+        opened = deepcopy(self.engine.config)
+        # Another tab changes the message and adds a second alert.
+        other = deepcopy(opened)
+        other["rules"][0]["message"] = "Other tab"
+        other["rules"].append(rule(id="second", name="Second", enabled=False, devices=[]))
+        self.assertFalse(await self.engine.save(other, opened))
+        # This tab, still on the old copy, changes quiet hours and the master switch.
+        mine = deepcopy(opened)
+        mine["rules"][0]["quiet"] = mine["rules"][0]["quiet"] | {"enabled": True, "from": "23:00"}
+        mine["enabled"] = False
+        self.assertTrue(await self.engine.save(mine, opened))
+        merged = self.engine.config
+        self.assertFalse(merged["enabled"])
+        self.assertEqual([r["id"] for r in merged["rules"]], ["battery", "second"])
+        self.assertEqual(merged["rules"][0]["message"], "Other tab")
+        self.assertEqual(merged["rules"][0]["quiet"]["from"], "23:00")
+
+    async def test_concurrent_saves_of_the_same_field_conflict(self):
+        await self.enable(delay=0)
+        opened = deepcopy(self.engine.config)
+        other = deepcopy(opened)
+        other["rules"][0]["title"] = "One"
+        await self.engine.save(other, opened)
+        mine = deepcopy(opened)
+        mine["rules"][0]["title"] = "Two"
         with self.assertRaises(ValueError):
-            await self.engine.save({"enabled": False, "rules": []}, {"enabled": False, "rules": []})
+            await self.engine.save(mine, opened)
+        self.assertEqual(self.engine.config["rules"][0]["title"], "One")
+
+    async def test_concurrent_removal_and_edit_of_different_alerts(self):
+        await self.engine.save({"enabled": True, "rules": [rule(delay=0), rule(id="second", name="Second", delay=0)]})
+        opened = deepcopy(self.engine.config)
+        other = deepcopy(opened)
+        other["rules"] = [r for r in other["rules"] if r["id"] != "second"]
+        await self.engine.save(other, opened)
+        mine = deepcopy(opened)
+        mine["rules"][0]["message"] = "Edited"
+        await self.engine.save(mine, opened)
+        self.assertEqual([r["id"] for r in self.engine.config["rules"]], ["battery"])
+        self.assertEqual(self.engine.config["rules"][0]["message"], "Edited")
 
     async def test_invalid_template_does_not_replace_saved_settings(self):
         with self.assertRaises(ValueError):
@@ -315,3 +436,48 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(mod.quiet_now(q, "23:00"))
         self.assertTrue(mod.quiet_now(q, "06:59"))
         self.assertFalse(mod.quiet_now(q, "07:00"))
+
+    async def test_explain_reports_each_blocker_without_changing_anything_or_sending(self):
+        async def verdict(**changes):
+            await self.enable(**changes)
+            return await self.engine.explain("battery")
+        before = None
+        result = await verdict()
+        self.assertEqual((result["verdict"], result["steps"][-1]["id"]), ("waiting", "delay"))   # delay 30 s, never ticked
+        self.assertEqual(result["retry_in"], 30)
+        await self.engine.tick()
+        self.time.return_value += 31
+        result = await self.engine.explain("battery")
+        self.assertEqual(result["verdict"], "would_send")
+        before = json_state(self.engine)
+        for _ in range(3):
+            await self.engine.explain("battery")
+        self.assertEqual(json_state(self.engine), before)
+        self.assertFalse(self.calls)
+        self.assertEqual((await verdict(condition="false"))["verdict"], "inactive")
+        self.engine.recipients = lambda: [{"svc": "notify.someone_else"}]
+        self.assertEqual((await verdict(delay=0))["verdict"], "no_recipient")   # chosen device is not available
+        self.engine.recipients = lambda: []
+        self.assertEqual((await verdict(quiet={"enabled": True, "from": "22:00", "to": "07:00", "mode": "skip"}, delay=0))["steps"][-1]["id"], "quiet")
+        self.assertEqual((await verdict(enabled=False))["verdict"], "blocked")
+        await self.engine.save({"enabled": False, "rules": [rule()]})
+        self.assertEqual((await self.engine.explain("battery"))["steps"][0]["id"], "master")
+        with self.assertRaises(ValueError):
+            await self.engine.explain("missing")
+
+    async def test_explain_covers_dismiss_limit_repeat_and_cooldown(self):
+        await self.enable(delay=0, repeat=0, max_sends=1, cooldown=1800)
+        await self.engine.tick()                                   # sends once
+        result = await self.engine.explain("battery")
+        self.assertEqual(result["verdict"], "blocked")
+        self.assertEqual(result["steps"][-1]["id"], "limit")
+        token = self.engine.state["battery"]["token"]
+        await self.engine.action(types.SimpleNamespace(data={"action": token}))
+        self.assertEqual(self.engine.explain.__name__, "explain")
+        self.assertEqual((await self.engine.explain("battery"))["steps"][-1]["id"], "dismissed")
+        await self.enable(delay=0, repeat=600, max_sends=3, cooldown=1800)
+        self.engine.state["battery"] = {"since": 1, "count": 1, "last": self.time.return_value - 10}
+        result = await self.engine.explain("battery")
+        self.assertEqual((result["verdict"], result["steps"][-1]["id"]), ("waiting", "repeat"))
+        self.engine.state["battery"] = {"since": 1, "count": 0, "last": self.time.return_value - 10}
+        self.assertEqual((await self.engine.explain("battery"))["steps"][-1]["id"], "cooldown")

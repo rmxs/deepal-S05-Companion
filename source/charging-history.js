@@ -44,7 +44,7 @@ EN.loadChargingSessions=async(card)=>{
       history=await hass.companionRecorderHistory({type:"history/history_during_period",start_time:new Date(0).toISOString(),end_time:new Date(now).toISOString(),entity_ids:entities,include_start_time_state:false,significant_changes_only:false,minimal_response:true,no_attributes:true});
       card._recorderCharges={key,at:now,value:history};
     }
-  }catch(_){history={};warning=CT("HA Recorder history could not be loaded. Only the Companion archive is shown.","Δεν φορτώθηκε το ιστορικό του Recorder. Εμφανίζεται μόνο το αρχείο Companion.");}
+  }catch(_){history={};warning=CT("HA Recorder history could not be loaded. Only the Companion archive is shown.","Δεν φορτώθηκε το ιστορικό του Recorder. Εμφανίζεται μόνο το αρχείο Companion.","No se pudo cargar el historial del Recorder de HA. Solo se muestra el archivo de Companion.");}
   const raw={batt:rowsOf(history?.[ids.batt]),ac:rowsOf(history?.[ids.ac]),dc:rowsOf(history?.[ids.dc]),odo:[],pow:[],fuel:[]};
   const recovered=model(raw,now,cap,now,0,true).chg.filter(g=>!archived.some(a=>a.s<=g.e&&a.e>=g.s)).map(g=>{
     const assignment=assignments[String(Math.round(g.s/1000))]||null,entity=assignment?.profile?.entity;

@@ -51,7 +51,7 @@ module.exports=async page=>{
  const savedInterval=await page.evaluate(()=>window.localNotifications?.live_charging?.min_interval??300);
  assert.equal(await board.locator('[data-live-setting=min_interval]').getAttribute('placeholder'),'300');assert.equal(await board.locator('[data-live-setting=min_interval]').inputValue(),savedInterval===300?'':String(savedInterval),'Saved overrides stay visible');
  await board.locator('[data-live-setting=min_interval]').fill('420');const statusAlignment=await board.locator('.notification-title-status').evaluate(status=>{const a=status.getBoundingClientRect(),b=status.nextElementSibling.getBoundingClientRect();return Math.abs(a.top+a.height/2-b.top-b.height/2);});assert(statusAlignment<2,'Unsaved changes aligns with the licence plate');await board.locator('[data-live-setting=min_interval]').fill('');assert.equal(await panel.evaluate(root=>root.localBoard.dirty),savedInterval!==300,'Clearing an override restores the default');
- if(savedInterval!==300)await board.locator('#view-overview [data-command=cancel]').click();
+ if(savedInterval!==300)await board.locator('#view-overview [data-command=cancel]').dispatchEvent('click');
  await panel.locator('[data-mode=history]').click();await panel.locator('.charge-session-list').waitFor();await panel.locator('.history-line-chart [data-period="7"]').click();
  await page.waitForFunction(()=>window.calls.some(call=>call.op==='charging_dashboard'&&call.data.start_time&&new Date(call.data.end_time)-new Date(call.data.start_time)<8*864e5));
  await panel.locator('.history-line-chart [data-wk="-1"]').click();await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').costChartPeriod?.period===7);

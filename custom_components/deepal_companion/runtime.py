@@ -17,7 +17,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.util import dt as dt_util
 
 from .charging import ChargingEngine, number
-from .const import DEFAULT_PROFILES, DOMAIN, ENERGY_KEYS, SIGNAL
+from .const import DEFAULT_PROFILES, DEFAULT_SPIKE_JUMP, DOMAIN, ENERGY_KEYS, RANGES, SIGNAL
 from .pricing import calculate
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class VehicleRuntime:
         self.unsubs = []
         self.queue = asyncio.Queue()
         self.worker = None
+        self.stop_timeout = 5  # seconds the archive worker gets to finish before unload cancels it
         self.engine = None
         self.entities = {}
         self.last_states = {}
@@ -59,13 +60,18 @@ class VehicleRuntime:
         await self.refresh()
         self.worker = self.hass.async_create_background_task(self._work(), "Deepal Companion archive " + self.vehicle)
         self.unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(minutes=1)))
-        self.unsubs.append(self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self._shutdown))
+        self._stop_unsub = self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self._shutdown)
+        self.unsubs.append(self._stop_unsub)
         self._tick(dt_util.utcnow())
         from .notifications import NotificationEngine
         self.notifications = NotificationEngine(self)
         await self.notifications.start()
 
     async def _shutdown(self, _event):
+        # A fired listen_once listener is already removed by Home Assistant; unsubscribing it again logs an error.
+        stop_unsub = getattr(self, "_stop_unsub", None)
+        if stop_unsub in self.unsubs:
+            self.unsubs.remove(stop_unsub)
         await self.stop()
 
     async def refresh(self):
@@ -125,6 +131,11 @@ class VehicleRuntime:
             values[role] = state.state if state and not state.attributes.get("restored") else None
         return values
 
+    def spike_jump(self):
+        value = number(self.config.get("charge_spike_jump"))
+        low, high = RANGES["charge_spike_jump"]
+        return value if value is not None and low <= value <= high else DEFAULT_SPIKE_JUMP
+
     def capacity(self):
         explicit = number(self.config.get("battery_kwh"))
         if explicit and explicit > 0:
@@ -168,7 +179,7 @@ class VehicleRuntime:
                     True if values.get("charging") == "on" else False if values.get("charging") == "off" else None)
                 if values.get("cloud") in {"off", "unknown", "unavailable"}:
                     charging = None
-                sessions = self.engine.feed(now, values.get("batt"), charging, self.capacity(), dc is not None and dc > .5)
+                sessions = self.engine.feed(now, values.get("batt"), charging, self.capacity(), dc is not None and dc > .5, self.spike_jump())
                 curve_entities = {key: self.entities.get(role) for key, role in (("ac", "ac"), ("dc", "dc"), ("battery", "batt"))}
                 for session in sessions:
                     session.setdefault("curve_entities", curve_entities)
@@ -219,9 +230,14 @@ class VehicleRuntime:
             self.state_unsub()
             del self.state_unsub
         if self.worker:
-            await self.queue.join()
-            self.queue.put_nowait(None)
-            await self.worker
+            try:
+                await asyncio.wait_for(self.queue.join(), self.stop_timeout)
+                self.queue.put_nowait(None)
+                await asyncio.wait_for(self.worker, self.stop_timeout)
+            except Exception:  # a stuck or failed worker must not block unload or shutdown
+                _LOGGER.warning("Companion archive worker for %s did not stop cleanly; cancelling it", self.vehicle, exc_info=True)
+                self.worker.cancel()
+                await asyncio.gather(self.worker, return_exceptions=True)
             self.worker = None
         if self.engine:
             await self.hub.db("put", self.vehicle, "engine", self.engine.state)
@@ -236,7 +252,9 @@ class VehicleRuntime:
     async def session_page(self, before=None, limit=5, location="", sort="newest"):
         async with self._pricing_lock:
             if sort in {"highest", "lowest"}:
-                key = (self._summary_revision, int(time.time() // 60))
+                # Every cost, setting or session change bumps the revision, so the whole archive is only re-priced
+                # when something changed, or at most every 15 minutes for readings that arrive late.
+                key = (self._summary_revision, int(time.time() // 900))
                 if getattr(self, "_cost_index_key", None) != key:
                     rows = await self._priced_sessions()
                     await self.hub.db("index_session_costs", self.vehicle, rows)

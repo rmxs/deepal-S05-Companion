@@ -62,6 +62,7 @@ window.__DEEPAL_COMPANION_UI = {
   enhanceChoices(root,hass){
     if(!root)return;
     for(const select of root.querySelectorAll('select')){
+      if(!select._compPicker&&!customElements.get('deepal-companion-choice'))continue;/* keep the native select usable until the custom picker exists */
       select.style.colorScheme=hass?.themes?.darkMode===false?'light':'dark';
       let picker=select._compPicker;
       if(!picker){
@@ -117,7 +118,7 @@ window.__DEEPAL_COMPANION_UI = {
         card?._force();
       };
       if(key==='callWS')return message=>{
-        if(!interactive)return Promise.reject(new Error('The preview is read-only.'));
+        if(!interactive&&!message.type?.startsWith('history/'))return Promise.reject(new Error('The preview is read-only.')); /* reading the recorded history is allowed: the card uses it for the real lock and engine times */
         if(mode==='live')return target.callWS(message);
         const read=message.type?.startsWith('history/')||message.type?.endsWith('/list')||message.type==='frontend/get_user_data'||(message.type==='deepal_companion/request'&&['list','config_get','costs_get','history','sessions','summary','charge_prompt','session_curve'].includes(message.op));
         return read?target.callWS(message):Promise.reject(new Error('Demo mode does not save vehicle or charging data.'));
@@ -144,7 +145,7 @@ window.__DEEPAL_COMPANION_UI = {
     card._previewInitialLast={...card._last};
     card._n=function(key){const raw=this._s(key),value=raw===null?null:parseFloat(raw);return Number.isFinite(value)?value:null;};
     card._nl=function(key){return {v:this._n(key),stale:false};};
-    card._compConfigSignature="read-only-preview";card._remoteLoaded=true;card._uiDone=true;
+    card._compConfigSignature="read-only-preview";card._remoteLoaded=true;
     card._compViewName=config.companion_design||"mobile";
     card._yaml={...config,type:"custom:"+TAG,...owner};card._local={};
     card._c=mergeConfig(card._yaml,{});card._built=false;card._sig=null;

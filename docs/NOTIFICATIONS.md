@@ -92,12 +92,28 @@ Critical alerts are exempt from quiet hours. Under the overview’s **Advanced**
 
 A test does not turn the alert on or operate the car. Quiet alerts use sound for tests. An accepted request means Home Assistant accepted it; check the phone to confirm delivery.
 
-## Live charging on the Lock Screen
+## Live notifications on the Lock Screen
 
 > [!IMPORTANT]
-> **Charging can stay visible on your phone while the dashboard is closed.** Companion supports iPhone **Live Activities** and Android **Live Updates** for charging progress. Enable this separately under **Notifications → Live charging**. It is off by default.
+> **Live notifications stay visible on your phone while the dashboard is closed.** Companion supports iPhone **Live Activities** and Android **Live Updates**. They have their own box at the top of **Notifications**, separate from the other alerts, and every one is **off by default**.
 >
-> Updates use the car’s last reported battery and charging readings. The default update interval is **300 seconds**, with a **5% battery step**. A faster setting does not make the vehicle integration poll the car faster. A displayed countdown uses the most recently reported remaining-time estimate.
+> Updates use the car’s last reported readings. A faster setting does not make the vehicle integration poll the car faster, and the car’s cloud is read about every 5 minutes, so very short events can be missed.
+
+There are three Live notifications. Each opens its own page, so you only see the options that belong to it.
+
+| Notification | What it shows | Page options |
+| --- | --- | --- |
+| **Live charging** | Battery level and, if you want, time left while the car charges | Show time remaining; Update at most every (minutes); Update every (battery %) |
+| **Live climate** | Cabin temperature against the target while the climate is on. It disappears when the climate stops | Show target temperature; Show outside temperature; Show progress bar; Show running time; “Turn off” button; Update at most every (minutes); Wait before showing (minutes) |
+| **Left open or unlocked** | One list of the doors, windows, bonnet, trunk or unlocked car. Items drop off as they are closed, and it disappears when everything is secure | Doors, Windows, Bonnet and Trunk switches; Unlocked car; Show item count; Show time; “Lock vehicle” button; Wait before showing (minutes) |
+
+Every page also has an **Alert enabled** switch, a **Title**, an **Icon**, a **Send test** button and an **End test** button.
+
+- The notification title shows only the useful information, for example “72% · 1 h 20 min left”.
+- **Icon** accepts Material Design icons only (names starting with `mdi:`). The phone app cannot show other icon sets, so other names are refused. The list offers the most useful ones and highlights the one in use.
+- Colours follow the card palette on the progress bar, the timer and the icon. Doors, windows and an unlocked car show in red.
+- The **Turn off** and **Lock vehicle** buttons are marked **Android only**, because iPhone Live Activities cannot show action buttons.
+- **When you tap a notification** sits in the same box as **Old data protection**. Choose the dashboard page the phone opens, or leave it empty to open the page the Home Assistant app shows by default. To open Companion, choose its page here.
 
 ### Requirements
 
@@ -109,28 +125,24 @@ A test does not turn the alert on or operate the car. Quiet alerts use sound for
 
 Check the [official Home Assistant Live Activity guide](https://companion.home-assistant.io/docs/notifications/live-activities/) for phone-specific permissions and setup.
 
-### Enable live charging
+### Enable a Live notification
 
 1. Open **Deepal Companion → Notifications**.
 2. Select the receiving phone under **Devices to notify**.
-3. Find the **Live charging** section and turn it on.
-4. Leave **Update interval (s)** at 300 or enter your preferred interval.
-5. Leave **Battery step (%)** at 5 or enter another step.
-6. Under **Lock Screen display**, choose **Time remaining** or **Battery only**.
-7. If needed, open its **Advanced** section and set **Maximum reading age**. The default is 1800 seconds.
-8. Save notification settings.
-9. Start charging and check the phone’s Lock Screen.
+3. In the **Live notifications** box, open the one you want.
+4. Turn on **Alert enabled** and adjust the options.
+5. Save notification settings.
+6. Start charging, turn on the climate or leave a door open, and check the phone’s Lock Screen.
 
-The activity displays battery progress and reported charging information. It updates as fresh readings arrive and ends when charging finishes or stops, subject to the phone’s delivery behaviour.
+The **LIVE** tag next to each name is yellow while that notification is on and grey while it is off.
 
-### Test live charging
+### Test a Live notification
 
-1. Select your receiving phone.
-2. Choose **Test live charging**.
-3. Check for a Live Activity/Live Update on the phone.
-4. Choose **End live test** when finished.
+1. Open the Live notification page and make sure a receiving phone is selected.
+2. Choose **Send test** and check the phone.
+3. Choose **End test** when finished.
 
-The test uses a separate activity from a real charge. If a normal test notification works but a live test does not, check live-activity permissions, app version and connection to Home Assistant.
+A test uses a separate notification from a real one, and ending it leaves your real notification unchanged. If a normal test notification works but a live test does not, check live-activity permissions, the app version and the connection to Home Assistant.
 
 ## Recent activity
 

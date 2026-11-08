@@ -5,7 +5,7 @@
     if(card._compOpenCosts){card._compOpenCosts=false;costView=true;tabs.querySelectorAll("button").forEach(n=>n.setAttribute("aria-pressed",String(n.dataset.enMode==="costs")));}
     tabs.addEventListener("click",event=>{
       const button=event.target.closest("[data-en-mode]");if(!button)return;
-      if(costs.dirty){costs.message=CT("Save or close the location editor first.","Αποθήκευσε ή κλείσε πρώτα την τοποθεσία.");const status=costs.editorNode?.querySelector("[role=status]");if(status){status.hidden=false;status.textContent=costs.message;}return;}
+      if(costs.dirty){costs.message=CT("Save or close the location editor first.","Αποθήκευσε ή κλείσε πρώτα την τοποθεσία.","Guarda o cierra primero el editor de ubicaciones.");const status=costs.editorNode?.querySelector("[role=status]");if(status){status.hidden=false;status.textContent=costs.message;}return;}
       costView=button.dataset.enMode==="costs";
       tabs.querySelectorAll("button").forEach(n=>n.setAttribute("aria-pressed",String(n===button)));
       body().innerHTML=LOAD();run(true,true);

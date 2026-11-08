@@ -124,7 +124,7 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         async def sessions(start, end):
             return self.db.sessions("car", start, end)
         runtime = types.SimpleNamespace(entry=types.SimpleNamespace(data={"battery_entity": "sensor.batt"}, options={}), refresh=refresh, priced_sessions=sessions)
-        self.hub = types.SimpleNamespace(db=db, vehicles={"car": runtime}, setting_keys={"car_color", "battery_kwh", "fuel_tank_liters", "entities", "prefix", "companion_design", "companion_width"}, changed=lambda vehicle: None)
+        self.hub = types.SimpleNamespace(db=db, vehicles={"car": runtime}, setting_keys={"car_color", "battery_kwh", "fuel_tank_liters", "entities", "prefix", "companion_design", "companion_width", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump"}, changed=lambda vehicle: None)
         self.hass = types.SimpleNamespace(data={"deepal_companion": self.hub})
 
     async def asyncTearDown(self):
@@ -132,6 +132,8 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def request(self, op, data=None, connection=None, **extra):
         connection = connection or Connection()
+        if op == "config_patch" and "expected_revision" not in (data or {}):  # the card always sends the revision it edited
+            data = {**(data or {}), "expected_revision": self.db.config("car", self.view)["revision"]}
         await api.request(self.hass, connection, {"id": 1, "type": "deepal_companion/request", "op": op, "vehicle_id": "car", "view_id": self.view, "data": data or {}, **extra})
         return connection
 
@@ -186,7 +188,8 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         preview = await self.request("notifications_preview", {"rule": stored["rules"][0]})
         self.assertTrue(preview.results[0]["active"])
         conflict = await self.request("notifications_set", {"value": {"enabled": False, "rules": []}, "expected": {"enabled": False, "rules": []}})
-        self.assertTrue(conflict.errors)
+        # A stale save is three-way merged: the stored rule was added elsewhere, and this save did not touch it.
+        self.assertFalse(conflict.errors)
         self.assertEqual(len(self.db.get("car", "local_notifications")["rules"]), 1)
         await engine.record(stored["rules"][0], "test", title="Test", message="Phone alert")
         activity = await self.request("notifications_history", {"limit": 5})
@@ -325,6 +328,85 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         result = await self.request('charge_prompt_dismiss', {'session_id':'charge'}, connection=Connection(admin=False))
         self.assertFalse(result.errors)
         self.assertIsNone(self.db.charge_prompt('car', 'user'))
+
+    async def test_vehicle_access_needs_read_to_every_sensor_used(self):
+        runtime = self.hub.vehicles["car"]
+        runtime.hass = types.SimpleNamespace(states={"sensor.batt": 1, "sensor.secret": 1})
+        runtime.entities = {"batt": "sensor.batt", "odo": "sensor.secret"}
+        # Battery readable, but an existing odometer sensor is not: the whole vehicle is refused.
+        result = await self.request("summary", connection=Connection(admin=False))
+        self.assertEqual(result.errors[0][0], "unauthorized")
+        listed = await self.request("list", connection=Connection(admin=False))
+        self.assertEqual(listed.results[0], [])
+
+    async def test_missing_optional_sensor_does_not_block_vehicle_access(self):
+        runtime = self.hub.vehicles["car"]
+        runtime.hass = types.SimpleNamespace(states={"sensor.batt": 1})
+        runtime.entities = {"batt": "sensor.batt", "fuel": "sensor.s05_fuel_level"}  # fuel sensor does not exist
+        runtime.live_entities = {"remaining": None}
+        only_battery = lambda entity, rule: entity == "sensor.batt"
+        connection = Connection(admin=False)
+        connection.user.permissions = types.SimpleNamespace(check_entity=only_battery)
+        result = await self.request("summary", connection=connection)
+        self.assertFalse(connection.errors)
+
+    async def test_costs_patch_checks_the_final_merged_state_before_saving(self):
+        before = self.db.get('car', 'costs')
+        def reject(value):
+            raise ValueError('merged state rejected')
+        with self.assertRaises(ValueError):
+            self.db.patch_costs('car', {'profiles': before['profiles'][:1]}, {'profiles': before['profiles']}, reject)
+        self.assertEqual(self.db.get('car', 'costs'), before)  # nothing was written
+        self.db.patch_costs('car', {'profiles': before['profiles'][:1]}, {'profiles': before['profiles']}, lambda value: value)
+        self.assertEqual(len(self.db.get('car', 'costs')['profiles']), 1)
+
+    async def test_settings_save_with_an_old_revision_is_refused(self):
+        revision = self.db.config('car', self.view)['revision']
+        first = await self.request('config_patch', {'patch': {'car_color': 'white'}, 'expected_revision': revision})
+        self.assertFalse(first.errors)
+        stale = await self.request('config_patch', {'patch': {'car_color': 'black'}, 'expected_revision': revision})
+        self.assertIn('changed elsewhere', stale.errors[0][1])
+        self.assertEqual(self.db.config('car', self.view)['config']['car_color'], 'white')
+        unchecked = await self.request('config_patch', {'patch': {'car_color': 'red'}, 'expected_revision': None})  # a save without a revision is refused
+        self.assertIn('revision missing', unchecked.errors[0][1])
+        self.assertEqual(self.db.config('car', self.view)['config']['car_color'], 'white')
+        malformed = await self.request('config_patch', {'patch': {'car_color': 'red'}, 'expected_revision': 'x'})
+        self.assertEqual(malformed.errors[0][0], 'invalid_format')
+
+    async def test_view_only_settings_do_not_invalidate_shared_config(self):
+        before = self.db.config('car', self.view)['revision']
+        await self.request('config_patch', {'patch': {'car_color': 'blue'}})
+        after = self.db.config('car', self.view)['revision']
+        self.assertEqual((after[0], after[1]), (before[0], before[1] + 1))
+        await self.request('config_patch', {'patch': {'battery_kwh': 20}})
+        self.assertEqual(self.db.config('car', self.view)['revision'][0], before[0] + 1)
+
+    async def test_minimum_charge_gain_setting_is_validated(self):
+        for bad in (101, -1, True, 'ten'):
+            result = await self.request('config_patch', {'patch': {'charge_prompt_min_gain': bad}})
+            self.assertEqual(result.errors[0][0], 'invalid_format')
+        good = await self.request('config_patch', {'patch': {'charge_prompt_min_gain': 5}})
+        self.assertFalse(good.errors)
+        self.assertEqual(self.db.config('car', self.view)['config']['charge_prompt_min_gain'], 5)
+
+    async def test_charge_reminder_and_spike_settings_are_validated(self):
+        for key, bad in (('charge_prompt_recent', 0), ('charge_prompt_recent', 21), ('charge_spike_jump', 4),
+                         ('charge_spike_jump', 51), ('charge_spike_jump', True), ('charge_prompt_min_gain', 'x')):
+            result = await self.request('config_patch', {'patch': {key: bad}})
+            self.assertEqual(result.errors[0][0], 'invalid_format', key)
+        good = await self.request('config_patch', {'patch': {'charge_prompt_recent': 5, 'charge_spike_jump': 30}})
+        self.assertFalse(good.errors)
+        config = self.db.config('car', self.view)['config']
+        self.assertEqual((config['charge_prompt_recent'], config['charge_spike_jump']), (5, 30))
+
+    async def test_unexpected_failure_gets_a_fixed_message_without_details(self):
+        async def failing(method, *args):
+            raise RuntimeError('database path /config/.storage secret detail')
+        self.hub.db = failing
+        with self.assertLogs(api._LOGGER, level='ERROR'):
+            result = await self.request('summary')
+        self.assertEqual(result.errors[0][0], 'unknown_error')
+        self.assertNotIn('secret', result.errors[0][1])
 
     async def test_charge_assignment_requires_admin_and_vehicle_read_permission(self):
         for connection in (Connection(admin=False), Connection(allowed=False)):

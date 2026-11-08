@@ -16,8 +16,8 @@ Open **Deepal Companion** from the sidebar. The paths below use the English menu
 
 | Setting | Available choices |
 | --- | --- |
-| Sections | Show/hide and reorder Vehicle image, Control buttons, Status, Charging, Charging curve, Temperature & battery, Info, Diagnostics, Charging costs and Charging reminder |
-| On the image | Show/hide Name, Plate, Total range, Cloud connection and Last update |
+| Sections | Show/hide and reorder Vehicle image, Control buttons, Status, Charging, Charging curve, Temperature & battery, Info, Charging costs and Charging reminder |
+| On the image | Show/hide Name, Plate, Total range, Cloud connection, Last update (the age badge on the refresh button) and the Settings button (the gear at the bottom right of the image) |
 | Message under the status | None, Rolling or With dots |
 | Top-right buttons | Show/hide and reorder Notifications, View, Diagnostics and Refresh |
 | Control buttons | Show/hide and reorder Lock, Windows, Trunk, Climate, Tyres, Cabin, Flash, Sound signal and Locate |
@@ -86,7 +86,6 @@ The image’s charging details remain visible when the separate Charging section
 
 | Setting | Available choices |
 | --- | --- |
-| Diagnostic display | Alerts only or Always all |
 | Diagnostic indicators | Enable/disable individual available warning indicators |
 | All / None | Enable or disable the diagnostic selection together |
 | Tyre unit | bar, kPa or psi |
@@ -102,12 +101,14 @@ New warning sensors and custom diagnostic indicators are managed in Advanced.
 | Setting | What you can change |
 | --- | --- |
 | Card name | Name shown on the card |
-| Settings button | Show/hide the Settings entry on the dashboard card |
 | Entity prefix | Vehicle entity prefix |
 | Vehicle type | Automatic, Plug-in hybrid or Electric |
 | Paint colour | Black, blue, grey, silver or white |
 | Wheels | 20-inch with covers, 20-inch without covers or 18-inch Pro |
 | Battery capacity | Automatic capacity or a kWh override, when Energy history is enabled |
+| Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
+| Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
+| Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
 | Full-tank fuel range | Automatic 940 km for hybrids, or a positive override |
 | Tank capacity | Automatic sensor value/51 L fallback, or a litres override |
 | Hero photos folder | Automatic image folder or a custom folder |
@@ -115,8 +116,6 @@ New warning sensors and custom diagnostic indicators are managed in Advanced.
 | New sensors | Discover, add, add all, ignore or restore ignored diagnostic suggestions |
 | My diagnostics | Reorder, add or remove custom entities; choose their labels and icons |
 | Entity mapping | Choose a sensor role, select its HA entity and add/remove the mapping |
-| Copy YAML | Copy a configuration backup |
-| Reset | Restore the selected settings to their defaults |
 
 Empty numeric fields display the default as a hint. Enter your own value to override it. Clearing an override restores the default. For hybrid range and tank capacity, 0 selects automatic values.
 
@@ -169,10 +168,11 @@ The **Notifications** page contains the integration’s notification controls:
 - Per-alert reset, preview and test.
 - Ignore old data threshold.
 - Save and Cancel changes.
-- Live charging controls and tests.
+- Live notifications (Live charging, Live climate, Left open or unlocked): switches, options, title, icon and tests.
+- Where the phone opens when you tap a notification.
 - Recent activity pagination, delete and delete all.
 
-Configure alerts, phones, quiet hours and Live charging on the separate **Notifications** page.
+Configure alerts, phones, quiet hours and Live notifications on the separate **Notifications** page. Settings need Home Assistant administrator rights: the gear on the card opens the Companion dashboard and is hidden for other users.
 
 See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup steps.
 
@@ -189,7 +189,7 @@ See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup
 - Charging cost estimates from the selected energy source, with an estimate label when applicable.
 - Import of available Recorder charging sessions/readings on the Sessions page.
 - Saved tariff/payment assignments and saved charging curves in the archive.
-- Charging-detected reminders, dismissal until the next session and clearing after assignment elsewhere.
+- Charging-detected reminders for every unanswered recent charge, oldest first; dismissal applies to one charge and one user, and a reminder clears after assignment elsewhere. The minimum battery gain and the number of recent charges checked are set in Card Settings → Advanced.
 - Background notification checks, repeats, quiet hours and stopping reminders after their condition clears or they are dismissed.
 - Live charging start/update/end handling from reported charging state.
 - Settings updates across cards using the same profile.
@@ -201,4 +201,4 @@ In **Charging Profiles**, start typing a network name to see suggestions, or ent
 
 To test the on-card cost reminder, choose **Charging detected** under **Card Settings → Live preview**, enable **Charging costs** in Layout and turn on **Allow clicks**. The scenario uses sample data and never saves real assignments.
 
-**Independent card blocks:** In Layout → Sections, Charging costs controls the cost block and Charging reminder controls charging-detected assignment reminders. These choices are saved per card profile and do not remove charging history.
+**Independent card blocks:** In Layout → Sections, Charging costs (saved as `charging_cost`) controls the cost block, which disappears from the card when it is off; saved prices, receipts and the Costs dashboard are kept and Charging reminder controls charging-detected assignment reminders. These choices are saved per card profile and do not remove charging history.

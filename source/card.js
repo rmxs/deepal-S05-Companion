@@ -9,14 +9,14 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "1.5.1";
+const CARD_VERSION = "0.1.4"; // the build overwrites this with the package version
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-s05-card";
 const SETTINGS_TAG = "deepal-s05-settings";
 const EDITOR_TAG = "deepal-s05-card-editor";
 if (customElements.get(TAG)) return;
 
-const NUM_RANGE = { fuel_tank_liters: [0, 200], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
+const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], fuel_tank_liters: [0, 200], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
 const BAD = ["unknown", "unavailable", "none", "None", "null", ""];
 const TRANSITIONAL = ["locking", "unlocking", "opening", "closing"];
 const CLIMATE_TURN_OFF = 128; // ClimateEntityFeature.TURN_OFF
@@ -35,14 +35,13 @@ const SCRIPT_BASE = (() => {
 })();
 
 /* ───────────────────────── Defaults ───────────────────────── */
-const SECTIONS = ["hero", "actions", "status", "charge", "curve", "stats", "info", "diagnostics", "costs", "reminder"];
+const SECTIONS = ["hero", "actions", "status", "charge", "curve", "stats", "info", "costs", "reminder"]; /* diagnostics is no longer a section: warnings live on the top Diagnostics button */
 const SECTION_LABELS = {
   hero: "Vehicle image",
   actions: "Control buttons",
   status: "Status (on the image)",
   stats: "Temperature & battery",
   info: "Info",
-  diagnostics: "Diagnostics",
   charge: "Charging (when plugged in)",
   costs: "Charging costs",
   reminder: "Charging reminder",
@@ -115,7 +114,11 @@ const DEFAULTS = {
   charge_style: "beside", // line · text · big · beside
   charge_curve: true,
   charging_reminder: true,
+  charging_cost: true, // false = the card shows no charging cost block (saved prices and receipts are kept)
   energy_sheet: true, // tapping the Energy/Battery tile opens the history sheet (false = opens the sensor)
+  charge_prompt_min_gain: 3, // battery percent a finished charge must add before it asks for a charging profile
+  charge_prompt_recent: 10, // how many of the latest charges the profile reminder checks
+  charge_spike_jump: 20, // a single battery reading this many percent above the charge so far must be confirmed by the next one
   battery_kwh: 0, // battery capacity in kWh; 0 = automatic by vehicle type (PHEV 18.4 / electric 68.8); used for the kWh estimate of charges in the Energy sheet
   status_sub: "roll", // message under "Locked/Unlocked": off · roll (rolling) · ticker (rolling with dots)
   chg_roll: true, // in the Energy tile while charging: alternates "Charging now" ↔ time remaining (scrolls upward)
@@ -682,28 +685,6 @@ const hash32 = (str) => { let h = 2166136261; const t = String(str); for (let i 
 const lsRead = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (_) { return null; } };
 const lsWrite = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
 
-/* Small YAML serializer for exporting settings */
-const yamlScalar = (v) => (typeof v === "string" ? (/^[\w./-]+$/.test(v) && !/^(true|false|null|\d.*)$/.test(v) ? v : JSON.stringify(v)) : String(v));
-function toYaml(v, ind = 0) {
-  const pad = " ".repeat(ind);
-  if (Array.isArray(v)) {
-    if (!v.length) return "[]";
-    return v.map((x) => (x && typeof x === "object" ? `${pad}-\n${toYaml(x, ind + 4).replace(/^\s+/, " ".repeat(ind + 2))}`.replace(/\n\s*$/, "") : `${pad}- ${yamlScalar(x)}`)).join("\n");
-  }
-  if (v && typeof v === "object") {
-    const ks = Object.keys(v);
-    if (!ks.length) return "{}";
-    return ks
-      .map((k) => {
-        const x = v[k];
-        if (x && typeof x === "object" && (Array.isArray(x) ? x.length : Object.keys(x).length)) return `${pad}${k}:\n${toYaml(x, ind + 2)}`;
-        return `${pad}${k}: ${x && typeof x === "object" ? (Array.isArray(x) ? "[]" : "{}") : yamlScalar(x)}`;
-      })
-      .join("\n");
-  }
-  return `${pad}${yamlScalar(v)}`;
-}
-
 /* ───────────────────────── Styles ───────────────────────── */
 const BASE_CSS = `
 [hidden], [data-off] { display:none !important; }
@@ -796,6 +777,8 @@ ${BASE_CSS}
 .cvt img { position:absolute; inset:0; width:100%; height:100%; opacity:0; transition: opacity .3s ease; }
 .cvt img.on { opacity:1; }
 .cva, .cvb { position:absolute; inset:0; transition: opacity .6s ease; }
+.cvt { transition: opacity .6s ease; }
+.cva.cv-loading, .cvt.cv-loading { opacity: 0; }
 .cvb { opacity:0; transform: translate(2%, 3.5%); } /* the translucent view has a different frame: shifted so the car stays at the same centre */ .hcv.chg .cva { opacity:0; } .hcv.chg .cvb { opacity:1; }
 .cva img, .cvb > img:not(.sweep) { position:absolute; inset:0; width:100%; height:100%; opacity:0; transition: opacity .35s ease; }
 .cva img.on, .cvb > img.on:not(.sweep) { opacity:1; }
@@ -830,6 +813,7 @@ ${BASE_CSS}
   background: rgba(10,11,15,.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border:1px solid rgba(255,255,255,.16); -webkit-tap-highlight-color: transparent; transition: transform .14s ease; }
 .rfs[hidden] { display:none; } .rfs .i { --is:20px; } .rfs:active { transform: scale(.9); } .rfs.ok { color: rgb(var(--ds-ok)); border-color: rgb(var(--ds-ok) / .55); } .rfs.bad { color: rgb(var(--ds-bad)); border-color: rgb(var(--ds-bad) / .55); } .rfs.success { color: rgb(var(--ds-ok)); } .rfs.error { color: rgb(var(--ds-bad)); }
 .rfs .bdg { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background: rgb(var(--ds-bad)); color:#fff; font-size:10px; font-weight:800; font-style:normal; line-height:16px; text-align:center; pointer-events:none; box-shadow:0 0 0 1.5px rgba(10,11,15,.85); }
+.rfs .age { position:absolute; top:-9px; right:-3px; z-index:2; min-width:18px; height:16px; padding:0 5px; box-sizing:border-box; border-radius:8px; font-size:10px; font-weight:800; font-style:normal; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; pointer-events:none; --c: var(--ds-ok); color: rgb(var(--c)); background: linear-gradient(rgba(var(--c), .26), rgba(var(--c), .26)), rgba(10,11,15,.86); box-shadow: 0 0 0 1px rgba(var(--c), .5); } .rfs .age.warn { --c: var(--ds-warn); } .rfs .age.bad { --c: var(--ds-bad); }
 .rfs .ring { position:absolute; inset:-3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events:none; overflow:visible; }
 .rfs .ring rect { fill:none; stroke: rgba(255,255,255,.85); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 20 80; animation: ds-dash 1.2s linear infinite; }
 .meta .dgb:not(.warnb) { color: rgb(var(--ds-ok)) !important; }
@@ -1174,8 +1158,12 @@ ha-card[data-ti="custom"] .tile:not(.bad) .i { color: var(--ds-tile-custom); } h
 .charge > div { min-width:0; } .charge .l { font-size:11.5px; color: var(--ds-fg2); }
 .charge .v { margin-top:3px; font-size:15px; font-weight:600; color: var(--ds-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .upd { align-self:stretch; margin:6px 14px 0; display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid rgba(var(--ds-warn),.5); border-radius:12px; background:rgba(var(--ds-warn),.12); color:var(--ds-fg); font-size:12px; text-align:left; cursor:pointer; } .upd[hidden] { display:none; } .upd .i { --is:16px; flex:none; color:rgb(var(--ds-warn)); }
-.foot { align-self:center; display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border:0; border-radius:999px; background:transparent; cursor:pointer; color: var(--ds-fg2); font-size:11.5px; opacity:.75; }
-.companion-credit{font-size:10px;line-height:1.5;color:var(--ds-fg2);opacity:.7;text-align:center;margin:0 12px 10px;pointer-events:none}.foot .age { margin-right:4px; } .foot .age.old { color: rgb(var(--ds-warn)); } .foot:not(.nosets) .age:not([hidden])::after { content:'·'; margin-left:10px; } .foot:hover, .foot:focus-visible { opacity:1; } .foot .i { --is: 14px; } .foot .sets { display:inline-flex; align-items:center; gap:6px; } .foot.nosets { cursor:default; pointer-events:none; } .foot.nosets .sets { display:none; }
+.foot[hidden] { display:none; } .foot { position:relative; }
+/* Settings gear: a small round glass button on the image, bottom right, opposite the lock status */
+.foot { position:absolute; right:12px; bottom:12px; z-index:3; width:26px; height:26px; padding:0; justify-content:center; border-radius:50%; background: rgba(10,11,15,.55); border:1px solid rgba(255,255,255,.16); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: rgba(255,255,255,.8); opacity:1; }
+.foot .sets { gap:0; } .foot .i { --is:15px !important; }
+.foot { display:inline-flex; align-items:center; cursor:pointer; }
+.companion-credit{font-size:10px;line-height:1.5;color:var(--ds-fg2);opacity:.7;text-align:center;margin:0 12px 10px;pointer-events:none}.foot:hover, .foot:focus-visible { opacity:1; } .foot .i { --is: 14px; } .foot .sets { display:inline-flex; align-items:center; gap:6px; } .foot.nosets { cursor:default; pointer-events:none; } .foot.nosets .sets { display:none; }
 
 /* Sheet */
 .sheet { overscroll-behavior: contain; position:fixed; inset:0; z-index:100000; display:none; align-items:flex-end; justify-content:center; padding:10px; background: rgba(0,0,0,.62); }
@@ -1205,11 +1193,13 @@ ha-card:has(.sheet.show) *:not(.sheet):not(.sheet *), ha-card.off *, ha-card.off
 .lkh { margin:10px 0 0; text-align:center; font-size:12px; color: var(--ds-fg2); }
 .hd .ttl { min-width:0; } .hd .ver { display:block; margin-top:2px; font-size:11px; font-weight:500; letter-spacing:.02em; color: var(--ds-fg2); opacity:.75; }
 .hd { touch-action:none; flex:none; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.box.nfl { min-height:0; } .nfpanel { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:4px 2px 2px; --design-inner: var(--ds-soft); --design-line: var(--ds-line); --design-fg: var(--ds-fg); --design-muted: var(--ds-fg2); --design-bad: 248 113 113; --design-warn: 251 191 36; --design-info: 56 189 248; --design-accent-fg: #fff; }
+.nfpanel .activity-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 10px; } .nfpanel .activity-heading h3 { font-size:14px; } .nfpanel .activity-heading>div { display:flex; align-items:center; gap:10px; } .nfpanel .activity-list { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
+.nfpanel button { font:inherit; cursor:pointer; color:var(--ds-fg); border-radius:12px; border:1px solid var(--ds-line); background:var(--ds-soft); padding:8px 12px; min-height:36px; } .nfpanel .activity-delete-all, .nfpanel .activity-confirm-delete { color:rgb(var(--ds-bad)); border-color:rgba(var(--ds-bad),.3); background:rgba(var(--ds-bad),.08); } .nfpanel .activity-confirm-delete { color:#fff; background:rgb(var(--ds-bad)); } .nfpanel .activity-delete { width:40px; min-width:40px; height:40px; padding:0; background:none; border:0; color:var(--ds-fg2); } .nfpanel .activity-footer { display:flex; justify-content:center; padding:12px 0 0; } .nfpanel .activity-footer:empty { display:none; } .nfpanel .activity-footer>div { min-height:40px; } .nfpanel [hidden] { display:none !important; } .nfpanel .hint, .nfpanel .notification-info { font-size:12px; color:var(--ds-fg2); text-align:center; margin:8px 0; }
 .hd.sh { gap:12px; padding:2px 4px 0; margin-bottom:6px; } .hd.sh .ttl { flex:1; } .hd.sh h3 { margin:0; font-size:18px; font-weight:600; letter-spacing:.01em; } .hd .eic { flex:none; width:36px; height:36px; border-radius:50%; display:grid; place-items:center; background: rgba(var(--ds-ok), .16); color: rgb(var(--ds-ok)); } .hd .eic .i { --is:19px; }
 ${LOADER_CSS}
 @media (prefers-reduced-motion: reduce) { .ldr .ring::before, .ldr .ring .arc { animation:none !important; } }
 .x { flex:none; width:30px; height:30px; display:grid; place-items:center; border-radius:50%; border:1px solid var(--ds-line); background: var(--ds-soft); cursor:pointer; padding:0; } .x .i { --is: 16px; }
-.box deepal-s05-settings { flex:1 1 auto; min-height:0; display:block; overflow-y:auto; overflow-x:hidden; }
 @keyframes ds-up { from { transform: translateY(110%) } to { transform:none } }
 @keyframes ds-fade { from { opacity:0 } to { opacity:1 } }
 @media (prefers-reduced-motion: reduce) { .fx *, .act, .act .ring rect, .gauge .fp, .fxs *, .stage img, .bar b, .box, .l, .hdl rect { animation: none !important; transition: none !important; } }
@@ -1260,6 +1250,7 @@ h4 { margin:0 0 2px; font-size:11.5px; font-weight:700; letter-spacing:.08em; te
 .grp { display:flex; flex-direction:column; gap:10px; padding:13px; border-radius:20px; background: var(--ds-soft); border:1px solid var(--ds-line); }
 .grp .row, .grp .chk { background: rgba(var(--rgb-primary-text-color, 255,255,255), .05); }
 .grp input[type=text], .grp input[type=number], .grp select, .grp textarea { background: rgba(var(--rgb-primary-text-color, 255,255,255), .06); }
+.orow { display:grid; grid-template-columns:1fr 96px; gap:4px 12px; align-items:start; } .orow input { width:100%; box-sizing:border-box; } .oi summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; font-size:13.5px; min-height:36px; } .oi summary::-webkit-details-marker { display:none; } .oi .qm { flex:none; width:18px; height:18px; border-radius:50%; border:1px solid var(--ds-fg2); color:var(--ds-fg2); font:600 11px/16px sans-serif; text-align:center; font-style:normal; } .oi[open] .qm { background:var(--ds-fg2); color:#1c1c1c; } .oi p { margin:0 0 6px; font-size:11.5px; line-height:1.4; color:var(--ds-fg2); }
 .opt { display:flex; flex-direction:column; gap:7px; } .opt .ol { font-size:13.5px; } .opt .ol small { display:block; margin-top:2px; font-size:11.5px; color: var(--ds-fg2); line-height:1.35; }
 .seg.wide { width:100%; box-sizing:border-box; } .seg.wide button { flex:1; }
 .sw-c { display:flex; align-items:center; gap:10px; font-size:13.5px; color: var(--ds-fg); } .sw-c span { flex:1; }
@@ -1396,8 +1387,8 @@ class DeepalS05Card extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" }); I18N.watch(this.shadowRoot);
     this._pending = {}; this._flashes = {}; this._opt = {}; this._last = {};
-    this._toastState = null; this._confirm = null; this._customize = false; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null;
-    this._sig = null; this._built = false; this._stab = "layout";
+    this._toastState = null; this._confirm = null; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null; this._nfSheet = false; this._nfEl = null; this._nfAct = null;
+    this._sig = null; this._built = false;
   }
 
   static getStubConfig() { return { type: `custom:${TAG}`, prefix: "s05" }; }
@@ -1410,7 +1401,6 @@ class DeepalS05Card extends HTMLElement {
     this._c = mergeConfig(config, this._local);
     this._last = lsRead(`deepal-s05-last:${this._c.prefix}`) || {};
     this._built = false; this._sig = null; this._remoteLoaded = false; this._cvReset();
-    if (!this._uiDone) { this._uiDone = true; this._uiRestore(); }
     if (this._hass) this._render();
   }
   _devName() {
@@ -1433,7 +1423,7 @@ class DeepalS05Card extends HTMLElement {
     I18N.subs.add(this); I18N.watch(this.shadowRoot);
     if (!this._onKey) this._onKey = (e) => this._key(e);
     document.addEventListener("keydown", this._onKey, true);
-    if (!this._skyTick) this._skyTick = setInterval(() => { if (this._el && this._c && this._c.hero_sky === "auto") this._skySet(this._el.hero.dataset.style === "carview"); }, 30000); /* the day phase changes even without another update */
+    if (!this._skyTick) this._skyTick = setInterval(() => { this._tickAge(); if (this._el && this._c && this._c.hero_sky === "auto") this._skySet(this._el.hero.dataset.style === "carview"); }, 30000); /* the day phase changes even without another update */
     if (window.IntersectionObserver && !this._io) { this._io = new IntersectionObserver(([e]) => { if (this._el && this._el.card) this._el.card.classList.toggle("off", !e.isIntersecting); }); this._io.observe(this); }
   }
   /* Order and visibility of the small buttons at the top right (bell, view, refresh) */
@@ -1461,44 +1451,27 @@ class DeepalS05Card extends HTMLElement {
     for (const t of ["_toastTimer", "_confirmTimer", "_pkT", "_pkUT", "_pkPT", "_tTimer", "_tTimer2", "_optTimer"]) clearTimeout(this[t]);
     this._toastState = null; if (this._confirm) { this._confirm = null; this._tpend = undefined; }
     if (this._pkRaf) { cancelAnimationFrame(this._pkRaf); this._pkRaf = 0; }
-    I18N.subs.delete(this); if (this._onKey) document.removeEventListener("keydown", this._onKey, true); if (this._yPend) { this._yPend = false; this._customize = false; this._doSaveYaml(); } if (this._io) { this._io.disconnect(); this._io = null; } }
+    I18N.subs.delete(this); if (this._onKey) document.removeEventListener("keydown", this._onKey, true); if (this._io) { this._io.disconnect(); this._io = null; } }
   getCardSize() { return 9; }
   getGridOptions() { return { columns: 12, min_columns: 6, rows: "auto" }; }
 
   /* ───── settings (saved on the device) ───── */
-  /* After saving to the YAML, HA rebuilds the card; we keep the open settings window so it can reopen */
-  _uiKey() { return `deepal-s05-ui:${(this._yaml && this._yaml.prefix) || DEFAULTS.prefix}`; }
-  _uiSave() {
-    try {
-      if (!this._customize) { sessionStorage.removeItem(this._uiKey()); return; }
-      sessionStorage.setItem(this._uiKey(), JSON.stringify({ t: Date.now(), tab: this._stab, sc: this._el && this._el.box ? this._el.box.scrollTop : 0 }));
-    } catch (_) {}
-  }
-  _uiRestore() {
-    try {
-      const v = JSON.parse(sessionStorage.getItem(this._uiKey()) || "null");
-      if (v && Date.now() - v.t < 30000) { this._customize = true; this._stab = v.tab || "sections"; this._restoreSc = v.sc || 0; }
-      sessionStorage.removeItem(this._uiKey());
-    } catch (_) {}
-  }
   _lsKey() { return `deepal-s05-card:${(this._yaml && this._yaml.prefix) || DEFAULTS.prefix}`; }
   _patch(p) {
     if ("hero_view" in p) { this._hview = null; lsWrite(`deepal-s05-view:${this._c.prefix}`, null); } /* the choice in the settings applies again over the device's button */
     this._local = { ...(this._local || {}), ...p }; this._lrev = (this._lrev || 0) + 1; /* a local change: an older answer from the server must not overwrite it */
-    lsWrite(this._lsKey(), this._local); this._saveYaml(); this._uiSave();
+    lsWrite(this._lsKey(), this._local); this._saveYaml();
     const rebuild = Object.keys(p).some((k) => REBUILD_KEYS.includes(k));
     if (["hero_style", "car_color", "iso_wheels", "layers_path"].some((k) => k in p)) this._cvReset();
     this._c = mergeConfig(this._yaml, this._local);
     if (rebuild) this._built = false;
     this._force();
   }
-  _resetLocal() { this._lrev = (this._lrev || 0) + 1; this._local = {}; lsWrite(this._lsKey(), null); this._c = mergeConfig(this._yaml, {}); this._built = false; this._saveYaml(true); this._force(); }
 
   /* ───── saving to the dashboard YAML (shared settings everywhere) ───── */
   _saveYaml(reset) {
     clearTimeout(this._yT);
     if (reset) this._yReset = true;
-    if (this._customize) { this._yPend = true; this._saveRemote(); return; } /* while the settings are open we do not write to the YAML (it causes a dashboard reload) */
     this._yT = setTimeout(() => this._doSaveYaml(), 1200);
   }
   async _doSaveYaml() {
@@ -1517,7 +1490,6 @@ class DeepalS05Card extends HTMLElement {
       if (!target) throw new Error("card not found");
       if (reset) { const keep = { type: target.type, prefix: target.prefix, name: target.name }; Object.keys(target).forEach((k) => delete target[k]); Object.assign(target, keep); }
       Object.assign(target, snap);
-      this._uiSave();
       await hass.callWS({ type: "lovelace/config/save", url_path: urlPath, config: cfg });
       this._yaml = { ...target };
       for (const k of Object.keys(snap)) if (JSON.stringify((this._local || {})[k]) === JSON.stringify(snap[k])) delete this._local[k];
@@ -1609,7 +1581,7 @@ class DeepalS05Card extends HTMLElement {
     const st = this._allKeys().map((k) => this._obj(k)?.state ?? "∅").join("|");
     const cu = [...(this._c.diag_custom || []), ...(this._c.info_custom || [])].map((x) => this._eobj(x.entity)?.state ?? "∅").join("|");
     return [st, cu, Math.floor(Date.now() / 60000), Object.keys(this._pending).join(","),
-      Object.entries(this._flashes).map(([k, v]) => k + v.type).join(","), this._confirm ? this._confirm.id : "", String(this._customize), String(this._diagSheet), String(this._lockSheet), String(this._lockAsk), String(this._enSheet),
+      Object.entries(this._flashes).map(([k, v]) => k + v.type).join(","), this._confirm ? this._confirm.id : "", String(this._diagSheet), String(this._lockSheet), String(this._lockAsk), String(this._enSheet), String(this._nfSheet),
       JSON.stringify(this._c), JSON.stringify(this._opt), String(this._tpend), String(this._moreOpen), String((this._tgt() || {}).state), String(this._view), JSON.stringify((this._hass && this._hass.locale) || null), String((this._obj("lock.doors") || {}).last_changed), this._toastState ? this._toastState.msg : ""].join("#");
   }
   _force() { this._sig = null; if (this._hass && this._c) this._render(); }
@@ -1671,6 +1643,21 @@ class DeepalS05Card extends HTMLElement {
     a.toggleAttribute("data-r", r); a.toggleAttribute("data-l", l);
   }
   _ageMin() { const t = new Date(this._s("sensor.last_updated") || "").getTime(); return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 60000)) : 0; }
+  /* Data age as a short tint badge on the refresh button: 1m, 3m, 1h ... yellow after 2 h, red after 4 h */
+  _ageBadge(show) {
+    const raw = this._s("sensor.last_updated"), t = new Date(raw || "").getTime();
+    if (!show || !raw || !Number.isFinite(t)) return "";
+    const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+    const txt = m < 1 ? T("now") : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : `${Math.floor(m / 1440)}d`;
+    return `<i class="age ${m > 240 ? "bad" : m > 120 ? "warn" : ""}">${esc(txt)}</i>`;
+  }
+  _tickAge() {
+    const a = this._el && this._el.rfs && this._el.rfs.querySelector(".age");
+    if (!a) return;
+    const t = document.createElement("template"); t.innerHTML = this._ageBadge(true);
+    const n = t.content.firstChild;
+    if (n && (n.className !== a.className || n.textContent !== a.textContent)) { a.className = n.className; a.textContent = n.textContent; }
+  }
   _age() {
     const raw = this._s("sensor.last_updated");
     if (!raw) return "--";
@@ -1690,6 +1677,25 @@ class DeepalS05Card extends HTMLElement {
     const ac = this._n(acKey);
     return ac && ac > 0 ? `AC ${Math.round(ac)} ${this._unit(acKey) || "A"}` : "";
   }
+  /* Home Assistant resets "last changed" whenever the integration reloads, so the real lock and engine times come from the recorded history: the start of the current run of the same state, ignoring unavailable/unknown gaps. Loaded only when one of them changes. */
+  _runStart(rows) {
+    const t = (r) => (typeof (r.lu ?? r.lc) === "number" ? (r.lu ?? r.lc) * 1000 : Date.parse(r.last_updated || r.last_changed));
+    let cur = null, since = NaN;
+    for (const r of rows || []) { const st = r.s ?? r.state; if (st === undefined || st === "unavailable" || st === "unknown") continue; if (st !== cur) { cur = st; since = t(r); } }
+    return { state: cur, since };
+  }
+  _lockKick() {
+    const lk = this._obj("lock.doors"), en = this._obj("binary_sensor.engine"), od = this._obj("sensor.total_odometer");
+    if (!lk || !this._hass) return;
+    const key = [lk.state, lk.last_changed, en && en.state, en && en.last_changed, od && od.state].join("|");
+    if (key === this._lhKey) return;
+    this._lhKey = key;
+    const ids = [this._id("lock.doors"), en && this._id("binary_sensor.engine"), od && this._id("sensor.total_odometer")].filter(Boolean), tok = (this._lhTok = (this._lhTok || 0) + 1);
+    Promise.resolve(this._hass.callWS({ type: "history/history_during_period", start_time: new Date(Date.now() - 14 * 864e5).toISOString(), end_time: new Date().toISOString(), entity_ids: ids, include_start_time_state: true, significant_changes_only: false, minimal_response: true, no_attributes: true }))
+      .then((res) => { if (tok !== this._lhTok || !this.isConnected) return; const lh = {}; for (const id of ids) lh[id] = this._runStart(res && res[id]); this._lh = lh; this._force(); })
+      .catch(() => { this._lhKey = ""; });
+  }
+  _inUse() { return this._is("binary_sensor.engine", "on") || this._is("sensor.power_status", "on"); }
   _offline() { const o = this._obj("binary_sensor.cloud_connection"), s = o && o.state; return s === "off" || s === "unavailable"; } /* "unknown" is not offline; a missing entity is not offline */
   _status(v) {
     const cloudOk = this._is("binary_sensor.cloud_connection", "on");
@@ -1705,6 +1711,7 @@ class DeepalS05Card extends HTMLElement {
     if (v.charging) return { icon: "bolt", text: "Charging", sub: "", rgb: "var(--ds-ok)" };
     const alerts = this._diagItems().filter((d) => d.on).length, warn = alerts ? T(alerts === 1 ? "{0} warning" : "{0} warnings", alerts) : "";
     if (v.plugged) return { icon: "plug", text: "Charger connected", sub: warn, rgb: "var(--ds-warn)" };
+    if (this._inUse()) return { icon: "engine", text: "In use", sub: warn, rgb: "var(--ds-ok)", plain: true, warn, inUse: true }; /* the lock is polled every few minutes and the car may lock itself while driving, so no lock claim while the engine runs */
     if (this._s("lock.doors") === "unlocking") return { icon: "unlock", text: "Unlocking…", sub: warn, rgb: "var(--ds-warn)" };
     if (v.unlocked) return { icon: "unlock", text: "Unlocked", sub: warn, rgb: "var(--ds-warn)", plain: true, warn, locked: false };
     const ls = this._s("lock.doors"); /* "locked" must be known before the car is shown as locked */
@@ -1716,10 +1723,16 @@ class DeepalS05Card extends HTMLElement {
   /* Rolling messages under "Locked / Unlocked" (status_sub setting). Returns [{t, w}] — w: warning */
   _since(ms) { const m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60), d = Math.floor(h / 24); return d >= 1 ? T("{0} d", d) : h >= 1 ? T("{0} h {1} min", h, m % 60) : T("{0} min", m); }
   _statusMsgs(st, mode) {
-    const out = [], lk = this._obj("lock.doors"), lt = lk && Date.parse(lk.last_changed);
+    const out = [], lk = this._obj("lock.doors"), lh = this._lh && this._lh[this._id("lock.doors")];
+    const lt = lh && lk && lh.state === lk.state && Number.isFinite(lh.since) ? lh.since : lk && Date.parse(lk.last_changed);
     if (st.warn) out.push({ t: st.warn, w: true });
-    if (Number.isFinite(lt)) { const F = haFmt(this._hass), same = new Date().toDateString() === new Date(lt).toDateString(), hm = F.hm(lt);
-      out.push({ t: T(st.locked ? "Locked at {0}" : "Unlocked at {0}", same ? hm : F.dm(lt) + " " + hm) }); }
+    const F = haFmt(this._hass), stamp = (ms) => (new Date().toDateString() === new Date(ms).toDateString() ? F.hm(ms) : F.dm(ms) + " " + F.hm(ms));
+    const en = this._obj("binary_sensor.engine"), eh = en && this._lh && this._lh[this._id("binary_sensor.engine")], eT = en && (eh && eh.state === en.state && Number.isFinite(eh.since) ? eh.since : Date.parse(en.last_changed));
+    const oh = this._lh && this._lh[this._id("sensor.total_odometer")], od = oh && Number.isFinite(oh.since) ? oh.since : NaN; /* the odometer proves a drive even when the engine sensor missed it */
+    const et = en && en.state === "off" ? (Number.isFinite(od) ? Math.max(eT, od) : eT) : Number.isFinite(od) && !en ? od : NaN;
+    if (st.inUse) { const on = en && en.state === "on" ? eT : NaN; if (Number.isFinite(on)) out.push({ t: T("Engine on since {0}", stamp(on)) }); }
+    else if (st.locked && Number.isFinite(et) && !(et <= lt)) out.push({ t: T("Locked after {0}", stamp(et)) }); /* the lock cannot be caught between two polls, so a car that was driven since the last lock change was locked after the engine stopped */
+    else if (Number.isFinite(lt)) out.push({ t: T(st.locked ? "Locked at {0}" : "Unlocked at {0}", stamp(lt)) });
     if (mode === "roll") { if (!st.warn) out.push({ t: this._vehicle().blind ? T("Some sensors are not reporting") : T("All closed · no warnings") }); return out.slice(0, 2); }
     const pw = this._obj("sensor.power_status"), pt = pw && Date.parse(pw.last_changed);
     if (pw && pw.state !== "on" && pw.state !== "unavailable" && pw.state !== "unknown" && Number.isFinite(pt)) out.push({ t: T("Parked {0}", this._since(Date.now() - pt)) });
@@ -1892,7 +1905,7 @@ class DeepalS05Card extends HTMLElement {
   }
   _diagAct(d) {
     if (d.dgOk !== undefined) { this._dgOk = !this._dgOk; return this._force(); }
-    if (d.dgSet !== undefined) { this._diagSheet = false; this._stab = "sensors"; this._customize = true; return this._force(); }
+    if (d.dgSet !== undefined) { this._diagSheet = false; this._openDashboard(); return this._force(); }
     const found = discoverDiag(this._hass, this._c);
     if (d.dgAdd !== undefined) { this._patch({ diag_custom: [...(this._c.diag_custom || []), ...found.map((f) => ({ entity: f.entity, label: f.label, icon: f.icon }))] }); }
     else if (d.dgIgnore !== undefined) { this._patch({ diag_ignore: [...new Set([...(this._c.diag_ignore || []), ...found.map((f) => f.entity)])] }); }
@@ -1925,9 +1938,9 @@ class DeepalS05Card extends HTMLElement {
     }
     this._onAction("lock");
   }
-  _closeSheet() { clearTimeout(this._confirmTimer); if (this._confirm && this._confirm.temp !== undefined) this._tpend = undefined; this._confirm = null; const wasC = this._customize; this._customize = false; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null; this._uiSave(); this._force(); if (wasC && this._yPend) { this._yPend = false; this._saveYaml(); } }
-  _popupBox() { if (!this._el) return null; if (this._confirm || this._customize || this._diagSheet || this._lockSheet || this._enSheet) return this._el.box; return this._view ? this._el.vbox : null; }
-  _closeTop() { if (this._confirm || this._customize || this._diagSheet || this._lockSheet || this._enSheet) return this._closeSheet(); if (this._view) { this._view = null; this._force(); } }
+  _closeSheet() { clearTimeout(this._confirmTimer); if (this._confirm && this._confirm.temp !== undefined) this._tpend = undefined; this._confirm = null; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null; this._nfSheet = false; this._nfEl = null; if (this._nfAct) { this._nfAct.destroy(); this._nfAct = null; } this._force(); }
+  _popupBox() { if (!this._el) return null; if (this._confirm || this._diagSheet || this._lockSheet || this._enSheet || this._nfSheet) return this._el.box; return this._view ? this._el.vbox : null; }
+  _closeTop() { if (this._confirm || this._diagSheet || this._lockSheet || this._enSheet || this._nfSheet) return this._closeSheet(); if (this._view) { this._view = null; this._force(); } }
   _key(e) {
     const box = this._popupBox(); if (!box) return;
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); return this._closeTop(); }
@@ -1955,11 +1968,25 @@ class DeepalS05Card extends HTMLElement {
     button.hidden=(this._c.top_buttons_hidden||[]).includes('bell');
     button.innerHTML=ico('chat');button.title=T('Notifications');button.setAttribute('aria-label',button.title);
   }
-  _openNotifications() {
-    history.pushState(null,'','/deepal-companion#notifications');
-    window.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:false}}));
+  /* Settings live in the Companion dashboard (admins only); the card just links there. */
+  _openDashboard() {
+    history.pushState(null, "", "/deepal-companion");
+    window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
   }
-  _vsheetOpen() { return !!this._view && !this._customize && !this._diagSheet && !this._lockSheet && !this._enSheet; }
+  async _loadNotifications(d) {
+    const gone = () => this._nfEl !== d, h = this._hass;
+    const fail = (m) => { if (!gone()) d.innerHTML = `<p class="hint">${esc(T(m))}</p>`; };
+    if (h && h.user && h.user.is_admin === false) return fail("Notifications are only available to administrators.");
+    try {
+      const request = (op, data) => h.companionRequest(op, data);
+      const [mod, page] = await Promise.all([import(`${SCRIPT_BASE}notification-activity.js?v=${CARD_VERSION}`), request("notifications_history", { limit: 5 })]);
+      if (gone()) return;
+      d.innerHTML = ""; const host = document.createElement("div"); d.appendChild(host);
+      this._nfAct = mod.mountActivity(host, request, { loaderHtml }, (m, err) => this._toast(m, err ? "error" : undefined));
+      this._nfAct.set(page);
+    } catch (e) { fail(/Unknown.*operation/i.test((e && e.message) || "") ? "Restart Home Assistant to load notifications, then try again." : "Could not load notifications."); }
+  }
+  _vsheetOpen() { return !!this._view && !this._diagSheet && !this._lockSheet && !this._enSheet && !this._nfSheet; }
 
   /* ───── interior: seat levels / steering wheel / temperature ───── */
   _level(key) {
@@ -2221,8 +2248,10 @@ class DeepalS05Card extends HTMLElement {
         el.cvt.innerHTML = this._cvtL.map(([n, d]) => `<img data-n="${n}" data-src="${esc(root + "top/" + d + "/" + n + ".webp")}" alt="" decoding="async">`).join("") + this._hdlSvg(true);
         this._cvtImgs = [...el.cvt.querySelectorAll("img")];
         this._cvBaseGuard(el.cvt, true);
+        this._cvtFresh = true;
       }
       this._cvtImgs.forEach((im, i) => this._layerOn(im, this._cvtL[i]));
+      if (this._cvtFresh) { this._cvtFresh = false; this._cvGate(el.cvt, this._cvtImgs); }
       if (v.unlocked) this._hdlSync(el.cvt);
     } else {
       const key = color + "|" + wheels + "|" + root;
@@ -2231,8 +2260,10 @@ class DeepalS05Card extends HTMLElement {
         el.cva.innerHTML = this._cvL.map(([n, d]) => `<img data-n="${n}" data-src="${esc(root + "iso/" + d + "/" + n + ".webp")}" alt="" decoding="async">`).join("") + this._hdlSvg(false);
         this._cvImgs = [...el.cva.querySelectorAll("img")];
         this._cvBaseGuard(el.cva);
+        this._cvFresh = true;
       }
       this._cvImgs.forEach((im, i) => this._layerOn(im, this._cvL[i]));
+      if (this._cvFresh) { this._cvFresh = false; this._cvGate(el.cva, this._cvImgs); }
       if (v.unlocked) this._hdlSync(el.cva);
     }
   }
@@ -2264,6 +2295,19 @@ class DeepalS05Card extends HTMLElement {
         if (src) im.src = src + (src.includes("?") ? "&" : "?") + "retry=" + attempts;
       }, delay);
     });
+  }
+  /* The car is stacked from many layers. After a (re)build it stays hidden until every layer needed right now has arrived, then fades in once,
+     so it never shows half painted (a dark ghost). After 6 s it appears anyway, so a slow or failed layer can never hide it for good. */
+  _cvGate(box, imgs) {
+    const need = imgs.filter((im) => im._on);
+    const done = () => need.every((im) => im.complete && im.naturalWidth > 0);
+    if (done()) { box.classList.remove("cv-loading"); return; }
+    box.classList.add("cv-loading");
+    let timer = null;
+    const reveal = () => { clearTimeout(timer); box.classList.remove("cv-loading"); need.forEach((im) => im.removeEventListener("load", check)); };
+    const check = () => { if (done()) reveal(); };
+    need.forEach((im) => im.addEventListener("load", check));
+    timer = setTimeout(reveal, 6000);
   }
   /* New image/colour/folder: we retry from the start */
   _cvReset() { this._cvFail = false; this._topFail = false; this._cvKey = this._cvtKey = null; }
@@ -2344,7 +2388,7 @@ class DeepalS05Card extends HTMLElement {
         <div class="info" id="info"></div>
         <div class="diag" id="diag"></div>
         <div class="charge" id="charge" hidden></div>
-        <button class="foot" id="foot" aria-label="Card settings"><span class="age" id="age"></span><span class="sets">${ico("sliders")}Settings</span></button>
+        <button class="foot" id="foot" aria-label="Open Companion settings"><span class="sets">${ico("sliders")}</span></button>
         <div class="sheet" id="vsheet"><div class="box wide" id="vbox" role="dialog" aria-modal="true" aria-labelledby="vtitle">
           <h3 id="vtitle" class="sr">Vehicle</h3>
           <div class="vtop"><div class="seg" id="vtabs"><button data-vv="iso">${ico("carside")}<span class="tx">Car View</span></button><button data-vv="climate">${ico("fan")}<span class="tx">Climate</span></button><button data-vv="seats">${ico("seat")}<span class="tx">Seats</span></button></div><button class="x" data-vclose aria-label="Close">${ico("close")}</button></div>
@@ -2364,7 +2408,7 @@ class DeepalS05Card extends HTMLElement {
     sr.addEventListener("click", (e) => { if (Date.now() < (this._noClickUntil || 0)) { e.stopPropagation(); e.preventDefault(); } }, true);
     sr.getElementById("toast").addEventListener("click", () => { clearTimeout(this._toastTimer); this._toastState = null; this._force(); });
     this._skyP = undefined;
-    this._el = { card: sr.querySelector("ha-card"), hero: g("hero"), sky: g("sky"), cv: g("cv"), cvi: g("cvi"), cvt: g("cvt"), vtg: g("vtg"), cva: g("cva"), cvb: g("cvb"), sweep: sr.querySelector(".sweep"), imgs: [...sr.querySelectorAll(".stage img")], plate: g("plate"), age: g("age"),
+    this._el = { card: sr.querySelector("ha-card"), hero: g("hero"), sky: g("sky"), cv: g("cv"), cvi: g("cvi"), cvt: g("cvt"), vtg: g("vtg"), cva: g("cva"), cvb: g("cvb"), sweep: sr.querySelector(".sweep"), imgs: [...sr.querySelectorAll(".stage img")], plate: g("plate"),
       toast: g("toast"), nm: g("nm"), status: g("status"), tells: g("tells"), rfs: g("rfs"), nfbell: g("nfbell"), dgb: g("dgb"), total: g("total"), stats: g("stats"), veh: g("veh"), vtabs: g("vtabs"), vgi: g("vgi"), vgc: g("vgc"), vgs: g("vgs"), viso: g("viso"), vclim: g("vclim"), dov: g("dov"), vseats: g("vseats"), pk: g("pk"), pkp: g("pkp"), pkv: g("pkv"), pkr: g("pkr"), pktk: g("pktk"), vmiss: g("vmiss"), vextra: g("vextra"),
       vsheet: g("vsheet"), vtctl: g("vtctl"), dash: g("dash"), info: g("info"), diag: g("diag"), charge: g("charge"), chgbox: g("chgbox"), chgline: g("chgline"), actions: g("actions"), foot: g("foot"), sheet: g("sheet"), box: g("box") };
     this._el.hero.style.setProperty("--ds-scale", String(c.image_scale));
@@ -2405,10 +2449,10 @@ class DeepalS05Card extends HTMLElement {
       if (t.dataset.id) return this._onAction(t.dataset.id);
       if (t.dataset.tp) return this._tempStep(Number(t.dataset.tp));
     });
-    this._el.nfbell.addEventListener("click", () => this._openNotifications());
+    this._el.nfbell.addEventListener("click", () => { this._nfSheet = true; this._force(); });
     this._el.dgb.addEventListener("click", () => { this._diagSheet = true; this._force(); });
     this._el.tells.addEventListener("click", (e) => { if (e.target.closest("[data-diag-open]")) { this._diagSheet = true; this._force(); } });
-    this._el.foot.addEventListener("click", () => { if (this._c.show_customize === false) return; this._stab = "layout"; this._customize = true; this._force(); });
+    this._el.foot.addEventListener("click", () => { if (this._c.show_customize === false) return; this._openDashboard(); });
     this._el.sheet.addEventListener("click", (e) => {
       if (e.target === this._el.sheet) return this._closeSheet();
       const lk = e.target.closest("[data-lk]");
@@ -2424,7 +2468,6 @@ class DeepalS05Card extends HTMLElement {
       }
       this._closeSheet();
     });
-    this._setEl = null;
     this._built = true;
   }
 
@@ -2467,8 +2510,10 @@ class DeepalS05Card extends HTMLElement {
     const secs = { hero: el.hero, actions: el.actions, status: el.status, stats: el.stats, info: el.info, diagnostics: el.diag, charge: el.charge, costs: el.costs };
     const hid = new Set(c.hidden);
     c.order.forEach((id, i) => { const s = secs[id]; if (!s) return; s.style.order = i; s.toggleAttribute("data-off", hid.has(id)); });
-    el.foot.style.order = 99;
+    el.foot.style.order = 99; this._lockKick();
     el.foot.classList.toggle("nosets", c.show_customize === false);
+    { if (el.foot.parentNode !== el.hero) el.hero.appendChild(el.foot);
+      el.foot.hidden = c.show_customize === false || !!(this._hass && this._hass.user && this._hass.user.is_admin === false); /* settings need administrator rights */ }
 
     /* hero */
     el.hero.classList.toggle("unlocked", v.unlocked);
@@ -2483,9 +2528,7 @@ class DeepalS05Card extends HTMLElement {
     el.plate.textContent = this._s("sensor.license_plate") || "";
     const hs = new Set(c.hero_show || []), sr = this.shadowRoot;
     sr.getElementById("nm").hidden = !hs.has("name"); el.plate.hidden = !hs.has("plate"); sr.getElementById("ttl").hidden = !hs.has("name") && !hs.has("plate");
-    el.total.hidden = !hs.has("range"); el.age.hidden = !hs.has("updated");
-    el.age.textContent = T("Updated {0}", this._age());
-    el.age.classList.toggle("old", this._ageMin() > 180);
+    el.total.hidden = !hs.has("range");
     this._scUpd();
     const dn = this._devName(); if (dn && el.nm.textContent !== dn) el.nm.textContent = dn; /* name from the integration (device), if you have not set your own */
     const ts = this._toastState;
@@ -2503,7 +2546,7 @@ class DeepalS05Card extends HTMLElement {
       const cloudOk = this._is("binary_sensor.cloud_connection", "on"), cs = hs.has("cloud") ? (cloudOk ? "ok" : "bad") : "";
       el.rfs.className = `rfs ${cs} ${rs}`; el.rfs.disabled = !!ra.disabled; el.rfs.hidden = !!ra.disabled;
       const rl = (cs ? `${T(cloudOk ? "Connected" : "Offline")} · ` : "") + T("Refresh data · {0}", this._age()); el.rfs.title = rl; el.rfs.setAttribute("aria-label", rl);
-      el.rfs.innerHTML = ico(f && !pend ? (f.type === "success" ? "check" : "alert") : "refresh") + (pend ? RING : "");
+      el.rfs.innerHTML = ico(f && !pend ? (f.type === "success" ? "check" : "alert") : "refresh") + (pend ? RING : "") + this._ageBadge(hs.has("updated"));
     }
     this._paintNotificationLink();
     /* buttons */
@@ -2628,7 +2671,7 @@ class DeepalS05Card extends HTMLElement {
       tiles.push(`<div class="tile" data-ent="${esc(x.entity)}"${x.tap_action ? ` data-tap="${esc(JSON.stringify(x.tap_action))}"` : ""}${x.hold_action ? ` data-hold="${esc(JSON.stringify(x.hold_action))}"` : ""}>${ico(x.icon || "info")}<div><div class="v">${esc(val)}</div><div class="l">${esc(x.label || o?.attributes?.friendly_name || x.entity)}</div></div></div>`);
     }
     /* diagnostics: indicator icons over the image, only when there is something to see */
-    const hidSec = new Set(c.hidden), items = hidSec.has("diagnostics") ? [] : this._diagItems(), all = c.diag_mode === "all";
+    const hidSec = new Set(c.hidden), items = this._diagItems(), all = false; /* only warnings are drawn; the full list is in the Diagnostics sheet (top button) */
     const rank = { bad: 0, warn: 1, na: 2, ok: 3 }, dvis = items.filter((x) => all || x.on), grp = new Map();
     for (const d of dvis) { const k = `${d.icon}|${d.st}`, g = grp.get(k); if (g) { g.n++; g.label += `, ${d.label}`; } else grp.set(k, { ...d, n: 1 }); }
     const shown = [...grp.values()].sort((a, b) => rank[a.st] - rank[b.st]), hw = el.hero ? el.hero.clientWidth : 0, MAXT = !hw ? 4 : hw < 330 ? 2 : hw < 400 ? 3 : 4, top = shown.slice(0, MAXT), rest = dvis.length - top.reduce((t, g) => t + g.n, 0);
@@ -2647,8 +2690,8 @@ class DeepalS05Card extends HTMLElement {
     el.tells.toggleAttribute("hidden", dgOn || !shown.length);
     el.info.innerHTML = tiles.join("");
     el.info.toggleAttribute("data-off", !tiles.length || hidSec.has("info"));
-    el.diag.innerHTML=dvis.map(d=>{const state={ok:"OK",bad:"Warning",warn:"Warning",na:"Unavailable"}[d.st],label=T(d.label)+" · "+T(state);return `<button class="diag-item ${d.st}" data-ent="${esc(d.ent)}" title="${esc(label)}" aria-label="${esc(label)}">${icoBadge(d.icon)}</button>`;}).join("");
-    el.diag.toggleAttribute("data-empty-diag", !dvis.length);
+    /* the block of indicators at the bottom of the card is gone: warnings show as a number on the Diagnostics button and the full list opens from it */
+    el.diag.innerHTML = ""; el.diag.toggleAttribute("data-empty-diag", true);
 
     /* charging */
     const showCharge = v.charging || v.plugged, cst = ["text", "line", "big", "beside"].includes(c.charge_style) ? c.charge_style : "line";
@@ -2672,52 +2715,38 @@ class DeepalS05Card extends HTMLElement {
       const [title, text] = CONFIRM_TEXT[this._confirm.key] || ["Continue?", ""];
       el.box.className = "box confirm";
       el.box.innerHTML = `<h3>${esc(title)}</h3><p class="c">${esc(text)}</p><div class="btnrow"><button class="btn ic" data-close>${ico("close")}Cancel</button><button class="btn go ic" data-sheet="yes">${ico(CONF_ICO[this._confirm.key] || "check")}Confirm</button></div>`;
-      this._setEl = null;
       el.sheet.classList.add("show");
-    } else if (this._diagSheet && !this._customize) {
+    } else if (this._diagSheet) {
       el.box.className = "box wide dg";
       el.box.innerHTML = this._diagHtml();
-      this._setEl = null;
       el.sheet.classList.add("show");
-    } else if (this._lockSheet && !this._customize) {
+    } else if (this._lockSheet) {
       el.box.className = "box confirm lk";
       el.box.innerHTML = this._lockHtml();
-      this._setEl = null;
       el.sheet.classList.add("show");
-    } else if (this._enSheet && !this._customize) {
+    } else if (this._enSheet) {
       /* Energy sheet: the code is in energy/energy.js and loads only when it opens */
-      this._setEl = null;
       if (!this._enEl || !el.box.contains(this._enEl)) {
         el.box.className = "box wide nfp";
-        el.box.innerHTML = sheetHd("bolt", "Ενέργεια");
+        el.box.innerHTML = sheetHd("bolt", "Energy");
         const d = document.createElement("div"); d.className = "enpanel"; d.innerHTML = loaderHtml("bolt");
         el.box.appendChild(d); this._enEl = d;
         loadEnergy().then((ok) => { if (this._enEl !== d) return; if (ok && window.__DEEPAL_S05_ENERGY.panel) window.__DEEPAL_S05_ENERGY.panel(d, this); else d.innerHTML = `<p class="hint">${esc(T("The energy file didn't load. Check that the energy folder sits next to the card file."))}</p>`; });
       }
       el.sheet.classList.add("show");
-    } else if (this._customize) {
-      if (!this._setEl || !el.box.contains(this._setEl)) {
-        el.box.className = "box";
-        el.box.innerHTML = sheetHd("sliders", "Ρυθμίσεις κάρτας", CARD_CREDIT);
-        const s = document.createElement(SETTINGS_TAG);
-        s.mode = "card";
-        s.tab = this._stab;
-        s.onTab = (t) => { this._stab = t; this._uiSave(); };
-        s.onPatch = (p) => this._patch(p);
-        s.onReset = () => this._resetLocal();
-        el.box.appendChild(s);
-        this._setEl = s;
-        if (this._restoreSc) { const y = this._restoreSc; this._restoreSc = 0; requestAnimationFrame(() => { el.box.scrollTop = y; }); }
+    } else if (this._nfSheet) {
+      /* Notifications popup: the same activity list as the Companion dashboard, loaded only when it opens */
+      if (!this._nfEl || !el.box.contains(this._nfEl)) {
+        el.box.className = "box wide nfp nfl";
+        el.box.innerHTML = sheetHd("chat", "Notifications");
+        const d = document.createElement("div"); d.className = "nfpanel"; d.innerHTML = loaderHtml("sliders");
+        el.box.appendChild(d); this._nfEl = d; this._loadNotifications(d);
       }
-      this._setEl.hass = this._hass;
-      this._setEl.cfg = this._c;
-      this._setEl.yamlBase = this._yaml;
       el.sheet.classList.add("show");
     } else {
-      this._setEl = null;
       el.sheet.classList.remove("show");
     }
-    el.box.setAttribute("aria-label", this._confirm ? (CONFIRM_TEXT[this._confirm.key] || ["Confirm"])[0] : this._diagSheet && !this._customize ? "Diagnostics" : this._lockSheet && !this._customize ? "Doors" : this._enSheet && !this._customize ? "Energy" : "Card settings");
+    el.box.setAttribute("aria-label", this._confirm ? (CONFIRM_TEXT[this._confirm.key] || ["Confirm"])[0] : this._diagSheet ? "Diagnostics" : this._lockSheet ? "Doors" : this._enSheet ? "Energy" : this._nfSheet ? "Notifications" : "Deepal Companion");
     this._focusSync();
   }
 
@@ -3062,9 +3091,9 @@ class DeepalS05Settings extends HTMLElement {
         return `${this._datalist()}
       <h4>Sections</h4>
       <p class="hint">${T("Put the sections in the order you want (e.g. buttons first, then the image, then the range) and hide the ones you don't need.")}</p>
-      ${this._orderList(SECTIONS, c.order, [...c.hidden,...(c.charge_curve?[]:['curve']),...(c.charging_reminder?[]:['reminder'])], (i) => SECTION_LABELS[i], "sec")}
+      ${this._orderList(SECTIONS, c.order, [...c.hidden,...(c.charge_curve?[]:['curve']),...(c.charging_reminder?[]:['reminder']),...(c.charging_cost===false?['costs']:[])], (i) => SECTION_LABELS[i], "sec")}
       <h4>On the image</h4>
-      <div class="list">${HERO_SHOW_OPTS.map(([k, l]) => `<button class="row tg ${(c.hero_show || []).includes(k) ? "on" : ""}" data-hs="${k}"><span>${l}</span><i class="sw ${(c.hero_show || []).includes(k) ? "on" : ""}"></i></button>`).join("")}</div>
+      <div class="list">${HERO_SHOW_OPTS.map(([k, l]) => `<button class="row tg ${(c.hero_show || []).includes(k) ? "on" : ""}" data-hs="${k}"><span>${l}</span><i class="sw ${(c.hero_show || []).includes(k) ? "on" : ""}"></i></button>`).join("")}${this._tg("show_customize", c.show_customize !== false, "Settings button")}</div>
       ${this._opt("Message under the status", this._seg("status_sub", c.status_sub === "off" || c.status_sub === "ticker" ? c.status_sub : "roll", [["off", "None"], ["roll", "Rolling"], ["ticker", "With dots"]]), "Under “Locked / Unlocked”: a rolling line (lock time, all closed) or 3 facts (time, parked, range) with dots.")}
       <h4>Top-right buttons</h4>
       <p class="hint">${T("Order (left to right) and visibility of the small buttons in the image corner.")}</p>
@@ -3097,13 +3126,12 @@ class DeepalS05Settings extends HTMLElement {
     const dRows = DIAG.filter((d) => has(d[0])).map((d) => `<button class="row tg ${selIds.includes(d[0]) ? "on" : ""}" data-diag="${d[0]}">${icoBadge(d[2])}<span>${esc(d[1])}</span><i class="sw ${selIds.includes(d[0]) ? "on" : ""}"></i></button>`).join("");
     return `${this._datalist()}
       <h4>Diagnostics</h4>
-      <div class="seg"><button data-dmode="alerts" class="${c.diag_mode === "alerts" ? "on" : ""}">Alerts only</button><button data-dmode="all" class="${c.diag_mode === "all" ? "on" : ""}">Always all</button></div>
       <div class="list">${dRows}</div>
       <div class="btnrow"><button class="btn sm" data-dall="0">None</button><button class="btn sm" data-dall="1">All</button></div>
       ${this._tabTires(c)}`;
   }
   _tabVehicle(c) {
-    const ents = Object.entries(c.entities), cfgOut = this._exportObj();
+    const ents = Object.entries(c.entities);
     const cc = CAR_COLORS.some((x) => x[0] === c.car_color) ? c.car_color : "black";
     return `${this._datalist()}${this._tabGeneral(c)}<h4>Vehicle setup</h4>
       <label class="field">Entity prefix (e.g. s05)<input type="text" data-set="prefix" data-text value="${esc(c.prefix)}" list="dl-pfx"></label>
@@ -3114,7 +3142,10 @@ class DeepalS05Settings extends HTMLElement {
       <p class="hint">Used by the Car View image (vehicle popup and, if you choose it, the hero).</p>
       <div class="csw">${CAR_COLORS.map(([k, n, hex]) => `<button data-sset="car_color|${k}" class="${k === cc ? "on" : ""}" style="background:${hex}" title="${esc(T(n))}" aria-label="${esc(T(n))}"></button>`).join("")}</div>
       ${this._opt("Wheels (Car View)", this._seg("iso_wheels", c.iso_wheels || "cover", [["cover", "20″ with covers"], ["open", "20″ without covers"], ["pro", "18″ Pro"]]))}
-      ${c.energy_sheet !== false ? `<label class="field">Battery capacity (kWh)<input type="number" step="0.1" data-set="battery_kwh" data-num value="${Number(c.battery_kwh) > 0 ? esc(c.battery_kwh) : ""}" placeholder="${autoKwh(this._hass, c)}"></label><p class="hint">${T("Automatic: 18.4 kWh for plug-in hybrid, 68.8 kWh for electric. Enter a value only to override it; empty = automatic.")}</p>` : ""}
+      ${c.energy_sheet !== false ? `${this._orow("Battery capacity (kWh)", `<input type="number" step="0.1" data-set="battery_kwh" data-num value="${Number(c.battery_kwh) > 0 ? esc(c.battery_kwh) : ""}" placeholder="${autoKwh(this._hass, c)}">`, T("Automatic: 18.4 kWh for plug-in hybrid, 68.8 kWh for electric. Enter a value only to override it; empty = automatic."))}
+      ${this._orow("Ask for a charging profile after at least (%)", this._num("charge_prompt_min_gain", c.charge_prompt_min_gain, "1"), "A finished charge that adds at least this many battery percent asks which charging profile to use. Default 3; 0 asks after every charge.")}
+      ${this._orow("Recent charges checked for the reminder", this._num("charge_prompt_recent", c.charge_prompt_recent, "1"), "How many of the latest charges the reminder looks at, so earlier ones you missed are still offered. 1 to 20, default 10.")}
+      ${this._orow("Ignore one-off battery jumps above (%)", this._num("charge_spike_jump", c.charge_spike_jump, "1"), "A single reading this many percent above the charge so far is ignored until the next reading confirms it. 5 to 50, default 20.")}` : ""}
       ${this._tabTank(c)}
       <h4>Photos (hero & dashboard)</h4>
       <p class="hint">${T("Photos are loaded from the {0} folder next to the card. Here you can set another folder or another file for each photo and check that it exists.", "<code>images/car/</code>")}</p>
@@ -3128,20 +3159,16 @@ class DeepalS05Settings extends HTMLElement {
       ${this._customRows(c.diag_custom, "diag_custom")}${this._addForm("diag_custom")}
       <h4>Entity mapping</h4>
       <p class="hint">${T("If an entity has a different name than the expected {0}, choose here which one to use.", `<code>${esc(c.prefix)}_…</code>`)}</p>
-      ${ents.length ? `<div class="list">${ents.map(([k, v]) => `<div class="row"><span data-ha-name>${esc(this._entityRoleName(k,c))}<small>${esc(v)}</small></span><button class="mv" data-delent="${esc(k)}">${ico("trash")}</button></div>`).join("")}</div>` : ""}
+      ${ents.length ? `<div class="list">${ents.map(([k, v]) => `<div class="row"><span data-ha-name>${esc(this._entityRoleName(k,c))}<small>${esc(v)}</small></span><button class="mv" data-delent="${esc(k)}" aria-label="Remove ${esc(this._entityRoleName(k,c))} override">${ico("trash")}</button></div>`).join("")}</div>` : ""}
       <div class="add"><label class="field">Key${this._sel("_mkey", this._form.mkey, [["", "— choose —"], ...uniq(OTHER_KEYS).map((k) => [k, this._entityRoleName(k,c)])])}</label>
         <label class="field">Entity<ha-selector data-entity-mapping></ha-selector><small data-mapping-id>${esc(this._form.ment)}</small></label>
         <button class="btn sm" data-addent>${ico("plus")} Map</button></div>
-      <h4>Export / reset</h4>
-      <p class="hint">Settings are saved in Home Assistant. Copy the configuration below for a manual backup.</p>
-      <textarea readonly id="yaml">${esc(toYaml(cfgOut))}</textarea>
-      <div class="btnrow"><button class="btn sm" data-copy>${ico("copy")} Copy YAML</button><button class="btn sm" data-reset>${ico("refresh")} Reset</button></div>
       <div class="note" id="note">${esc(this._note)}</div>`;
   }
   _tabTank(c) {
     return hasFuel(this._hass, c) ? `<h4>Tank</h4>
-      ${this._opt("Full-tank fuel range (km)", this._num("fuel_max", c.fuel_max, "1"), "0 = automatic (940 km for the hybrid). Enter a positive value to override.")}
-      ${this._opt("Tank capacity (L)", this._num("fuel_tank_liters", c.fuel_tank_liters, "0.1"), "0 = automatic from the tank capacity sensor, or 51 L. Used for estimated petrol consumption.")}` : "";
+      ${this._orow("Full-tank fuel range (km)", this._num("fuel_max", c.fuel_max, "1"), "0 = automatic (940 km for the hybrid). Enter a positive value to override.")}
+      ${this._orow("Tank capacity (L)", this._num("fuel_tank_liters", c.fuel_tank_liters, "0.1"), "0 = automatic from the tank capacity sensor, or 51 L. Used for estimated petrol consumption.")}` : "";
   }
   _tabLook(c) {
     const cc = CAR_COLORS.some((x) => x[0] === c.car_color) ? c.car_color : "black";
@@ -3177,14 +3204,12 @@ class DeepalS05Settings extends HTMLElement {
   }
   /* drawing helpers */
   _seg(name, val, opts) { return `<div class="seg wide">${opts.map(([v, l]) => `<button data-sset="${name}|${v}" class="${String(v) === String(val) ? "on" : ""}">${esc(l)}</button>`).join("")}</div>`; }
+  _orow(label, ctrl, sub) { return `<div class="orow"><details class="oi"><summary><span>${label}</span>${sub ? `<i class="qm" aria-label="More information">?</i>` : ""}</summary>${sub ? `<p>${sub}</p>` : ""}</details>${ctrl}</div>`; }
   _opt(label, ctrl, sub) { return `<div class="opt"><div class="ol">${label}${sub ? `<small>${sub}</small>` : ""}</div>${ctrl}</div>`; }
   _tg(key, on, label, sub) { return `<button class="row tg ${on ? "on" : ""}" data-tgl="${key}"><span>${label}${sub ? `<small>${sub}</small>` : ""}</span><i class="sw ${on ? "on" : ""}"></i></button>`; }
   _tabGeneral(c) {
-    const cfgOut = this._exportObj();
     return `<h4>Card</h4>
       <label class="field">Card name<input type="text" data-set="name" data-text placeholder="Deepal S05" value="${esc(c.name)}"></label>
-      <h4>Settings on the card</h4>
-      ${this._tg("show_customize", c.show_customize !== false, "“Settings” button on the card", "If you hide it, you can still change settings in Companion or the Home Assistant card editor.")}
 `;
   }
   _tabCharge(c) {
@@ -3287,7 +3312,7 @@ class DeepalS05Settings extends HTMLElement {
       const move = (ev) => {
         const dy = Math.min(hi, Math.max(lo, ev.clientY - y0)); row.style.transform = `translateY(${dy}px)`;
         const mid = rc[from].top + rc[from].height / 2 + dy; to = from;
-        rc.forEach((r, i) => { if (i < from && mid < r.top + r.height / 2) to = Math.min(to, i); if (i > from && mid > r.top + r.height / 2) to = Math.max(to, i); });
+        rc.forEach((r, i) => { const mc = r.top + r.height / 2; /* the drag is clamped so the row's middle can at best reach the first/last row's middle: that must count (otherwise the first and last positions are unreachable) */ if (i < from && mid < mc + 1) to = Math.min(to, i); if (i > from && mid > mc - 1) to = Math.max(to, i); });
         rows.forEach((r, i) => { if (i === from) return; r.style.transform = to < from && i >= to && i < from ? `translateY(${step}px)` : to > from && i > from && i <= to ? `translateY(${-step}px)` : ""; });
       };
       const end = (ev) => {
@@ -3321,6 +3346,7 @@ class DeepalS05Settings extends HTMLElement {
       if (d.vis) {
         const [kind, id] = d.vis.split("|"), key = kind === "sec" ? "hidden" : kind === "top" ? "top_buttons_hidden" : "buttons_hidden", s = new Set(c[key]);
         if(kind==='sec'&&id==='curve')return this._emit({charge_curve:!(c.charge_curve&&!c.hidden.includes('curve')),hidden:c.hidden.filter(id=>id!=='curve')});
+        if(kind==='sec'&&id==='costs')return this._emit({charging_cost:!(c.charging_cost!==false&&!c.hidden.includes('costs')),hidden:c.hidden.filter(id=>id!=='costs')});
         if(kind==='sec'&&id==='reminder')return this._emit({charging_reminder:!(c.charging_reminder&&!c.hidden.includes('reminder')),hidden:c.hidden.filter(id=>id!=='reminder')});
         s.has(id) ? s.delete(id) : s.add(id);
         return this._emit({ [key]: [...s] });
@@ -3360,12 +3386,6 @@ class DeepalS05Settings extends HTMLElement {
         return this._emit({ entities: m });
       }
       if (d.delent) { const m = { ...c.entities }; delete m[d.delent]; return this._emit({ entities: m }); }
-      if (d.copy !== undefined) {
-        const txt = sr.getElementById("yaml").value;
-        (navigator.clipboard?.writeText(txt) || Promise.reject()).then(() => (this._note = T("Copied ✓")), () => { sr.getElementById("yaml").select(); this._note = T("Press Ctrl/⌘+C"); }).then(() => this._render());
-        return;
-      }
-      if (d.reset !== undefined) { this._note = ""; return this.onReset && this.onReset(); }
     });
     sr.addEventListener("change", (e) => {
       const t = e.target, d = t.dataset;
@@ -3403,11 +3423,6 @@ class DeepalS05CardEditor extends HTMLElement {
       this._s.onTab = (t) => (this._tab = t);
       this._s.onPatch = (p) => {
         this._config = { ...this._config, ...p };
-        this._commit();
-      };
-      this._s.onReset = () => {
-        const { type, prefix, name } = this._config;
-        this._config = { type, ...(prefix ? { prefix } : {}), ...(name ? { name } : {}) };
         this._commit();
       };
       this.shadowRoot.innerHTML = "";

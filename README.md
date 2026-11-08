@@ -1,26 +1,70 @@
+<p align="center"><img src="docs/images/header.png" alt="Deepal Companion: the card standing on a stage" width="100%"></p>
+
 # Deepal Companion
 
 Your Deepal S05 in Home Assistant: vehicle controls, a customisable dashboard, charging sessions, energy history, costs and phone alerts.
 
 Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/ha-deepal-alternative) (`deepal`) for electric and plug-in hybrid vehicles. Install it as an **integration through Home Assistant Marketplace** (HACS on earlier Home Assistant versions). The Companion dashboard and Lovelace card are included in the same package.
 
-[Installation](docs/INSTALLATION.md) · [User guide](docs/USAGE.md) · [All settings](docs/SETTINGS.md) · [Notifications and Live charging](docs/NOTIFICATIONS.md) · [Changelog](CHANGELOG.md)
+[Installation](docs/INSTALLATION.md) · [User guide](docs/USAGE.md) · [All settings](docs/SETTINGS.md) · [Notifications and Live notifications](docs/NOTIFICATIONS.md) · [Changelog](CHANGELOG.md)
 
-## Latest release — v0.1.3
+<p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
-- Switch the card’s **Charging costs** and **Charging reminder** blocks on or off independently.
-- Preview guidance appears in a coloured information box.
-- Notification buttons use consistent, readable labels, and mobile alert settings open at the top.
-- The dashboard remembers your selected card profile after reopening.
-- Saved notification preferences retain their values across updates, including values that matched earlier defaults.
+## Latest release — v0.1.4
 
-[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.3) · [Full changelog](CHANGELOG.md)
+- **Live notifications** on the Lock Screen for charging, climate and left-open doors, each with its own settings page.
+- New charging alerts: started, almost finished and reached target.
+- A notifications popup on the card, a data-age badge on the refresh button, a clearer lock status and a round Settings gear on the image.
+- A Health tab that checks sensors, the recorder, the database, notification devices and prices.
+- Saving from two devices now merges both sets of changes instead of losing one.
+
+[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.4) · [Full changelog](CHANGELOG.md)
 
 ## Release highlights
 
-- **Live charging notifications:** follow charging progress on your phone’s Lock Screen with iPhone Live Activities or Android Live Updates. Battery progress and optional remaining time follow the car’s reported readings, even while the dashboard is closed.
+- **Live notifications:** keep **Live charging**, **Live climate** and **Left open or unlocked** on your phone’s Lock Screen with iPhone Live Activities or Android Live Updates. Each has its own settings page and follows the car’s reported readings, even while the dashboard is closed.
+- **Clearer card status:** the age of the vehicle data sits on the refresh button, the lock line says **In use** while the engine runs, and the Settings gear sits on the image.
 - **Saved charging curves:** inspect current readings, charging time and recorded battery percentages for each session. Captured curves stay in Companion’s archive alongside the charge and its cost.
+- **Charging networks for Spain, Italy and Greece:** when you name a charging profile, pick a ready-made network such as Zunder, Iberdrola | bp pulse, Plenitude On the Road, PPC blue or EKO Charge & Go, or type your own name and tariff.
 - **Charging expenses:** organise Home, Work, Public and custom locations, set tariffs or free charging, enter receipt totals and review your charging energy and costs in session cards and charts.
+
+## Gallery
+
+### Your card
+
+<table>
+<tr><td width="50%"><img src="docs/images/feature-vehicle-overview.png" alt="Your whole car on one card"></td><td width="50%"><img src="docs/images/feature-battery-range.png" alt="Range, battery and fuel"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-controls-state.png" alt="Buttons that show the state"></td><td width="50%"><img src="docs/images/feature-climate.png" alt="Climate controls"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-tyres-warnings.png" alt="Tyre pressure and warnings"></td><td width="50%"><img src="docs/images/feature-diagnostics.png" alt="Diagnostic warnings"></td></tr>
+</table>
+
+### Car view and interior
+
+<table>
+<tr><td width="50%"><img src="docs/images/presentation-car-colour.png" alt="Car colours"></td><td width="50%"><img src="docs/images/presentation-climate.png" alt="Cabin climate"></td></tr>
+<tr><td width="50%"><img src="docs/images/presentation-seats.png" alt="Seat heating and ventilation"></td><td width="50%"><img src="docs/images/presentation-custom.png" alt="Custom sensors and buttons"></td></tr>
+</table>
+
+### Charging and costs
+
+<table>
+<tr><td width="50%"><img src="docs/images/feature-charging.png" alt="Charging on the card"></td><td width="50%"><img src="docs/images/presentation-charging.png" alt="Assign a charging profile"></td></tr>
+<tr><td width="50%"><img src="docs/images/presentation-curve.png" alt="Saved charging curve"></td><td width="50%"><img src="docs/images/presentation-live-curve.png" alt="Live charging curve"></td></tr>
+</table>
+
+### Live notifications and alerts
+
+<table>
+<tr><td width="50%"><img src="docs/images/presentation-live-iphone.png" alt="iPhone Live Activity"></td><td width="50%"><img src="docs/images/presentation-live-android.png" alt="Android Live Update"></td></tr>
+<tr><td width="50%"><img src="docs/images/presentation-notifications.png" alt="Choose your alerts"></td></tr>
+</table>
+
+### Control panel
+
+<table>
+<tr><td width="50%"><img src="docs/images/control-panel-feature.png" alt="Set up the card and see it live"></td><td width="50%"><img src="docs/images/feature-panel-layout.png" alt="Layout settings"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-panel-advanced.png" alt="Vehicle setup and sensors"></td><td width="50%"><img src="docs/images/feature-panel-charging-profiles.png" alt="Charging profiles"></td></tr>
+</table>
 
 ## How it started
 
@@ -91,16 +135,16 @@ Made for my car, shared for yours.
 - Editable titles, messages and icons, with vehicle-value tags and message previews.
 - Supported action buttons, including Lock vehicle and Dismiss.
 - Test notifications and recent activity with Load more, Delete and Delete all.
-- Charging Live Activities on iPhone and Live Updates on supported Android devices.
+- Live charging, Live climate and Left open or unlocked as Live Activities on iPhone and Live Updates on supported Android devices.
 
-## Live charging on your phone
+## Live notifications on your phone
 
 > [!IMPORTANT]
-> **Keep charging progress on your Lock Screen.** Open **Deepal Companion → Notifications → Live charging**, select your receiving phone and enable the feature. iPhone Live Activities and Android Live Updates show battery progress and optional remaining time while the dashboard is closed.
+> **Keep the car on your Lock Screen.** Open **Deepal Companion → Notifications**, select your receiving phone and open one of the three **Live notifications**: **Live charging**, **Live climate** or **Left open or unlocked**. Turn on **Alert enabled**, adjust the options and use **Send test** to check your phone. iPhone Live Activities and Android Live Updates keep working while the dashboard is closed.
 >
-> Updates follow the car’s reported readings. Defaults are **300 seconds**, a **5% battery step** and a **1800-second maximum reading age**. These settings control notification updates; vehicle polling is configured in your vehicle integration.
+> Updates follow the car’s reported readings. These settings control notification updates; vehicle polling is configured in your vehicle integration, and the car’s cloud is read about every 5 minutes.
 >
-> Live charging requires **Home Assistant 2026.7.0 or newer**, a compatible Companion App, and **iOS/iPadOS 17.2+** or **Android 16+**. Use **Test live charging** and **End live test** to check your phone. [Full setup and test instructions](docs/NOTIFICATIONS.md#live-charging-on-the-lock-screen).
+> Live notifications require **Home Assistant 2026.7.0 or newer**, a compatible Companion App, and **iOS/iPadOS 17.2+** or **Android 16+**. [Full setup and test instructions](docs/NOTIFICATIONS.md#live-notifications-on-the-lock-screen).
 
 ## Requirements
 
@@ -140,7 +184,7 @@ The dashboard has four main pages: **Card Settings → Notifications → Session
 | **Card Settings → Colours** | Tile icon presets/custom colour, airflow colours and battery/fuel thresholds |
 | **Card Settings → Diagnostics & tyres** | Warning indicators, tyre units and pressure limits |
 | **Card Settings → Advanced** | Vehicle type, paint, wheels, capacities, custom photos, sensor mapping, custom diagnostics and configuration backup/reset |
-| **Notifications** | Devices, alerts, timing, messages, quiet hours, Live charging, tests and recent activity |
+| **Notifications** | Devices, alerts, timing, messages, quiet hours, Live notifications, tests and recent activity |
 | **Sessions** | Charging history, costs, curves, filters, sorting, charts and data options |
 | **Charging Profiles** | Charging locations, tariffs, free charging, energy sources and charger sensors |
 
@@ -159,7 +203,7 @@ Use **Sessions → Data options** to import available Recorder charges, export J
 - [Installation and updates](docs/INSTALLATION.md)
 - [Step-by-step user guide](docs/USAGE.md)
 - [Complete settings reference](docs/SETTINGS.md)
-- [Phone alerts and Live charging](docs/NOTIFICATIONS.md)
+- [Phone alerts and Live notifications](docs/NOTIFICATIONS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Report an issue](https://github.com/rmxs/deepal-S05-Companion/issues)
 

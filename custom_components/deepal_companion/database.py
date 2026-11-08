@@ -9,7 +9,7 @@ import sqlite3
 import time
 from uuid import uuid4
 
-from .const import DEFAULT_PROFILES, SHARED_KEYS
+from .const import DEFAULT_PROFILES, DEFAULT_PROMPT_MIN_GAIN, DEFAULT_PROMPT_RECENT, RANGES, SHARED_KEYS
 from .storage import HistoryStorage
 
 
@@ -109,6 +109,12 @@ class Database(HistoryStorage):
                 if current.get("_configured_battery") != config["_configured_battery"]:
                     current["battery_entity"] = config["battery_entity"]
                     current["entities"] = {**current.get("entities", {}), **config["entities"]}
+                # A vehicle created before the type was stored takes the type confirmed in setup;
+                # any stored choice, including an explicit "auto", is never overwritten.
+                # Only an explicit Settings choice ("_powertrain_explicit") is kept; anything else,
+                # including a default "auto" saved by an older version, takes the setup type.
+                if not current.get("_powertrain_explicit") and config.get("powertrain") in {"auto", "phev", "ev"}:
+                    current["powertrain"] = config["powertrain"]
                 current["_configured_prefix"] = config["_configured_prefix"]
                 current["_configured_battery"] = config["_configured_battery"]
                 db.execute("UPDATE vehicles SET name=?, config=? WHERE id=?", (name, encode(current), vehicle))
@@ -139,20 +145,27 @@ class Database(HistoryStorage):
                     "revision": [car["revision"], v["revision"]],
                     "config": {**json.loads(v["config"]), **shared}}
 
-    def patch_config(self, vehicle, view, patch, reset=False):
+    def patch_config(self, vehicle, view, patch, reset=False, expected_revision=None):
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             v = db.execute("SELECT * FROM views WHERE vehicle=? AND id=?", (vehicle, view)).fetchone()
             if not v:
                 raise ValueError("Unknown display profile")
             car = db.execute("SELECT * FROM vehicles WHERE id=?", (vehicle,)).fetchone()
+            if expected_revision is not None and [car["revision"], v["revision"]] != expected_revision:
+                raise ValueError("Settings changed elsewhere. Reload before saving.")
             common = json.loads(car["config"])
+            original = json.loads(car["config"])
             local = {} if reset else json.loads(v["config"])
             for key, value in patch.items():
                 if key in SHARED_KEYS:
                     common[key] = value
+                    if key == "powertrain":
+                        common["_powertrain_explicit"] = True
                 elif key not in {"type", "vehicle_id", "view_id", "battery_entity"}:
                     local[key] = value
-            db.execute("UPDATE vehicles SET config=?,revision=revision+1 WHERE id=?", (encode(common), vehicle))
+            if common != original:  # only shared settings invalidate every open card
+                db.execute("UPDATE vehicles SET config=?,revision=revision+1 WHERE id=?", (encode(common), vehicle))
             db.execute("UPDATE views SET config=?,revision=revision+1 WHERE id=?", (encode(local), view))
         return self.config(vehicle, view)
 
@@ -216,11 +229,38 @@ class Database(HistoryStorage):
                               ON CONFLICT(vehicle,start) DO UPDATE SET
                               end=excluded.end,active=excluded.active,data=excluded.data""",
                            (data["id"], vehicle, data["s"] / 1000, data["e"] / 1000, int(data["live"]), encode(data)))
+                if not data["live"]:
+                    self._queue_prompt(db, vehicle, data["id"])
             db.execute("INSERT INTO kv VALUES(?,?,?) ON CONFLICT(vehicle,key) DO UPDATE SET value=excluded.value",
                        (vehicle, "engine", encode(engine)))
 
-    def patch_costs(self, vehicle, changes, expected):
-        """Save only edited tariffs/receipts, with conflict checks scoped to those edits."""
+    @staticmethod
+    def _prompt_queue(db, vehicle):
+        """Charges waiting for a profile, oldest first. It is kept apart from the session list so new charges never push an unanswered one out."""
+        saved = db.execute("SELECT value FROM kv WHERE vehicle=? AND key='charge_prompt_queue'", (vehicle,)).fetchone()
+        if saved:
+            return list(json.loads(saved["value"]))
+        # First use after an update: start from the latest charges, so older history does not suddenly ask.
+        rows = db.execute("SELECT id FROM sessions WHERE vehicle=? AND active=0 ORDER BY start DESC LIMIT ?", (vehicle, DEFAULT_PROMPT_RECENT)).fetchall()
+        return [row["id"] for row in reversed(rows)]
+
+    @staticmethod
+    def _store_prompt_queue(db, vehicle, queue):
+        db.execute("INSERT INTO kv VALUES(?,?,?) ON CONFLICT(vehicle,key) DO UPDATE SET value=excluded.value",
+                   (vehicle, "charge_prompt_queue", encode(queue)))  # unanswered charges are never dropped silently
+
+    @staticmethod
+    def _queue_prompt(db, vehicle, session):
+        queue = Database._prompt_queue(db, vehicle)
+        if session not in queue:
+            Database._store_prompt_queue(db, vehicle, [*queue, session])
+        elif not db.execute("SELECT 1 FROM kv WHERE vehicle=? AND key='charge_prompt_queue'", (vehicle,)).fetchone():
+            Database._store_prompt_queue(db, vehicle, queue)
+
+    def patch_costs(self, vehicle, changes, expected, validate=None):
+        """Save only edited tariffs/receipts, with conflict checks scoped to those edits.
+
+        `validate` checks the final merged state before it is written, in the same transaction."""
         if not isinstance(expected, dict) or set(expected) != set(changes):
             raise ValueError("Reload charging settings before saving")
         with self.connect() as db:
@@ -239,6 +279,8 @@ class Database(HistoryStorage):
                     if previous[ident] != current["sessions"].get(ident):
                         raise ValueError("This charging receipt changed elsewhere. Reload before saving.")
                     current["sessions"][ident] = value
+            if validate is not None:
+                current = validate(current)
             db.execute("INSERT INTO kv VALUES(?,?,?) ON CONFLICT(vehicle,key) DO UPDATE SET value=excluded.value",
                        (vehicle, "costs", encode(current)))
 
@@ -266,6 +308,8 @@ class Database(HistoryStorage):
                           ON CONFLICT(vehicle,start) DO UPDATE SET
                           end=excluded.end,active=excluded.active,data=excluded.data""",
                        (data["id"], vehicle, data["s"] / 1000, data["e"] / 1000, int(data["live"]), encode(data)))
+            if not data["live"]:
+                self._queue_prompt(db, vehicle, data["id"])
 
     def import_sessions(self, vehicle, rows, entities=None):
         """Archive recovered completed charges without replacing canonical or overlapping sessions."""
@@ -386,27 +430,55 @@ class Database(HistoryStorage):
                 "battery_kwh": round(sum(s.get("kwh") or 0 for s in completed), 4)}
 
     @staticmethod
-    def _charge_prompt(db, vehicle, user):
-        row = db.execute("SELECT data FROM sessions WHERE vehicle=? ORDER BY start DESC LIMIT 1", (vehicle,)).fetchone()
-        if not row:
-            return None
-        session = json.loads(row["data"])
-        before, after = session.get("from"), session.get("to")
-        if (session.get("gap") or not isinstance(before, (int, float)) or not isinstance(after, (int, float))
-                or not 0 <= before <= after <= 100 or after - before < 10):
-            return None
+    def _dismissed_prompts(db, vehicle, user):
         saved = db.execute("SELECT value FROM kv WHERE vehicle=? AND key=?", (vehicle, "charge_prompt_dismissed:" + user)).fetchone()
-        if saved and json.loads(saved["value"]) == session["id"]:
+        value = json.loads(saved["value"]) if saved else []
+        return list(value) if isinstance(value, list) else [value]  # older versions stored one id
+
+    @staticmethod
+    def _charge_prompt(db, vehicle, user):
+        """The oldest recent charge that still needs a profile; the rest follow once it is answered."""
+        car = db.execute("SELECT config FROM vehicles WHERE id=?", (vehicle,)).fetchone()
+        settings = json.loads(car["config"]) if car else {}
+        def setting(key, default):
+            value = settings.get(key)
+            low, high = RANGES[key]
+            return value if not isinstance(value, bool) and isinstance(value, (int, float)) and low <= value <= high else default
+        minimum = setting("charge_prompt_min_gain", DEFAULT_PROMPT_MIN_GAIN)
+        recent = int(setting("charge_prompt_recent", DEFAULT_PROMPT_RECENT))
+        queue = Database._prompt_queue(db, vehicle)
+        rows = [db.execute("SELECT data FROM sessions WHERE vehicle=? AND id=?", (vehicle, ident)).fetchone() for ident in queue]
+        rows = [row for row in rows if row]
+        if not rows:
             return None
+        dismissed = set(Database._dismissed_prompts(db, vehicle, user))
         costs = db.execute("SELECT value FROM kv WHERE vehicle=? AND key='costs'", (vehicle,)).fetchone()
         value = json.loads(costs["value"]) if costs else {}
-        assignment = value.get("sessions", {}).get(str(int(session["s"] / 1000 + .5)), {})
-        if assignment.get("profile", {}).get("id"):
+        pending = []
+        for row in rows:  # oldest first, as queued
+            session = json.loads(row["data"])
+            before, after = session.get("from"), session.get("to")
+            if (session.get("gap") or session.get("live") or not isinstance(before, (int, float)) or not isinstance(after, (int, float))
+                    or not 0 <= before < after <= 100 or after - before < minimum):
+                continue
+            if session["id"] in dismissed:
+                continue
+            assignment = value.get("sessions", {}).get(str(int(session["s"] / 1000 + .5)), {})
+            if assignment.get("profile", {}).get("id"):
+                continue
+            pending.append(session)
+        pending = pending[:recent]  # the setting limits how many wait in line; the rest stay queued
+        if not pending:
             return None
+        session = pending[0]
         return {**{key: session.get(key) for key in ("id", "s", "e", "from", "to", "kwh", "live")},
-                "gain": after - before,
+                "gain": session["to"] - session["from"], "more": len(pending) - 1,
                 "profiles": [{key: profile.get(key) for key in ("id", "name", "free", "price")}
                              for profile in value.get("profiles", [])]}
+
+    def schema_version(self):
+        with self.connect() as db:
+            return db.execute("PRAGMA user_version").fetchone()[0]
 
     def charge_prompt(self, vehicle, user):
         with self.connect() as db:
@@ -417,8 +489,11 @@ class Database(HistoryStorage):
             prompt = self._charge_prompt(db, vehicle, user)
             if not prompt or prompt["id"] != session:
                 return
+            # Keep a dismissal for as long as its charge is still queued, so it can never reappear.
+            queued = set(self._prompt_queue(db, vehicle))
+            dismissed = list(dict.fromkeys(s for s in [*self._dismissed_prompts(db, vehicle, user), session] if s in queued))
             db.execute("INSERT INTO kv VALUES(?,?,?) ON CONFLICT(vehicle,key) DO UPDATE SET value=excluded.value",
-                       (vehicle, "charge_prompt_dismissed:" + user, encode(session)))
+                       (vehicle, "charge_prompt_dismissed:" + user, encode(dismissed)))
 
     def assign_charge_profile(self, vehicle, session, profile):
         """Snapshot one profile atomically without replacing other assignments."""
@@ -437,6 +512,7 @@ class Database(HistoryStorage):
                                                     "profile": deepcopy(selected), "energy": None, "total": None}
             db.execute("INSERT INTO kv VALUES(?,?,?) ON CONFLICT(vehicle,key) DO UPDATE SET value=excluded.value",
                        (vehicle, "costs", encode(value)))
+            self._store_prompt_queue(db, vehicle, [i for i in self._prompt_queue(db, vehicle) if i != session])
 
     def export(self, vehicle):
         cars = [v for v in self.list_vehicles() if v["id"] == vehicle]

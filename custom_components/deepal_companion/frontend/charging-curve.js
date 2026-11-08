@@ -60,7 +60,7 @@ export function mountCurve(card,history=null,container=null){
   let dead=false,busy=false,again=false,signature='',points=[],owner='',lastMarkup='',selectedTime=null,batteryReadings=[];
   const host=document.createElement('section');host.className='charging-curve-block';host.setAttribute('aria-label','Charging current curve');
   host.innerHTML='<style>'+css+detailCss+'</style><div class="curve-heading"><h3>Charging curve</h3><div class="curve-range" aria-label="Current range while charging"><span>Low <b data-curve-low>—</b> A</span><span>High <b data-curve-high>—</b> A</span></div></div><div class="curve-plot"></div><div class="curve-reading" role="status" aria-live="polite">Tap or drag to see a recorded reading.</div><p class="curve-note">Low / High exclude the stop reading.</p>';
-  const attach=()=>{if(!host.isConnected){if(container)container.append(host);else card._el.card.querySelector('.foot').before(host);}host.style.order=String(card._c.order.indexOf('curve'));};attach();
+  const attach=()=>{if(!host.isConnected){if(container)container.append(host);else{const foot=card._el.card.querySelector(':scope>.foot');if(foot)foot.before(host);else card._el.card.append(host);}}host.style.order=String(card._c.order.indexOf('curve'));};attach();
   const plot=host.querySelector('.curve-plot'),readout=host.querySelector('.curve-reading');
   function draw(){
     if(dead)return;attach();

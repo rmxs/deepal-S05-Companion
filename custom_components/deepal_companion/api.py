@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import logging
 import math
 import re
 import time
@@ -14,8 +15,9 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 
-from .const import DEFAULT_PROFILES, DOMAIN, SIGNAL
+from .const import DEFAULT_PROFILES, DOMAIN, RANGES, SIGNAL
 
+_LOGGER = logging.getLogger(__name__)
 ENTITY = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
 SOURCES = {"battery", "total", "session", "power"}
 
@@ -85,8 +87,14 @@ def validate_costs(data):
 
 
 def authorize(connection, runtime):
+    # Every sensor the vehicle's data is built from must be readable, not only the battery sensor.
     anchor = getattr(runtime, "entities", {}).get("batt") or runtime.entry.options.get("battery_entity", runtime.entry.data["battery_entity"])
-    if not connection.user.permissions.check_entity(anchor, POLICY_READ):
+    states = getattr(getattr(runtime, "hass", None), "states", None)
+    # Optional sensors that do not exist in Home Assistant are skipped, so they cannot lock a user out of the vehicle.
+    optional = {*getattr(runtime, "entities", {}).values(), *getattr(runtime, "live_entities", {}).values(),
+                *getattr(runtime, "charger_entities", set())}
+    optional = {e for e in optional if e and e != anchor and (states is None or states.get(e) is not None)}
+    if not all(connection.user.permissions.check_entity(entity, POLICY_READ) for entity in {anchor, *optional}):
         raise PermissionError("You do not have access to this vehicle")
 
 
@@ -130,7 +138,8 @@ async def request(hass, connection, msg):
                 from .live_charging import supported
                 activity = engine.history_page()
                 result = {"value": engine.config, "history": activity["rows"], "activity": activity, "state": engine.state, "recipients": engine.recipients(),
-                          "live_supported": supported(), "live_test_active": bool(engine.live.state.get("test_devices"))}
+                          "live_supported": supported(), "live_test_active": bool(engine.live.state.get("test_devices")),
+                          "live_status_test_active": {kind: bool(engine.live_status.state.get(kind, {}).get("test_devices")) for kind in ("climate", "open")}}
             elif op == "notifications_history":
                 result = engine.history_page(data.get("limit", 5), data.get("before"))
             elif op == "notifications_history_delete":
@@ -142,10 +151,18 @@ async def request(hass, connection, msg):
                     raise ValueError("Choose an activity entry or delete all")
                 result = engine.history_page()
             elif op == "notifications_set":
-                await engine.save(data.get("value"), data.get("expected"))
-                result = {"value": engine.config}
+                merged = await engine.save(data.get("value"), data.get("expected"))
+                result = {"value": engine.config, "merged": merged}
             elif op in {"notifications_live_test", "notifications_live_stop_test"}:
                 result = await engine.live.test(data.get("value", {}), stop=op == "notifications_live_stop_test")
+            elif op in {"notifications_live_status_test", "notifications_live_status_stop_test"}:
+                if not isinstance(data.get("kind"), str):
+                    raise ValueError("Choose a live notification")
+                result = await engine.live_status.test(data["kind"], data.get("value", {}), stop=op == "notifications_live_status_stop_test")
+            elif op == "notifications_explain":
+                if set(data) != {"rule_id"} or not isinstance(data["rule_id"], str):
+                    raise ValueError("Choose an alert")
+                result = await engine.explain(data["rule_id"])
             elif op in {"notifications_preview", "notifications_test"}:
                 rule = validate({"enabled": False, "rules": [data.get("rule")]})["rules"][0]
                 if op == "notifications_test" and not rule["devices"]:
@@ -153,6 +170,9 @@ async def request(hass, connection, msg):
                 result = await (engine.test(rule) if op == "notifications_test" else engine.preview(rule))
             else:
                 raise ValueError("Unknown notification operation")
+        elif op == "health_get":
+            from .health import build_health
+            result = await build_health(runtime)
         elif op == "config_get":
             result = await hub.db("config", vehicle, msg.get("view_id"))
             result["charge_prompt"] = await hub.db("charge_prompt", vehicle, str(connection.user.id))
@@ -176,6 +196,12 @@ async def request(hass, connection, msg):
             for k in ("battery_kwh", "fuel_tank_liters"):
                 if k in patch and (isinstance(patch[k], bool) or not isinstance(patch[k], (int, float)) or not 0 <= patch[k] <= 500):
                     raise ValueError("Invalid capacity")
+            for key, (low, high) in RANGES.items():
+                if key in patch and (isinstance(patch[key], bool) or not isinstance(patch[key], (int, float)) or not low <= patch[key] <= high):
+                    raise ValueError("%s must be between %s and %s" % (key.replace("_", " "), low, high))
+            expected_revision = data.get("expected_revision")
+            if not isinstance(expected_revision, list) or len(expected_revision) != 2 or any(isinstance(n, bool) or not isinstance(n, int) for n in expected_revision):
+                raise ValueError("Settings revision missing. Reload before saving.")
             if "companion_design" in patch and patch["companion_design"] not in ("", "mobile", "tablet", "energy"):
                 raise ValueError("Invalid card design")
             if "companion_width" in patch:
@@ -186,7 +212,7 @@ async def request(hass, connection, msg):
                 raise ValueError("Invalid entity prefix")
             if "entities" in patch and (not isinstance(patch["entities"], dict) or any(not ENTITY.fullmatch(v) for v in patch["entities"].values())):
                 raise ValueError("Invalid entity mapping")
-            result = await hub.db("patch_config", vehicle, msg.get("view_id"), patch, bool(data.get("reset")))
+            result = await hub.db("patch_config", vehicle, msg.get("view_id"), patch, bool(data.get("reset")), expected_revision)
             await runtime.refresh()
         elif op == "view":
             name = str(data.get("name", ""))[:100].strip()
@@ -200,7 +226,7 @@ async def request(hass, connection, msg):
                     raise ValueError("Expected changed charging profiles or receipts")
                 validate_costs({"profiles": changes.get("profiles", DEFAULT_PROFILES),
                                 "sessions": changes.get("sessions", {})})
-                await hub.db("patch_costs", vehicle, changes, data.get("expected_changes"))
+                await hub.db("patch_costs", vehicle, changes, data.get("expected_changes"), validate_costs)
             else:
                 value = validate_costs(data.get("value"))
                 await hub.db("save_costs", vehicle, value, data.get("expected"))
@@ -315,6 +341,9 @@ async def request(hass, connection, msg):
         connection.send_error(msg["id"], "unauthorized", str(err))
     except (ValueError, TypeError, KeyError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
+    except Exception:  # storage or other unexpected failure: log it, answer with a fixed message that carries no data
+        _LOGGER.exception("Companion request %s failed", op)
+        connection.send_error(msg["id"], "unknown_error", "The request could not be completed")
 
 
 @websocket_api.websocket_command({vol.Required("type"): DOMAIN + "/subscribe"})

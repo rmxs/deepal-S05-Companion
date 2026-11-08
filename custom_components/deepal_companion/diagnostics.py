@@ -7,7 +7,7 @@ async def async_get_config_entry_diagnostics(hass, entry):
     summary = await hub.db("summary", entry.unique_id)
     return {
         "version": VERSION,
-        "archive_schema": 2,
+        "archive_schema": await hub.db("schema_version"),
         "storage": await hub.db("storage_stats"),
         "completed_sessions": summary["sessions"],
         "active_session": summary["active"] is not None,

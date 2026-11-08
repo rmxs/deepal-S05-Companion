@@ -89,8 +89,11 @@ def detected_defaults(hass, entity):
             prefix = Counter(prefixes).most_common(1)[0][0]
     device = dr.async_get(hass).async_get(entity.device_id) if getattr(entity, "device_id", None) else None
     name = (device.name_by_user or device.name) if device else None
+    powertrain = detect_powertrain(hass, entity)
+    # Plug-in hybrids ship with 18-inch wheels; electric and undetected vehicles keep the 20-inch covers.
     return {"battery_entity": entity.entity_id, "prefix": prefix,
-            "name": name or "Deepal S05", "powertrain": detect_powertrain(hass, entity)}
+            "name": name or "Deepal S05", "powertrain": powertrain,
+            "iso_wheels": "pro" if powertrain == "phev" else "cover"}
 
 
 def discover_vehicles(hass, exclude_configured=True):
@@ -177,7 +180,7 @@ class CompanionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 setup_select(["auto", "phev", "ev"], "powertrain"),
             vol.Required("car_color", default=(user_input or {}).get("car_color", "black")):
                 setup_select(["black", "blue", "grey", "silver", "white"], "car_color"),
-            vol.Required("iso_wheels", default=(user_input or {}).get("iso_wheels", "cover")):
+            vol.Required("iso_wheels", default=(user_input or {}).get("iso_wheels", defaults.get("iso_wheels", "cover"))):
                 setup_select(["cover", "open", "pro"], "iso_wheels"),
         }), errors=errors, description_placeholders={"vehicle": selected["label"]})
 
