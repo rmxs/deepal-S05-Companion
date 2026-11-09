@@ -39,9 +39,10 @@ module.exports=async page=>{
   assert.equal(await panel.evaluate(root=>root.preview._s('cover.trunk')),'open');
   assert.equal(await page.evaluate(()=>window.testHass.states['binary_sensor.s05_front_left_door'].state),'off','Opening simulation must not mutate the real car');
   await emit({diag_mode:'all',diag:null});
-  assert((await panel.evaluate(root=>root.preview._el.diag.querySelectorAll('.diag-item').length))>5,'Always all must render healthy icons');
-  await emit({diag_mode:'alerts'});assert.equal(await panel.evaluate(root=>root.preview._el.diag.querySelectorAll('.diag-item').length),0);
-  await change('preview_mode','alerts');assert.equal(await panel.evaluate(root=>root.preview._el.diag.querySelectorAll('.diag-item.warn').length),2);
+  /* Warnings no longer have a block on the card: the Diagnostics button carries a red number instead. */
+  assert.equal(await panel.evaluate(root=>root.preview._el.diag.querySelectorAll('.diag-item').length),0);
+  assert.equal(await panel.evaluate(root=>root.preview._el.dgb.querySelectorAll('.bdg').length),0);
+  await change('preview_mode','alerts');assert.equal(await panel.evaluate(root=>root.preview._el.dgb.querySelector('.bdg')?.textContent),'2');
   await emit({order:['costs',...baseline.order.filter(key=>key!=='costs')]});assert.equal(await panel.evaluate(root=>root.preview._el.costs.style.order),'0');
   await emit({hidden:[...baseline.hidden,'costs']});assert.equal(await panel.evaluate(root=>root.preview._el.costs.hasAttribute('data-off')),true);
   await emit({hidden:baseline.hidden,order:baseline.order});

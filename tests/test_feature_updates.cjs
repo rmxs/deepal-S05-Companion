@@ -2,7 +2,7 @@ const assert=require('assert');
 module.exports=async page=>{
  const panel=page.locator('deepal-companion-panel');
  const sectionDefaults=await page.evaluate(()=>window.__DEEPAL_COMPANION_UI.normalize({prefix:'s05'}));
- assert.deepEqual(sectionDefaults.order,['hero','actions','status','charge','curve','stats','info','diagnostics','costs','reminder']);assert.deepEqual(sectionDefaults.hidden,['charge','costs']);assert.equal(sectionDefaults.charge_curve,true);
+ assert.deepEqual(sectionDefaults.order,['hero','actions','status','charge','curve','stats','info','costs','reminder']);assert.deepEqual(sectionDefaults.hidden,['charge','costs']);assert.equal(sectionDefaults.charge_curve,true);
  assert.equal(await panel.locator('header [data-action=add-dashboard]').count(),1);assert.equal(await panel.locator('.dashboard-guide,.legacy-card-note').count(),0);
  const defaults=await page.evaluate(()=>{const widget=document.createElement(window.__DEEPAL_COMPANION_UI.settingsTag);widget.mode='app';widget.hass=window.testHass;widget.yamlBase={prefix:'s05'};widget.cfg=window.__DEEPAL_COMPANION_UI.normalize({prefix:'s05'});widget.tab='colours';let last;widget.onPatch=patch=>{last=patch;};document.body.append(widget);widget._setTab('colours');const input=widget.shadowRoot.querySelector('[data-set=air_t1]'),hint=input.placeholder,empty=input.value==='';input.value='23';input.dispatchEvent(new Event('change',{bubbles:true}));const changed=last.air_t1;input.value='';input.dispatchEvent(new Event('change',{bubbles:true}));const reset=last.air_t1;widget.remove();return {hint,empty,changed,reset};});assert.deepEqual(defaults,{hint:'22',empty:true,changed:23,reset:22},'Numeric hints allow overrides and clearing restores the actual default');
  await page.evaluate(()=>{
@@ -48,10 +48,13 @@ module.exports=async page=>{
  await page.waitForTimeout(1200);assert.equal(await card.locator('.archived-curve-dialog .curve-chart').count(),1);
  await page.keyboard.press('Escape');await page.evaluate(()=>document.getElementById('curve-qa-card').remove());
  await panel.locator('[data-mode=notifications]').click();await panel.locator('.local-notifications').waitFor();const board=panel.locator('.local-notifications');
+ /* Live charging has its own page; its update interval is shown in minutes and saved as you type. */
  const savedInterval=await page.evaluate(()=>window.localNotifications?.live_charging?.min_interval??300);
- assert.equal(await board.locator('[data-live-setting=min_interval]').getAttribute('placeholder'),'300');assert.equal(await board.locator('[data-live-setting=min_interval]').inputValue(),savedInterval===300?'':String(savedInterval),'Saved overrides stay visible');
- await board.locator('[data-live-setting=min_interval]').fill('420');const statusAlignment=await board.locator('.notification-title-status').evaluate(status=>{const a=status.getBoundingClientRect(),b=status.nextElementSibling.getBoundingClientRect();return Math.abs(a.top+a.height/2-b.top-b.height/2);});assert(statusAlignment<2,'Unsaved changes aligns with the licence plate');await board.locator('[data-live-setting=min_interval]').fill('');assert.equal(await panel.evaluate(root=>root.localBoard.dirty),savedInterval!==300,'Clearing an override restores the default');
- if(savedInterval!==300)await board.locator('#view-overview [data-command=cancel]').dispatchEvent('click');
+ await board.locator('[data-live-open=charging]').locator('visible=true').first().click();const liveInterval=board.locator('[data-live-page=charging] [data-live-number=min_interval]');
+ assert.equal(await liveInterval.inputValue(),String(Math.round(savedInterval/60)),'Saved interval stays visible');
+ await liveInterval.fill('7');await page.waitForFunction(()=>window.localNotifications.live_charging.min_interval===420);
+ await liveInterval.fill(String(Math.round(savedInterval/60)));await page.waitForFunction(v=>window.localNotifications.live_charging.min_interval===v,Math.round(savedInterval/60)*60);
+ await board.locator('[data-live-back]').locator('visible=true').first().click();
  await panel.locator('[data-mode=history]').click();await panel.locator('.charge-session-list').waitFor();await panel.locator('.history-line-chart [data-period="7"]').click();
  await page.waitForFunction(()=>window.calls.some(call=>call.op==='charging_dashboard'&&call.data.start_time&&new Date(call.data.end_time)-new Date(call.data.start_time)<8*864e5));
  await panel.locator('.history-line-chart [data-wk="-1"]').click();await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').costChartPeriod?.period===7);

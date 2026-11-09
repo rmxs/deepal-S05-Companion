@@ -119,14 +119,12 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>document.getElementById("mobile")._patch({battery_kwh:20}));
   await page.waitForFunction(()=>document.getElementById("tablet")._c.battery_kwh===20);
   assert.equal(await page.evaluate(()=>window.calls.filter(m=>m.type==="lovelace/config/save").length),0);
-  await page.evaluate(()=>{const c=document.getElementById("mobile");c._customize=true;c._force();});
-  await page.waitForFunction(()=>!!document.getElementById("mobile")._setEl?.shadowRoot.querySelector('[data-tab="look"]'));
-  const tabs=await page.evaluate(()=>[...document.getElementById("mobile")._setEl.shadowRoot.querySelectorAll("[data-tab]")].map(n=>n.dataset.tab));
-  assert.deepEqual(tabs,["layout","look","controls","charge","colours","sensors","vehicle"]);
-  for(const tab of tabs){
-   await page.evaluate(tab=>document.getElementById("mobile")._setEl.shadowRoot.querySelector('[data-tab="'+tab+'"]').click(),tab);
-   await page.waitForTimeout(100);
-  }
+  /* The Settings popup is gone from the card: the round gear opens the Companion dashboard instead. */
+  assert.equal(await page.evaluate(()=>document.getElementById("mobile")._el.foot.hidden),false,"Administrators see the Settings gear");
+  await page.evaluate(()=>document.getElementById("mobile")._el.foot.click());
+  await page.waitForFunction(()=>location.pathname==="/deepal-companion");
+  assert.equal(await page.evaluate(()=>!document.getElementById("mobile")._setEl),true,"The card no longer opens a settings popup");
+  await page.evaluate(()=>history.replaceState(null,"","/"));
   await page.evaluate(()=>{const c=document.getElementById("mobile");c._closeSheet();c._view="iso";c._force();});
   await page.waitForFunction(()=>document.getElementById("mobile").shadowRoot.querySelectorAll(".tp[data-t]").length===4);
   await page.evaluate(()=>{const c=document.getElementById("mobile");c._view=null;c._enSheet=true;c._force();});
@@ -154,9 +152,12 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>document.getElementById("mobile")._popupBox()),null);
   await page.evaluate(()=>{document.querySelector("#scroll-test").remove();document.querySelector("#outside-menu").remove();scrollTo(0,0);});
   const history=await page.evaluate(()=>window.calls.filter(m=>m.op==="sessions").length);assert(history>0);
+  /* The bell opens a notifications popup on the card and no longer leaves the dashboard. */
   await page.evaluate(()=>{const card=document.getElementById('mobile');card._closeSheet();card._el.nfbell.click();});
-  assert.equal(await page.evaluate(()=>location.pathname+location.hash),'/deepal-companion#notifications');
-  await page.evaluate(()=>history.replaceState(null,'','/'));
+  await page.waitForFunction(()=>{const c=document.getElementById('mobile');return c._nfSheet&&c._el.sheet.classList.contains('show')&&!!c._el.box.querySelector('.nfpanel');});
+  assert.equal(await page.evaluate(()=>location.pathname+location.hash),'/');
+  await page.evaluate(()=>document.getElementById('mobile')._closeSheet());
+  assert.equal(await page.evaluate(()=>document.getElementById('mobile')._nfSheet),false);
   await page.evaluate(()=>{const editor=document.createElement("deepal-companion-card-editor");editor.id="full-editor";editor.setConfig({type:"custom:deepal-companion-card",vehicle_id:"car",view_id:"mobile"});document.querySelector("#editor").append(editor);editor.hass=window.testHass;});
   await page.waitForFunction(()=>document.getElementById("full-editor")._editorLoaded);
   await page.evaluate(()=>document.getElementById('full-editor')._s._setTab('vehicle'));

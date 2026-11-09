@@ -49,10 +49,11 @@ module.exports=async function settingsRoundtrip(page){
     return {key,value,tab:control?.tab||"general",kind:control?.kind||"event",baseline:base[key]};
   });
   if(process.env.SETTING_FILTER)cases=cases.filter(item=>process.env.SETTING_FILTER.split(",").includes(item.key));
-  const report={settings:keys.length,flows:["companion settings","frontend card settings"],checks:[],ui_controls:0,structured_setting_events:0};
+  const report={settings:keys.length,flows:["companion settings"],checks:[],ui_controls:0,structured_setting_events:0};
   const output=process.env.SETTINGS_REPORT_PATH||path.resolve(__dirname,"../SETTINGS_VALIDATION.json");
   try{
-    for(const flow of ["backend","frontend"]){
+    /* The card no longer has its own settings popup: every setting is saved and checked through the Companion dashboard. */
+    for(const flow of ["backend"]){
       if(flow==="frontend"){
         await page.evaluate(()=>{const card=document.getElementById("settings-validation-card");card._customize=true;card._force();});
         await page.waitForFunction(()=>!!document.getElementById("settings-validation-card")._setEl);

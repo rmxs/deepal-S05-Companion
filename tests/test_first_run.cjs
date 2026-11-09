@@ -27,7 +27,7 @@ module.exports=async function firstRun(page){
  assert((await panel.locator('.vehicle-setup').innerText()).includes('administrator'));
  await panel.evaluate(async root=>{root._hass.user.is_admin=window.firstRunAdmin;window.noVehicle=false;root.mode='settings';await root.refresh();});
  await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').settings);
- assert.equal(await panel.locator('nav [data-mode]').count(),4,'Setup success restores the working dashboard');
+ assert.equal(await panel.locator('nav [data-mode]').count(),5,'Setup success restores the working dashboard');
  await page.evaluate(()=>{window.firstRunHass.callWS=window.firstRunWS;delete window.firstRunWS;delete window.firstRunHass;});
  await page.setViewportSize({width:1440,height:1050});
  console.log('PASS: first-run instructions, hidden controls on all tabs, no invalid vehicle requests, access-aware setup and automatic recovery.');
