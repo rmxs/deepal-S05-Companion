@@ -107,7 +107,10 @@ There are three Live notifications. Each opens its own page, so you only see the
 | **Live climate** | Cabin temperature against the target while the climate is on. It disappears when the climate stops | Show target temperature; Show outside temperature; Show progress bar; Show running time; “Turn off” button; Update at most every (minutes); Wait before showing (minutes) |
 | **Left open or unlocked** | One list of the doors, windows, bonnet, trunk or unlocked car. Items drop off as they are closed, and it disappears when everything is secure | Doors, Windows, Bonnet and Trunk switches; Unlocked car; Only when the car is off; Show item count; Show time; “Lock vehicle” button; Wait before showing (minutes) |
 
-**Only when the car is off** (on by default) keeps *Left open or unlocked* quiet while the car is switched on or driving, and ends a running notification when you drive off. Each live notification adds one **started** and one **ended** entry to Recent activity. **Live charging** ends on your phone when the car stays unreachable longer than the reading age limit. Live notification text uses the same colour as the icon and progress bar from the card palette, including when the timer is off.
+- **Only when the car is off** (on by default) keeps *Left open or unlocked* quiet while the car is switched on or driving, and ends a running notification when you drive off.
+- **Live charging** ends on your phone when the car stays unreachable longer than the reading age limit.
+- Each live notification adds one **started** and one **ended** entry to Recent activity.
+- Live notification text uses the same colour as the icon and progress bar from the card palette, including when the timer is off.
 
 Every page also has an **Alert enabled** switch, a **Title**, an **Icon**, a **Send test** button and an **End test** button.
 

@@ -491,7 +491,7 @@ class ChargingCosts {
       const g=this.model?.chg.find(row=>String(row.s)===button.dataset.start);if(!g)return;
       button.disabled=true;
       try{
-        const module=await import('/deepal_companion/frontend/charging-curve.js?v=0.1.4');if(!this.host.isConnected)return;
+        const module=await import('/deepal_companion/frontend/charging-curve.js?v=0.1.5');if(!this.host.isConnected)return;
         this.curveDialog?.remove();
         this.curveDialog=module.openCurveDialog(this.host.getRootNode(),this.card._hass,async()=>{
           if(g.id&&!String(g.id).startsWith('recorder_')){const data=await this.card._hass.companionRequest('session_curve',{session_id:g.id});return {...data,mode:data.mode||(typeof g.dc==='boolean'?(g.dc?'DC':'AC'):null)};}

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.5 — not yet released
+## 0.1.5 — Live notification fixes and translations
 
 ### Fixes
 - **Left open or unlocked** (live notification) no longer appears while the car is switched on or driving. New switch **Only when the car is off**, on by default.
