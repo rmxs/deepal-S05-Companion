@@ -16,7 +16,7 @@ const SETTINGS_TAG = "deepal-companion-settings";
 const EDITOR_TAG = "deepal-companion-card-editor";
 if (customElements.get(TAG)) return;
 
-const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], fuel_tank_liters: [0, 200], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
+const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], charge_curve_refresh: [1, 60], fuel_tank_liters: [0, 200], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
 const BAD = ["unknown", "unavailable", "none", "None", "null", ""];
 const TRANSITIONAL = ["locking", "unlocking", "opening", "closing"];
 const CLIMATE_TURN_OFF = 128; // ClimateEntityFeature.TURN_OFF
@@ -104,6 +104,7 @@ const DEFAULTS = { companion_design: "", companion_width: 0,
   iso_wheels: "cover", // wheels in Car View: cover (20" with caps) · open (20" without caps) · pro (18")
   charge_style: "beside", // line · text · big · beside
   charge_curve: true,
+  charge_curve_refresh: 5, // minutes: while charging, the end of the charging curve moves to now at least this often when the car reports nothing new
   charging_reminder: true,
   charging_cost: true, // false = the card shows no charging cost block (saved prices and receipts are kept)
   energy_sheet: true, // tapping the Energy/Battery tile opens the history sheet (false = opens the sensor)
@@ -483,7 +484,8 @@ const I18N = {
     }
     this.dict = Object.assign(d, {}); this.tdict = full;
     const keys = Object.keys(d).sort((a, b) => b.length - a.length).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    this.re = keys.length ? new RegExp(`(?<![${GL}])(?:${keys.join("|")})(?![${GL}])`, "g") : null;
+    // "_" joins the parts of an identifier (hero_off.jpg, sensor.s05_trunk): never translate inside one.
+    this.re = keys.length ? new RegExp(`(?<![${GL}_])(?:${keys.join("|")})(?![${GL}_])`, "g") : null;
   },
   /* translations brought by a lazy module: { en: {...}, es: {...} } */
   addExtra(map) {
@@ -508,6 +510,8 @@ const I18N = {
   changed() { this.prune(); this.roots.forEach((o, r) => this.node(r)); this.subs.forEach((c) => { try { c._built = false; c._sig = null; c._force && c._force(); } catch (_) {} }); },
   tr(s) {
     if (!this.re) return s;
+    // A file name, folder, entity or icon id shown as a hint is not text: leave it as it is.
+    if (this.dict[s] === undefined && /^[\w.\/:-]+$/.test(s) && /[\/_:]|\.\w/.test(s)) return s;
     let o = this.memo.get(s);
     if (o === undefined) { o = s.replace(this.re, (m) => this.dict[m]); if (this.memo.size > 3000) this.memo.clear(); this.memo.set(s, o); }
     return o;
@@ -1141,7 +1145,7 @@ ha-card[data-ti="custom"] .tile:not(.bad) .i { color: var(--ds-tile-custom); } h
 .hero[data-style="carview"] { --ds-px: calc(50% + var(--ds-cvs, 1.08) * 26.47cqw); --ds-py: calc(50% + var(--ds-cvs, 1.08) * .27cqw); }
 .hero[data-style="carview"] .chgbox { top: calc(var(--ds-py) - 55px); left: min(calc(var(--ds-px) + 1px), calc(100% - 20px)); }
 .hero[data-style="carview"] .chgbox.text, .hero[data-style="carview"] .chgbox.big { top: calc(var(--ds-py) - 58px); left: min(calc(var(--ds-px) - 16px), calc(100% - 20px)); }
-.hero[data-style="carview"] .chgbox.beside { top: calc(var(--ds-py) - 10px); left: calc(var(--ds-px) - 24px); }
+.hero[data-style="carview"] .chgbox.beside { top: var(--ds-py); left: calc(var(--ds-px) - 24px); } /* the guide dot sits on the centre of the port pulse */
 .hero[data-style="carview"] .chgline { left: var(--ds-px); top: calc(var(--ds-py) - 37px); height: 27px; }
 .hero { container-type: inline-size; }
 @container (max-width: 370px) { .chgbox.line { font-size:12.5px; } .chgbox .a { font-size:18px; } .chgbox.big .a { font-size:28px; } }
@@ -3137,6 +3141,7 @@ class DeepalS05Settings extends HTMLElement {
       ${this._orow("Ask for a charging profile after at least (%)", this._num("charge_prompt_min_gain", c.charge_prompt_min_gain, "1"), "A finished charge that adds at least this many battery percent asks which charging profile to use. Default 3; 0 asks after every charge.")}
       ${this._orow("Recent charges checked for the reminder", this._num("charge_prompt_recent", c.charge_prompt_recent, "1"), "How many of the latest charges the reminder looks at, so earlier ones you missed are still offered. 1 to 20, default 10.")}
       ${this._orow("Ignore one-off battery jumps above (%)", this._num("charge_spike_jump", c.charge_spike_jump, "1"), "A single reading this many percent above the charge so far is ignored until the next reading confirms it. 5 to 50, default 20.")}` : ""}
+      ${this._orow("Refresh the charging curve every (min)", this._num("charge_curve_refresh", c.charge_curve_refresh, "1"), "While charging, the curve's line follows the latest car report. If the car reports nothing new, the line still moves to the current time this often. 1 to 60, default 5.")}
       ${this._tabTank(c)}
       <h4>Photos (hero & dashboard)</h4>
       <p class="hint">${T("Photos are loaded from the {0} folder next to the card. Here you can set another folder or another file for each photo and check that it exists.", "<code>images/car/</code>")}</p>
@@ -3428,10 +3433,23 @@ class DeepalS05CardEditor extends HTMLElement {
 
 
 /* New persistence boundary: profiles live in Companion SQLite; dashboard YAML is identifiers only. */
+/* Home Assistant can reject a request with a plain object or a code instead of an Error, for example when the
+   connection drops while the app is in the background. Callers always get an Error with readable text. */
+const readableError = error => {
+  if (error instanceof Error && typeof error.message === "string" && error.message) return error;
+  const source = error && typeof error === "object" ? error : {};
+  const inner = [source.error, source.body].find(value => value && typeof value === "object") || {};
+  const code = typeof error === "number" ? error : source.code ?? inner.code;
+  const text = [source.message, inner.message, source.error, error].find(value => typeof value === "string" && value.trim());
+  const lost = code === 3 || /connection.?lost/i.test(String(code));
+  const result = new Error(text || (lost ? "Connection to Home Assistant was lost. Try again." : "Home Assistant did not answer. Try again."));
+  if (code !== undefined) result.code = code;
+  return result;
+};
 const companionRequest = (hass, owner, op, data = {}) => hass.callWS({
   type: "deepal_companion/request", op,
   vehicle_id: owner.vehicle_id, view_id: owner.view_id, data
-});
+}).catch(error => { throw readableError(error); });
 function companionFacade(hass, card) {
   return new Proxy(hass, {
     get(target, key) {
@@ -3571,7 +3589,7 @@ DeepalS05Card.prototype._loadRemote = async function() {
       this.shadowRoot.innerHTML = '<ha-card style="padding:18px"><p style="margin:0 0 12px">Deepal Companion could not load. Check that Home Assistant is reachable, then try again.</p><button class="companion-retry" style="padding:8px 14px;cursor:pointer">Try again</button></ha-card>';
       this.shadowRoot.querySelector(".companion-retry")?.addEventListener("click", () => this._loadRemote());
     }
-    else this._toast(error.message || String(error), "error");
+    else this._toast(readableError(error).message, "error");
   } finally {
     if(generation===this._compGeneration){this._compFetching = false;
     if (this._compAgain) { this._compAgain = false; queueMicrotask(()=>this._loadRemote()); }}
@@ -3781,7 +3799,7 @@ class CompanionChoice extends HTMLElement {
   static live=new Set();
   static resizeStyles(){for(const picker of CompanionChoice.live)picker.syncAppearance?.();}
   constructor(){
-    super();this.attachShadow({mode:'open'});this.options=[];this._value='';this._disabled=false;
+    super();this.attachShadow({mode:'open'});I18N.watch(this.shadowRoot);this.options=[];this._value='';this._disabled=false;
     this.shadowRoot.innerHTML='<style>:host{display:block;min-width:0;width:100%}*{box-sizing:border-box}button{font:inherit;color:inherit;cursor:pointer}.field{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:var(--choice-padding,10px 12px);border:var(--choice-border,1px solid #444);border-radius:var(--choice-radius,11px);background:var(--choice-background,#262626);color:var(--choice-color,#eee);font:var(--choice-font,inherit);text-align:start}.field:focus-visible{outline:2px solid var(--primary-color,#63cba3);outline-offset:2px}.field:disabled{opacity:.5;cursor:default}.field span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chevron{flex:none;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 0;opacity:.65}.menu{position:fixed;inset:auto;margin:0;padding:5px;border:1px solid var(--divider-color,#454545);border-radius:12px;background:var(--card-background-color,#252525);color:var(--primary-text-color,#eee);box-shadow:0 12px 32px #0005;overflow:auto;overscroll-behavior:contain;z-index:10000}.menu:not(:popover-open){display:none}.option{display:block;width:100%;min-height:42px;border:0;border-radius:8px;padding:10px 12px;background:none;color:inherit;font:inherit;text-align:start;white-space:normal;overflow-wrap:anywhere}.option[aria-selected=true]{background:color-mix(in srgb,var(--primary-color,#63cba3) 18%,transparent);color:var(--primary-color,#63cba3)}.option:hover,.option:focus{outline:0;background:color-mix(in srgb,var(--primary-color,#63cba3) 12%,transparent)}</style><button class="field" type="button" aria-haspopup="listbox" aria-expanded="false"><span></span><i class="chevron" aria-hidden="true"></i></button><div class="menu" role="listbox" popover="auto"></div>';
     this.button=this.shadowRoot.querySelector('.field');this.menu=this.shadowRoot.querySelector('.menu');
     this.button.addEventListener('click',()=>this.open());
@@ -3820,6 +3838,9 @@ class CompanionChoice extends HTMLElement {
 if(!customElements.get('deepal-companion-choice'))customElements.define('deepal-companion-choice',CompanionChoice);
 /* The application mounts the complete existing settings UI directly, without a card/modal. */
 window.__DEEPAL_COMPANION_UI = {
+  readableError,
+  /* Pages outside the card (dashboard, notifications) use the same translation dictionary as the card. */
+  watchLanguage(root) { I18N.watch(root); },
   settingsTag: SETTINGS_TAG,
   version: CARD_VERSION,
   credit: CARD_CREDIT,
@@ -4070,7 +4091,11 @@ DeepalS05Card.prototype._render=function(...args){
   const result=curveRender.apply(this,args);
   if(!this._c||!this._el?.card)return result;
   const enabled=this._c.charge_curve===true&&!this._c.hidden.includes('curve');
-  const charging=this._n('sensor.ac_charge_current')>.5||this._n('sensor.dc_charge_current')>.5||this._n('sensor.charge_current')>.5;
+  const flowing=this._n('sensor.ac_charge_current')>.5||this._n('sensor.dc_charge_current')>.5||this._n('sensor.charge_current')>.5;
+  // One zero reading in the middle of a charge must not remove and reload the curve: keep it for a minute after the last current.
+  // The simulated preview follows its switch at once.
+  if(flowing)this._curveSeen=Date.now();
+  const charging=flowing||(!!this._curveSeen&&(!this._previewSourceHass||this._previewMode==='live')&&(this._s('binary_sensor.charging')==='on'||Date.now()-this._curveSeen<60000));
   if(!enabled||!charging){this._chargingCurve?.destroy();this._chargingCurve=null;this._curveLoad=null;this._el.card.querySelector(':scope > .charging-curve-block')?.remove();return result;}
   if(this._chargingCurve){this._chargingCurve.update();return result;}
   if(!this._curveLoad){

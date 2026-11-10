@@ -13,6 +13,8 @@ import uuid
 DEFAULT = {"enabled": False, "devices": [], "min_interval": 300,
            "battery_step": 5, "show_timer": True, "max_age": 1800, "icon": "", "url": ""}
 
+RULE = {"id": "live_charging", "name": "Live charging", "data": {"notification_icon": "mdi:ev-station"}}
+
 
 def validate_live(value):
     if not isinstance(value, dict):
@@ -149,12 +151,12 @@ class LiveCharging:
             color = "#63cba3"
         data = {"tag": tag, "live_update": True, "progress": snapshot["battery"], "progress_max": 100,
                 "critical_text": str(snapshot["battery"]) + "%", "notification_icon": options.get("icon") or "mdi:ev-station",
-                "color": color, "notification_icon_color": color, "progress_bar_color": color,
+                "color": color, "notification_icon_color": color, "progress_bar_color": color, "text_color": color,
                 "silent": True, "alert_once": True, "chronometer": False}
         if options.get("url"):
             data.update(url=options["url"], clickAction=options["url"])
         if options["show_timer"] and snapshot["charging"] and snapshot["end"]:
-            data.update(chronometer=True, when=snapshot["end"], when_relative=False, text_color=color)
+            data.update(chronometer=True, when=snapshot["end"], when_relative=False)
         # The title is the information itself; the message carries the details.
         return {"title": " · ".join(parts[:2]), "message": " · ".join(parts[2:]), "data": data}
 
@@ -180,6 +182,12 @@ class LiveCharging:
             stopped = now - self.state["stop_since"] >= 30
         else:
             self.state.pop("stop_since", None)
+        # A car that stays unreachable cannot keep the notification alive: end it after the reading age limit.
+        if enabled and snap is None and active:
+            self.state.setdefault("unknown_since", now)
+            stopped = now - self.state["unknown_since"] >= options["max_age"]
+        else:
+            self.state.pop("unknown_since", None)
         for device in list(active):
             if not enabled or device not in options["devices"] or stopped:
                 if now - self.last_attempt.get(device, 0) < options["min_interval"]:
@@ -189,6 +197,9 @@ class LiveCharging:
                 if result["status"] == "accepted":
                     del active[device]
         if not active and (not enabled or stopped):
+            if self.state.get("logged"):
+                await self.owner.record(RULE, "live_ended")
+                await self.owner.persist()
             self.state = {"test_devices": self.state["test_devices"]} if self.state.get("test_devices") else {}
         elif enabled and snap and snap["charging"]:
             if not self.state.get("tag"):
@@ -209,6 +220,10 @@ class LiveCharging:
                 if result["status"] == "accepted":
                     active[device] = {"sent": now, "signature": signature, "end": end, "updated": snap["updated"]}
                     self.last_errors.pop(device, None)
+                    if not self.state.get("logged"):  # one Recent activity entry per charge, not one per update
+                        self.state["logged"] = True
+                        await self.owner.record(RULE, "live_started", deliveries=[result])
+                        await self.owner.persist()
                 elif self.last_errors.get(device) != result["error"]:
                     self.last_errors[device] = result["error"]
                     await self.owner.record({"id": "live_charging", "name": "Live charging"}, "error", error=result["error"])

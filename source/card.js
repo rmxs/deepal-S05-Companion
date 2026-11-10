@@ -16,7 +16,7 @@ const SETTINGS_TAG = "deepal-s05-settings";
 const EDITOR_TAG = "deepal-s05-card-editor";
 if (customElements.get(TAG)) return;
 
-const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], fuel_tank_liters: [0, 200], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
+const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], charge_curve_refresh: [1, 60], fuel_tank_liters: [0, 200], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
 const BAD = ["unknown", "unavailable", "none", "None", "null", ""];
 const TRANSITIONAL = ["locking", "unlocking", "opening", "closing"];
 const CLIMATE_TURN_OFF = 128; // ClimateEntityFeature.TURN_OFF
@@ -113,6 +113,7 @@ const DEFAULTS = {
   iso_wheels: "cover", // wheels in Car View: cover (20" with caps) · open (20" without caps) · pro (18")
   charge_style: "beside", // line · text · big · beside
   charge_curve: true,
+  charge_curve_refresh: 5, // minutes: while charging, the end of the charging curve moves to now at least this often when the car reports nothing new
   charging_reminder: true,
   charging_cost: true, // false = the card shows no charging cost block (saved prices and receipts are kept)
   energy_sheet: true, // tapping the Energy/Battery tile opens the history sheet (false = opens the sensor)
@@ -492,7 +493,8 @@ const I18N = {
     }
     this.dict = Object.assign(d, {}); this.tdict = full;
     const keys = Object.keys(d).sort((a, b) => b.length - a.length).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    this.re = keys.length ? new RegExp(`(?<![${GL}])(?:${keys.join("|")})(?![${GL}])`, "g") : null;
+    // "_" joins the parts of an identifier (hero_off.jpg, sensor.s05_trunk): never translate inside one.
+    this.re = keys.length ? new RegExp(`(?<![${GL}_])(?:${keys.join("|")})(?![${GL}_])`, "g") : null;
   },
   /* translations brought by a lazy module: { en: {...}, es: {...} } */
   addExtra(map) {
@@ -517,6 +519,8 @@ const I18N = {
   changed() { this.prune(); this.roots.forEach((o, r) => this.node(r)); this.subs.forEach((c) => { try { c._built = false; c._sig = null; c._force && c._force(); } catch (_) {} }); },
   tr(s) {
     if (!this.re) return s;
+    // A file name, folder, entity or icon id shown as a hint is not text: leave it as it is.
+    if (this.dict[s] === undefined && /^[\w.\/:-]+$/.test(s) && /[\/_:]|\.\w/.test(s)) return s;
     let o = this.memo.get(s);
     if (o === undefined) { o = s.replace(this.re, (m) => this.dict[m]); if (this.memo.size > 3000) this.memo.clear(); this.memo.set(s, o); }
     return o;
@@ -1150,7 +1154,7 @@ ha-card[data-ti="custom"] .tile:not(.bad) .i { color: var(--ds-tile-custom); } h
 .hero[data-style="carview"] { --ds-px: calc(50% + var(--ds-cvs, 1.08) * 26.47cqw); --ds-py: calc(50% + var(--ds-cvs, 1.08) * .27cqw); }
 .hero[data-style="carview"] .chgbox { top: calc(var(--ds-py) - 55px); left: min(calc(var(--ds-px) + 1px), calc(100% - 20px)); }
 .hero[data-style="carview"] .chgbox.text, .hero[data-style="carview"] .chgbox.big { top: calc(var(--ds-py) - 58px); left: min(calc(var(--ds-px) - 16px), calc(100% - 20px)); }
-.hero[data-style="carview"] .chgbox.beside { top: calc(var(--ds-py) - 10px); left: calc(var(--ds-px) - 24px); }
+.hero[data-style="carview"] .chgbox.beside { top: var(--ds-py); left: calc(var(--ds-px) - 24px); } /* the guide dot sits on the centre of the port pulse */
 .hero[data-style="carview"] .chgline { left: var(--ds-px); top: calc(var(--ds-py) - 37px); height: 27px; }
 .hero { container-type: inline-size; }
 @container (max-width: 370px) { .chgbox.line { font-size:12.5px; } .chgbox .a { font-size:18px; } .chgbox.big .a { font-size:28px; } }
@@ -3146,6 +3150,7 @@ class DeepalS05Settings extends HTMLElement {
       ${this._orow("Ask for a charging profile after at least (%)", this._num("charge_prompt_min_gain", c.charge_prompt_min_gain, "1"), "A finished charge that adds at least this many battery percent asks which charging profile to use. Default 3; 0 asks after every charge.")}
       ${this._orow("Recent charges checked for the reminder", this._num("charge_prompt_recent", c.charge_prompt_recent, "1"), "How many of the latest charges the reminder looks at, so earlier ones you missed are still offered. 1 to 20, default 10.")}
       ${this._orow("Ignore one-off battery jumps above (%)", this._num("charge_spike_jump", c.charge_spike_jump, "1"), "A single reading this many percent above the charge so far is ignored until the next reading confirms it. 5 to 50, default 20.")}` : ""}
+      ${this._orow("Refresh the charging curve every (min)", this._num("charge_curve_refresh", c.charge_curve_refresh, "1"), "While charging, the curve's line follows the latest car report. If the car reports nothing new, the line still moves to the current time this often. 1 to 60, default 5.")}
       ${this._tabTank(c)}
       <h4>Photos (hero & dashboard)</h4>
       <p class="hint">${T("Photos are loaded from the {0} folder next to the card. Here you can set another folder or another file for each photo and check that it exists.", "<code>images/car/</code>")}</p>

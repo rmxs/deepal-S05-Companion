@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.5 — not yet released
+
+### Fixes
+- **Left open or unlocked** (live notification) no longer appears while the car is switched on or driving. New switch **Only when the car is off**, on by default.
+- The **Charging curve** no longer stops at the last current change: the line continues to the current time and battery level, without extra dots. New Advanced setting **Refresh the charging curve every (min)** (default 5) for when the car reports nothing new.
+- Live notifications now appear in **Recent activity**: one entry when they start and one when they end.
+- Live notifications colour the text with the same card palette colour as the icon and progress bar, also when the timer is off.
+- A lost connection (for example after the app returns from the background) now shows a readable message instead of `[object Object]`.
+- Companion dashboard, **Card design**: the “Maximum width (px)” label and its hint no longer overlap the field on phones.
+- Car View, charging text **At the port**: the guide dot now sits on the port pulse.
+- The Energy sheet no longer raises an error in the read-only preview when the charging archive cannot be read.
+- An alert whose phones are all held back by their own condition (for example “only when I am away”) now waits and is sent as soon as one phone qualifies. Before, it counted as sent and never arrived.
+- **Live charging** ends on the phone when the car stays unreachable longer than the reading age limit, instead of staying there.
+- A charge is no longer split in two when the car loses its connection for a while. A charge whose car never reports again is closed after 6 hours at its last known reading.
+- Vehicle type **Automatic**: a plug-in hybrid is no longer counted as electric when a charge starts before its fuel sensor has loaded.
+- The charging curve stays on the card through a single zero reading in the middle of a charge.
+- Costs dashboard: the energy total is now labelled **Energy from charger**. It includes charging losses, so it is higher than the *Energy added to battery* sensor.
+- A request with a missing value now answers “Missing value: …” instead of only the field name.
+- Greek and Spanish now cover the Companion dashboard, the notification pages, live notifications, Recent activity, the costs dashboard and the charging curve, and fill the gaps in Card Settings that showed mixed-language text.
+- Translations no longer change file names, folders and other identifiers shown as hints (for example the photo file names in Card Settings).
+- The card shows a readable message when its settings cannot be loaded after a lost connection.
+
 ## 0.1.4 — New charging notifications and safer saving
 
 ### Notifications

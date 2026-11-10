@@ -109,6 +109,7 @@ New warning sensors and custom diagnostic indicators are managed in Advanced.
 | Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
 | Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
 | Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
+| Refresh the charging curve every (min) | While charging, the curve's line follows the latest car report. When the car reports nothing new, the line still moves to the current time this often. 1–60, default 5 |
 | Full-tank fuel range | Automatic 940 km for hybrids, or a positive override |
 | Tank capacity | Automatic sensor value/51 L fallback, or a litres override |
 | Hero photos folder | Automatic image folder or a custom folder |

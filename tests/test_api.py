@@ -254,6 +254,18 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(c.errors)
         self.assertEqual(c.results[0]["config"]["companion_width"], 1000)
 
+    async def test_missing_field_is_named_in_plain_words(self):
+        import companion_api_test.api as module_api
+        original = module_api.validate_costs
+        def broken(value):
+            raise KeyError("profile")
+        module_api.validate_costs = broken
+        try:
+            c = await self.request("costs_set", {"value": {"profiles": [], "sessions": {}}})
+        finally:
+            module_api.validate_costs = original
+        self.assertEqual(c.errors[0], ("invalid_format", "Missing value: profile"))
+
     async def test_unknown_settings_rejected(self):
         c = await self.request("config_patch", {"patch": {"execute_python": "bad"}})
         self.assertEqual(c.errors[0][0], "invalid_format")

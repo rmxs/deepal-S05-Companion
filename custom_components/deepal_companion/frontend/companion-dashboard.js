@@ -32,7 +32,7 @@ export async function showDashboardAdd(panel){
     try{
       const config=await hass.callWS({type:'lovelace/config',url_path:path(),force:true});
       if(version!==request||!dialog.isConnected)return;
-      current=config;signature=JSON.stringify(config);view.innerHTML=(config.views||[]).map((item,index)=>'<option value="'+index+'">'+escape(item.title||item.path||'View '+(index+1))+'</option>').join('');
+      current=config;signature=JSON.stringify(config);view.innerHTML=(config.views||[]).map((item,index)=>'<option data-ha-name value="'+index+'">'+escape(item.title||item.path||'View '+(index+1))+'</option>').join('');
       view.disabled=false;view.value='0';busy=false;check();window.__DEEPAL_COMPANION_UI.enhanceChoices(dialog,hass);
     }catch(error){if(version!==request||!dialog.isConnected)return;busy=false;current=null;save.disabled=true;status.textContent=error.message||String(error);}
   };
@@ -58,7 +58,7 @@ export async function showDashboardAdd(panel){
   try{
     const rows=await hass.callWS({type:'lovelace/dashboards/list'});if(!dialog.isConnected)return;
     const dashboards=[{url_path:'lovelace',title:hass.panels?.lovelace?.title||'Overview',mode:'storage'},...rows.filter(row=>row.url_path!=='lovelace'&&row.mode==='storage')];
-    dashboard.innerHTML=dashboards.map(row=>'<option value="'+escape(row.url_path)+'">'+escape(row.title||row.url_path)+'</option>').join('');
+    dashboard.innerHTML=dashboards.map(row=>'<option data-ha-name value="'+escape(row.url_path)+'">'+escape(row.title||row.url_path)+'</option>').join('');
     dashboard.value=dashboards[0].url_path;window.__DEEPAL_COMPANION_UI.enhanceChoices(dialog,hass);await load();
   }catch(error){if(dialog.isConnected)status.textContent=error.message||String(error);}
 }

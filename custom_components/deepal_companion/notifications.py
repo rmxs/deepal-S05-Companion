@@ -375,6 +375,20 @@ class NotificationEngine:
         await self.record(rule, "test" if test else status, title=preview["title"], message=preview["message"], deliveries=outcomes)
         return outcomes
 
+    async def any_recipient_allowed(self, rule, index=1):
+        """False only when every device has its own condition and none of them is true right now."""
+        conditions = rule.get("recipient_conditions", {})
+        if not rule["devices"] or any(device not in conditions for device in rule["devices"]):
+            return True
+        context = await self.context(rule, index)
+        for device in rule["devices"]:
+            try:
+                if str(await self.render(conditions[device], context)).strip().lower() == "true":
+                    return True
+            except ValueError:
+                return True  # a broken condition is reported by the delivery itself
+        return False
+
     async def test(self, rule):
         async with self.lock:
             preview = await self.preview(rule)
@@ -558,6 +572,13 @@ class NotificationEngine:
                             await self.record(rule, "quiet_hours", message="Notification held until quiet hours end")
                         continue
                     state.pop("held", None)
+                    if not await self.any_recipient_allowed(rule, count + 1):
+                        # Nobody may receive it yet (for example "only when I am away"): wait, do not use up the send.
+                        if not state.get("waiting"):
+                            state["waiting"] = True
+                            await self.record(rule, "waiting_recipient", message="Held until a recipient condition is true")
+                        continue
+                    state.pop("waiting", None)
                     state["token"] = "DEEPAL_COMPANION_DISMISS_" + uuid.uuid4().hex
                     state.update(count=count + 1, last=now)
                     # Persist the attempt before sending: a restart must not duplicate it.

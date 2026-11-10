@@ -4,7 +4,11 @@ DeepalS05Card.prototype._render=function(...args){
   const result=curveRender.apply(this,args);
   if(!this._c||!this._el?.card)return result;
   const enabled=this._c.charge_curve===true&&!this._c.hidden.includes('curve');
-  const charging=this._n('sensor.ac_charge_current')>.5||this._n('sensor.dc_charge_current')>.5||this._n('sensor.charge_current')>.5;
+  const flowing=this._n('sensor.ac_charge_current')>.5||this._n('sensor.dc_charge_current')>.5||this._n('sensor.charge_current')>.5;
+  // One zero reading in the middle of a charge must not remove and reload the curve: keep it for a minute after the last current.
+  // The simulated preview follows its switch at once.
+  if(flowing)this._curveSeen=Date.now();
+  const charging=flowing||(!!this._curveSeen&&(!this._previewSourceHass||this._previewMode==='live')&&(this._s('binary_sensor.charging')==='on'||Date.now()-this._curveSeen<60000));
   if(!enabled||!charging){this._chargingCurve?.destroy();this._chargingCurve=null;this._curveLoad=null;this._el.card.querySelector(':scope > .charging-curve-block')?.remove();return result;}
   if(this._chargingCurve){this._chargingCurve.update();return result;}
   if(!this._curveLoad){

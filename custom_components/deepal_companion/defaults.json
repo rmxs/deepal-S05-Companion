@@ -97,6 +97,7 @@
   "iso_wheels": "cover",
   "charge_style": "beside",
   "charge_curve": true,
+  "charge_curve_refresh": 5,
   "charging_reminder": true,
   "charging_cost": true,
   "energy_sheet": true,

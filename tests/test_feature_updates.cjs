@@ -20,6 +20,11 @@ module.exports=async page=>{
  const requests=await page.evaluate(()=>window.curveHistoryCalls);
  await page.evaluate(()=>{const card=document.getElementById('curve-qa-card');card.hass={...window.curveHass};card._force();});
  assert.equal(await page.evaluate(()=>window.curveHistoryCalls),requests,'Unchanged HA updates must not refetch history');
+ await page.evaluate(()=>{window.curveHass.states['sensor.s05_battery_level']={...window.curveHass.states['sensor.s05_battery_level'],state:'81'};const card=document.getElementById('curve-qa-card');card.hass={...window.curveHass};card._force();});
+ await page.waitForFunction(()=>[...document.getElementById('curve-qa-card').shadowRoot.querySelectorAll('.curve-battery')].at(-1)?.dataset.battery==='81');
+ const liveCurve=await card.evaluate(card=>{const svg=card.shadowRoot.querySelector('.curve-chart'),numbers=svg.querySelector('.curve-line').getAttribute('d').match(/-?[\d.]+/g).map(Number),lastDot=Math.max(...[...svg.querySelectorAll('.curve-dot')].map(dot=>Number(dot.getAttribute('cx'))));return {dots:svg.querySelectorAll('.curve-dot').length,live:Number(svg.dataset.liveEnd),end:Number(svg.dataset.end),lineEnd:numbers.at(-2),lastDot};});
+ assert.equal(liveCurve.dots,3,'A battery update moves the end of the line without adding a dot');assert.equal(liveCurve.live,liveCurve.end);assert(Date.now()-liveCurve.live<60000,'The line ends at the current time');assert(liveCurve.lineEnd>liveCurve.lastDot+50&&Math.abs(liveCurve.lineEnd-548)<1,'The line runs past the last current change to now');
+ assert.equal(await page.evaluate(()=>window.curveHistoryCalls),requests,'A battery update must not refetch history');
  await page.evaluate(()=>{window.curveHass.states['sensor.s05_ac_charge_current'].state='18';window.curveHass.states['sensor.s05_ac_charge_current'].last_changed=new Date().toISOString();const card=document.getElementById('curve-qa-card');card.hass={...window.curveHass};card._force();});
  await page.waitForFunction(()=>document.getElementById('curve-qa-card').shadowRoot.querySelectorAll('.curve-dot').length===4);
  if(process.env.FEATURE_CAPTURE)await card.locator('.charging-curve-block').screenshot({path:process.env.FEATURE_CAPTURE+'-live-curve.png'});

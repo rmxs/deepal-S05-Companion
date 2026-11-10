@@ -152,6 +152,8 @@ Filtering and sorting apply to the saved archive, including sessions that have n
 
 The card’s **Energy** view also includes weekly/monthly history, daily distance and estimated consumption, charges and cost assignments. Enable **Card Settings → Charging → “Energy” sheet on the tile**, then tap the Energy tile to open it.
 
+In the costs dashboard, the energy total is labelled **Energy from charger**. It includes charging losses, so it is higher than the *Energy added to battery* sensor. A charge that loses its car connection for a while stays one session. If the car never reports again, the charge closes after 6 hours at its last known reading.
+
 ## 10. Open a charging curve
 
 1. In **Sessions**, select the curve icon next to **Edit charge**.
@@ -164,6 +166,8 @@ The card’s **Energy** view also includes weekly/monthly history, daily distanc
 Curves use amps over time and fit the recorded charging interval. Dots mark changed readings. Battery percentages appear below the time axis when battery readings are available. The final zero reading marks the charging stop; Low/High describe the active charging current.
 
 To display the current charge on the main card, enable **Card Settings → Layout → Sections → Charging curve**. It appears while charging. Saved curves remain available from each archived charge when readings were captured or imported.
+
+Dots on the curve mark the moments the charging current changed. While the car charges, the line continues from the last dot to the current time and battery level, so a steady current still shows progress. If the car reports nothing new, the line is refreshed every few minutes (**Card Settings → Advanced → Refresh the charging curve every (min)**, default 5).
 
 ## 11. Keep and recover history
 

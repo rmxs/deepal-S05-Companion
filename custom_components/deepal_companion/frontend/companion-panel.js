@@ -63,16 +63,17 @@ class DeepalCompanionPanel extends HTMLElement {
     if(this.context)window.__DEEPAL_COMPANION_UI.context(hass,this.selected,this.config||{},this.context);
     if(!this.loaded){this.loaded=true;this.refresh();}
   }
-  connectedCallback(){window.__DEEPAL_COMPANION_UI.applyPalette(this,this.config||{});this.hashListener=()=>{const mode=modeFromHash()||'settings';if(mode!==this.mode){if(this.selected.vehicle_id)this.navigateMode(mode,true);else this.mode=mode;}};window.addEventListener('hashchange',this.hashListener);this.syncModeHash(true);if(this._hass)this.refresh();}
+  connectedCallback(){window.__DEEPAL_COMPANION_UI.applyPalette(this,this.config||{});window.__DEEPAL_COMPANION_UI.watchLanguage(this.shadowRoot);this.hashListener=()=>{const mode=modeFromHash()||'settings';if(mode!==this.mode){if(this.selected.vehicle_id)this.navigateMode(mode,true);else this.mode=mode;}};window.addEventListener('hashchange',this.hashListener);this.syncModeHash(true);if(this._hass)this.refresh();}
   disconnectedCallback(){window.removeEventListener('hashchange',this.hashListener);this.sessionDialog?.remove();this.localBoard?.destroy();this._dashboardDialog?.remove();this._dashboardDialog=null;clearTimeout(this.statusTimer);this.context?._compEnergyHost?.energyCleanup?.();this.mountRevision=(this.mountRevision||0)+1;this.unsubscribe?.();this.unsubscribe=null;this.previewObserver?.disconnect();window.removeEventListener("resize",this.previewWindowResize);this.previewWindowResize=null;}
   request(op,data={},owner=this.selected){
-    return this._hass.callWS({type:"deepal_companion/request",op,vehicle_id:owner.vehicle_id,view_id:owner.view_id,data});
+    // A dropped connection (app back from the background) rejects with a plain object: turn it into readable text.
+    return this._hass.callWS({type:"deepal_companion/request",op,vehicle_id:owner.vehicle_id,view_id:owner.view_id,data}).catch(error=>{throw (window.__DEEPAL_COMPANION_UI?.readableError||(value=>value))(error);});
   }
   async refresh(){
     if(!this._hass||this.fetching){this.refreshAgain=true;return;}
     this.fetching=true;
     try{
-      const rows=await this._hass.callWS({type:"deepal_companion/request",op:"list"});
+      const rows=await this._hass.callWS({type:"deepal_companion/request",op:"list"}).catch(error=>{throw (window.__DEEPAL_COMPANION_UI?.readableError||(value=>value))(error);});
       if(!this.isConnected)return;
       const changed=JSON.stringify(rows.map(v=>({id:v.id,name:v.name,views:v.views.map(p=>({id:p.id,name:p.name}))})))!==this.listSignature;
       this.listSignature=JSON.stringify(rows.map(v=>({id:v.id,name:v.name,views:v.views.map(p=>({id:p.id,name:p.name}))})));

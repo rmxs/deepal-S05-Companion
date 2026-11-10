@@ -57,7 +57,12 @@ ha-card[data-companion-design=energy]>.charging-curve-block{order:6!important}`;
 
 const detailCss=`.charging-curve-block{--curve-fg:var(--ds-fg,var(--primary-text-color,#eee));--curve-muted:var(--ds-fg2,var(--secondary-text-color,#aaa));--curve-card:var(--ds-card,var(--card-background-color,#202020));--curve-border:var(--ds-line,var(--divider-color,#444));color:var(--curve-fg);border-color:var(--curve-border);background:var(--ds-soft,var(--card-background-color,#202020))}.curve-heading{flex-wrap:wrap}.curve-range{display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--curve-muted)}.curve-range>span{border-radius:8px;padding:5px 8px;background:rgba(var(--ds-ok,99,203,163),.07);border:1px solid rgba(var(--ds-ok,99,203,163),.16)}.curve-range b{font-weight:600;font-size:13px;color:rgb(var(--ds-ok,99,203,163));font-variant-numeric:tabular-nums}.curve-chart{touch-action:pan-y pinch-zoom}.curve-chart text{fill:var(--curve-muted)}.curve-chart .curve-grid{stroke:var(--curve-border)}.curve-note,.curve-message{color:var(--curve-muted)}.curve-dot{stroke:var(--curve-card)}.curve-dot.is-selected{stroke:var(--curve-fg);stroke-width:2}.curve-cursor{stroke:rgb(var(--ds-ok,99,203,163));stroke-width:1;stroke-dasharray:3 4;pointer-events:none}.curve-reading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px 10px;min-height:44px;padding:8px 10px;margin-top:4px;border:1px solid var(--curve-border);border-radius:10px;background:var(--curve-card);font-size:11px;color:var(--curve-muted)}.curve-reading b{color:var(--curve-fg);font-weight:600;font-size:13px}.curve-reading small{font-size:11px;font-variant-numeric:tabular-nums}.curve-chart:focus-visible{outline:2px solid rgb(var(--ds-ok,99,203,163));outline-offset:3px;border-radius:8px}@media(max-width:420px){.charging-curve-block{padding:12px}.curve-reading{align-items:flex-start;flex-direction:column;justify-content:center}.curve-range{gap:6px}}`;
 export function mountCurve(card,history=null,container=null){
-  let dead=false,busy=false,again=false,signature='',points=[],owner='',lastMarkup='',selectedTime=null,batteryReadings=[];
+  let dead=false,busy=false,again=false,signature='',points=[],owner='',lastMarkup='',selectedTime=null,batteryReadings=[],tail=null,liveKey='';
+  // While charging, the line runs on from the last current change to now and the current battery level. Dots stay at current changes only.
+  const setTail=()=>{tail={t:Date.now(),battery:card._n('sensor.battery_level')};};
+  const refreshMinutes=()=>{const value=Number(card._c.charge_curve_refresh);return value>=1&&value<=60?value:5;};
+  // Fallback when the car reports nothing new: move the end of the line every few minutes (Settings: Refresh the charging curve every).
+  const timer=history?null:setInterval(()=>{if(dead||busy||!points.length||!tail||Date.now()-tail.t<refreshMinutes()*60000)return;setTail();draw();},30000);
   const host=document.createElement('section');host.className='charging-curve-block';host.setAttribute('aria-label','Charging current curve');
   host.innerHTML='<style>'+css+detailCss+'</style><div class="curve-heading"><h3>Charging curve</h3><div class="curve-range" aria-label="Current range while charging"><span>Low <b data-curve-low>—</b> A</span><span>High <b data-curve-high>—</b> A</span></div></div><div class="curve-plot"></div><div class="curve-reading" role="status" aria-live="polite">Tap or drag to see a recorded reading.</div><p class="curve-note">Low / High exclude the stop reading.</p>';
   const attach=()=>{if(!host.isConnected){if(container)container.append(host);else{const foot=card._el.card.querySelector(':scope>.foot');if(foot)foot.before(host);else card._el.card.append(host);}}host.style.order=String(card._c.order.indexOf('curve'));};attach();
@@ -68,15 +73,17 @@ export function mountCurve(card,history=null,container=null){
     host.querySelector('[data-curve-low]').textContent=range?number.format(range.low):'—';host.querySelector('[data-curve-high]').textContent=range?number.format(range.high):'—';
     if(!points.length){plot.innerHTML='<p class="curve-message">'+(history?'No archived charging readings are available for this charge.':'Waiting for a charging reading…')+'</p>';readout.hidden=true;return;}
     readout.hidden=false;
-    const axisBattery=batteryReadings.length?batteryReadings:points,hasBattery=axisBattery.some(row=>row.battery!==null&&row.battery>=0&&row.battery<=100);
+    const live=!history&&tail&&points.at(-1).a>.5&&tail.t>points.at(-1).t?tail:null,liveBattery=live&&live.battery!==null&&live.battery>=0&&live.battery<=100;
+    const axisBattery=[...(batteryReadings.length?batteryReadings:points),...(liveBattery?[{t:live.t,battery:live.battery}]:[])],hasBattery=axisBattery.some(row=>row.battery!==null&&row.battery>=0&&row.battery<=100);
     const W=560,H=hasBattery?222:200,L=36,R=12,T=12,B=hasBattery?54:32,max=Math.max(1,...points.map(p=>p.a))*1.15;
-    const first=points[0].t,end=Math.max(first+1000,points.at(-1).t),short=end-first<120000,x=t=>L+(t-first)/(end-first)*(W-L-R),y=a=>T+(1-a/max)*(H-T-B),format=window.__DEEPAL_COMPANION_UI.format(card._hass);
-    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.classList.add('curve-chart');svg.setAttribute('role','img');svg.setAttribute('tabindex','0');svg.setAttribute('data-start',String(first));svg.setAttribute('data-end',String(end));svg.setAttribute('aria-label',`Recorded charging current in amps, ${points.length} readings. Tap, drag or use arrow keys to inspect.`);
+    const first=points[0].t,end=Math.max(first+1000,points.at(-1).t,live?live.t:0),short=end-first<120000,x=t=>L+(t-first)/(end-first)*(W-L-R),y=a=>T+(1-a/max)*(H-T-B),format=window.__DEEPAL_COMPANION_UI.format(card._hass);
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.classList.add('curve-chart');svg.setAttribute('role','img');svg.setAttribute('tabindex','0');svg.setAttribute('data-start',String(first));svg.setAttribute('data-end',String(end));if(live)svg.setAttribute('data-live-end',String(live.t));svg.setAttribute('aria-label',`Recorded charging current in amps, ${points.length} readings. Tap, drag or use arrow keys to inspect.`);
     const element=(name,attrs)=>{const n=document.createElementNS(ns,name);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,String(v));svg.append(n);return n;};
     for(let i=0;i<3;i++){const a=max*i/2;element('line',{x1:L,x2:W-R,y1:y(a),y2:y(a),class:'curve-grid'});element('text',{x:L-6,y:y(a)+4,'text-anchor':'end'}).textContent=number.format(a);}
     for(const [t,anchor]of [[first,'start'],[(first+end)/2,'middle'],[end,'end']]){element('text',{x:x(t),y:hasBattery?H-25:H-6,'text-anchor':anchor,class:'curve-time'}).textContent=format.hm(t,short);const battery=batteryAt(axisBattery,t);if(hasBattery&&battery!==null)element('text',{x:x(t),y:H-7,'text-anchor':anchor,class:'curve-battery','data-battery':battery}).textContent=number.format(battery)+'%';}
     let group=[];const paint=()=>{if(!group.length)return;const path=smoothPath(group.map(p=>[x(p.t),y(p.a)]));if(group.length>1)element('path',{d:path+`L${x(group.at(-1).t)},${H-B}L${x(group[0].t)},${H-B}Z`,class:'curve-area'});element('path',{d:path,class:'curve-line'});group=[];};
-    for(const point of points){if(group.length&&group.at(-1).segment!==point.segment)paint();group.push(point);}paint();
+    for(const point of points){if(group.length&&group.at(-1).segment!==point.segment)paint();group.push(point);}
+    if(live&&group.length)group.push({t:live.t,a:group.at(-1).a,segment:group.at(-1).segment});paint();
     const dots=[];
     for(const p of points){const label=`${format.date(p.t)} ${format.hm(p.t,true)} · ${p.mode} ${number.format(p.a)} A${p.battery!==null?' · Battery '+number.format(p.battery)+'%':''}`,dot=element('circle',{cx:x(p.t),cy:y(p.a),r:3,class:'curve-dot','aria-label':label});const title=document.createElementNS(ns,'title');title.textContent=label;dot.append(title);dots.push(dot);}
     const cursor=element('line',{x1:L,x2:L,y1:T,y2:H-B,class:'curve-cursor',visibility:'hidden'});let index=-1,dragging=false;
@@ -96,10 +103,12 @@ export function mountCurve(card,history=null,container=null){
     const reportedMode=String(card._s?.('sensor.charging_type')||'').toUpperCase().match(/\b(AC|DC)\b/)?.[1]||null;
     const key=JSON.stringify([card._companion,ac,dc,reportedMode]),states=card._hass.states,change=JSON.stringify([key,states[ac]?.state,states[dc]?.state,card._previewMode]);
     if(owner!==key){owner=key;points=[];batteryReadings=[];signature='';lastMarkup='';}
-    if(signature===change)return;if(busy){again=true;return;}signature=change;busy=true;
+    const liveNow=JSON.stringify([states[battery]?.state,states[card._id('sensor.last_updated')]?.state]);
+    if(signature===change){if(liveNow!==liveKey&&!busy&&points.length&&tail){liveKey=liveNow;setTail();draw();}return;}
+    if(busy){again=true;return;}signature=change;busy=true;
     try{
       if(card._previewSourceHass&&card._previewMode!=='live'){
-        points=[{t:Date.now(),a:Math.max(card._n('sensor.ac_charge_current')||0,card._n('sensor.dc_charge_current')||0),battery:card._n('sensor.battery_level'),segment:0,mode:card._n('sensor.dc_charge_current')>.5?'DC':'AC'}];batteryReadings=points;draw();return;
+        points=[{t:Date.now(),a:Math.max(card._n('sensor.ac_charge_current')||0,card._n('sensor.dc_charge_current')||0),battery:card._n('sensor.battery_level'),segment:0,mode:card._n('sensor.dc_charge_current')>.5?'DC':'AC'}];batteryReadings=points;tail=null;draw();return;
       }
       if(!points.length)plot.innerHTML='<p class="curve-message">Loading charging readings…</p>';
       const readHass=card._previewSourceHass?window.__DEEPAL_COMPANION_UI.context(card._previewSourceHass,card._companion,card._c)._hass:card._hass;
@@ -114,11 +123,11 @@ export function mountCurve(card,history=null,container=null){
       const useDC=activeMode?activeMode==='DC':card._n('sensor.dc_charge_current')>.5;
       const latest=useDC?states[dc]:states[ac],reported=Date.parse(latest?.last_changed||latest?.last_updated),t=Number.isFinite(reported)?reported:Date.now(),a=activeMode?(card._n(useDC?'sensor.dc_charge_current':'sensor.ac_charge_current')??(useDC?0:card._n('sensor.charge_current'))??0):Math.max(card._n('sensor.ac_charge_current')||0,card._n('sensor.dc_charge_current')||0);
       if(!loaded.length||loaded.at(-1).a!==a){if(loaded.at(-1)?.t===t)loaded.pop();loaded.push({t,a,battery:card._n('sensor.battery_level'),segment:loaded.at(-1)?.segment||0,mode:useDC?'DC':'AC'});}
-      points=chargingWindow(loaded);draw();
+      points=chargingWindow(loaded);liveKey=liveNow;setTail();draw();
     }catch(_){if(!dead){signature='';if(!points.length){plot.innerHTML='<p class="curve-message">Charging readings could not be loaded.</p><button class="curve-retry">Try again</button>';plot.querySelector('button').onclick=()=>update();}}}
     finally{busy=false;if(again&&!dead){again=false;update();}}
   }
-  return {update,destroy(){dead=true;host.remove();}};
+  return {update,destroy(){dead=true;clearInterval(timer);host.remove();}};
 }
 export function mountArchivedCurve(container,hass,data){const chart=mountCurve({_hass:hass,_c:{order:['curve']},_el:{card:container}},data,container);chart.update();return chart;}
 
