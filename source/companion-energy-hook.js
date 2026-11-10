@@ -1,7 +1,7 @@
       if (hass.companionRequest) {
         const archiveRows = await hass.companionRequest("sessions", {
           start_time: new Date(t0).toISOString(), end_time: new Date(tEnd).toISOString()
-        });
+        }).catch(() => []);
         const archived = archiveRows.filter(g => g.e - g.s >= MIN_CHG);
         // Preserve older Recorder sessions and prefer canonical backend records on overlap.
         m.chg = [

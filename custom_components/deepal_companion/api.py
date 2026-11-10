@@ -339,7 +339,9 @@ async def request(hass, connection, msg):
             hub.changed(vehicle)
     except PermissionError as err:
         connection.send_error(msg["id"], "unauthorized", str(err))
-    except (ValueError, TypeError, KeyError) as err:
+    except KeyError as err:
+        connection.send_error(msg["id"], "invalid_format", "Missing value: " + str(err.args[0] if err.args else "unknown"))
+    except (ValueError, TypeError) as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
     except Exception:  # storage or other unexpected failure: log it, answer with a fixed message that carries no data
         _LOGGER.exception("Companion request %s failed", op)

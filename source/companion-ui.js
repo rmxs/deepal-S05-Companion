@@ -3,7 +3,7 @@ class CompanionChoice extends HTMLElement {
   static live=new Set();
   static resizeStyles(){for(const picker of CompanionChoice.live)picker.syncAppearance?.();}
   constructor(){
-    super();this.attachShadow({mode:'open'});this.options=[];this._value='';this._disabled=false;
+    super();this.attachShadow({mode:'open'});I18N.watch(this.shadowRoot);this.options=[];this._value='';this._disabled=false;
     this.shadowRoot.innerHTML='<style>:host{display:block;min-width:0;width:100%}*{box-sizing:border-box}button{font:inherit;color:inherit;cursor:pointer}.field{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:var(--choice-padding,10px 12px);border:var(--choice-border,1px solid #444);border-radius:var(--choice-radius,11px);background:var(--choice-background,#262626);color:var(--choice-color,#eee);font:var(--choice-font,inherit);text-align:start}.field:focus-visible{outline:2px solid var(--primary-color,#63cba3);outline-offset:2px}.field:disabled{opacity:.5;cursor:default}.field span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chevron{flex:none;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 0;opacity:.65}.menu{position:fixed;inset:auto;margin:0;padding:5px;border:1px solid var(--divider-color,#454545);border-radius:12px;background:var(--card-background-color,#252525);color:var(--primary-text-color,#eee);box-shadow:0 12px 32px #0005;overflow:auto;overscroll-behavior:contain;z-index:10000}.menu:not(:popover-open){display:none}.option{display:block;width:100%;min-height:42px;border:0;border-radius:8px;padding:10px 12px;background:none;color:inherit;font:inherit;text-align:start;white-space:normal;overflow-wrap:anywhere}.option[aria-selected=true]{background:color-mix(in srgb,var(--primary-color,#63cba3) 18%,transparent);color:var(--primary-color,#63cba3)}.option:hover,.option:focus{outline:0;background:color-mix(in srgb,var(--primary-color,#63cba3) 12%,transparent)}</style><button class="field" type="button" aria-haspopup="listbox" aria-expanded="false"><span></span><i class="chevron" aria-hidden="true"></i></button><div class="menu" role="listbox" popover="auto"></div>';
     this.button=this.shadowRoot.querySelector('.field');this.menu=this.shadowRoot.querySelector('.menu');
     this.button.addEventListener('click',()=>this.open());
@@ -42,6 +42,9 @@ class CompanionChoice extends HTMLElement {
 if(!customElements.get('deepal-companion-choice'))customElements.define('deepal-companion-choice',CompanionChoice);
 /* The application mounts the complete existing settings UI directly, without a card/modal. */
 window.__DEEPAL_COMPANION_UI = {
+  readableError,
+  /* Pages outside the card (dashboard, notifications) use the same translation dictionary as the card. */
+  watchLanguage(root) { I18N.watch(root); },
   settingsTag: SETTINGS_TAG,
   version: CARD_VERSION,
   credit: CARD_CREDIT,

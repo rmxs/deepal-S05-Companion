@@ -1,8 +1,21 @@
 /* New persistence boundary: profiles live in Companion SQLite; dashboard YAML is identifiers only. */
+/* Home Assistant can reject a request with a plain object or a code instead of an Error, for example when the
+   connection drops while the app is in the background. Callers always get an Error with readable text. */
+const readableError = error => {
+  if (error instanceof Error && typeof error.message === "string" && error.message) return error;
+  const source = error && typeof error === "object" ? error : {};
+  const inner = [source.error, source.body].find(value => value && typeof value === "object") || {};
+  const code = typeof error === "number" ? error : source.code ?? inner.code;
+  const text = [source.message, inner.message, source.error, error].find(value => typeof value === "string" && value.trim());
+  const lost = code === 3 || /connection.?lost/i.test(String(code));
+  const result = new Error(text || (lost ? "Connection to Home Assistant was lost. Try again." : "Home Assistant did not answer. Try again."));
+  if (code !== undefined) result.code = code;
+  return result;
+};
 const companionRequest = (hass, owner, op, data = {}) => hass.callWS({
   type: "deepal_companion/request", op,
   vehicle_id: owner.vehicle_id, view_id: owner.view_id, data
-});
+}).catch(error => { throw readableError(error); });
 function companionFacade(hass, card) {
   return new Proxy(hass, {
     get(target, key) {
@@ -142,7 +155,7 @@ DeepalS05Card.prototype._loadRemote = async function() {
       this.shadowRoot.innerHTML = '<ha-card style="padding:18px"><p style="margin:0 0 12px">Deepal Companion could not load. Check that Home Assistant is reachable, then try again.</p><button class="companion-retry" style="padding:8px 14px;cursor:pointer">Try again</button></ha-card>';
       this.shadowRoot.querySelector(".companion-retry")?.addEventListener("click", () => this._loadRemote());
     }
-    else this._toast(error.message || String(error), "error");
+    else this._toast(readableError(error).message, "error");
   } finally {
     if(generation===this._compGeneration){this._compFetching = false;
     if (this._compAgain) { this._compAgain = false; queueMicrotask(()=>this._loadRemote()); }}

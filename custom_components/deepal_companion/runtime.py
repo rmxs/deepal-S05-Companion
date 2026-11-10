@@ -142,8 +142,10 @@ class VehicleRuntime:
             return explicit
         ev = self.config.get("powertrain") == "ev"
         if self.config.get("powertrain", "auto") == "auto":
-            ev = not self.hass.states.get(self.entities["fuel"]) and not self.hass.states.get(
-                "sensor." + self.config["prefix"] + "_fuel_range")
+            # At startup a fuel sensor can be registered but not loaded yet: it still means plug-in hybrid.
+            registry = er.async_get(self.hass)
+            ev = not any(self.hass.states.get(entity) or registry.async_get(entity)
+                         for entity in (self.entities["fuel"], "sensor." + self.config["prefix"] + "_fuel_range"))
         return 68.8 if ev else 18.4
 
     def _sample(self, entity, now, state, unit, samples, pending):

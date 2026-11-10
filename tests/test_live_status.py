@@ -227,6 +227,48 @@ class OpenOrUnlocked(Base):
         await self.live.tick()
         self.assertEqual(self.calls[-1][1]["message"], "clear_notification")
 
+    async def test_nothing_while_the_car_is_running(self):
+        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=False)
+        self.doors(("front_left_window",))
+        self.state("binary_sensor.s05_engine", "on")
+        self.state("sensor.s05_power_status", "on")
+        await self.live.tick()
+        self.assertEqual(self.calls, [], "an open window while driving is not reported")
+        self.state("binary_sensor.s05_engine", "off")
+        await self.live.tick()
+        self.assertEqual(self.calls, [], "power still on")
+        self.state("sensor.s05_power_status", "off")
+        await self.live.tick()
+        self.assertEqual(self.calls[0][1]["title"], "Front left window")
+        self.now += 60
+        self.state("sensor.s05_power_status", "on")
+        await self.live.tick()
+        self.assertEqual(self.calls[-1][1]["message"], "clear_notification", "driving off ends it")
+        self.config["live_open"]["only_parked"] = False
+        self.now += 60
+        await self.live.tick()
+        self.assertEqual(self.calls[-1][1]["title"], "Front left window", "the switch restores the old behaviour")
+
+    async def test_recent_activity_gets_one_start_and_one_end(self):
+        self.config["live_open"].update(start_delay=0, end_delay=0)
+        self.doors(("trunk", "hood"))
+        await self.live.tick()
+        self.now += 40
+        self.doors(("trunk",))
+        await self.live.tick()
+        self.assertEqual([(row[0], row[1]) for row in self.history], [("live_open", "live_started")], "updates add no entries")
+        self.now += 40
+        self.doors(())
+        await self.live.tick()
+        self.assertEqual([row[1] for row in self.history], ["live_started", "live_ended"])
+
+    async def test_every_coloured_part_uses_the_state_colour(self):
+        self.config["live_open"].update(start_delay=0, show_timer=False)
+        self.doors(("trunk",))
+        await self.live.tick()
+        data = self.calls[0][1]["data"]
+        self.assertEqual({data[key] for key in ("color", "notification_icon_color", "progress_bar_color", "text_color")}, {data["color"]})
+
     async def test_watch_list_and_limits(self):
         self.config["live_open"].update(start_delay=0, items=["trunk", "hood"], include_unlocked=False, max_shown=1, lock_button=False)
         self.doors(("trunk", "hood", "front_left_door"), unlocked=True)

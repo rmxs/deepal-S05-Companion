@@ -137,6 +137,22 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.runtime.config["charge_spike_jump"] = bad
             self.assertEqual(self.runtime.spike_jump(), 20)
 
+    async def test_registered_fuel_sensor_without_a_state_still_means_plug_in_hybrid(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        self.runtime.config = {**self.runtime.config, "powertrain": "auto", "battery_kwh": 0}
+        fuel = self.runtime.entities["fuel"]
+        missing = {fuel, "sensor." + self.runtime.config["prefix"] + "_fuel_range"}
+        states = self.hass.states.get
+        self.hass.states.get = lambda entity: None if entity in missing else states(entity)
+        try:
+            self.assertEqual(self.runtime.capacity(), 68.8, "no fuel sensor at all: electric")
+            self.hass.registry.async_get = lambda entity: object() if entity == fuel else None
+            self.assertEqual(self.runtime.capacity(), 18.4, "registered but not loaded yet: plug-in hybrid")
+        finally:
+            self.hass.states.get = states
+
     async def test_stop_does_not_hang_when_the_worker_never_finishes(self):
         self.assertTrue(await integration.async_setup(self.hass, {}))
         self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))

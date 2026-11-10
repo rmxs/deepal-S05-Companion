@@ -38,10 +38,10 @@ KINDS = {
     "open": {
         "key": "live_open", "name": "Live left open or unlocked", "icon": "mdi:car-door-lock-open", "title": "Left open",
         "default": {"enabled": False, "devices": [], "min_interval": 30, "max_age": 3600, "start_delay": 60, "end_delay": 10,
-                    "items": list(OPEN_ITEMS), "include_unlocked": True, "lock_button": True, "max_shown": 4, "show_count": True,
+                    "items": list(OPEN_ITEMS), "include_unlocked": True, "only_parked": True, "lock_button": True, "max_shown": 4, "show_count": True,
                     "show_timer": True, "show_updated": False, "title": "", "icon": "", "color": "", "url": ""},
         "ranges": {"min_interval": (15, 3600), "max_age": (300, 86400), "start_delay": (0, 3600), "end_delay": (0, 600), "max_shown": (1, 10)},
-        "bools": ("enabled", "include_unlocked", "lock_button", "show_count", "show_timer", "show_updated"),
+        "bools": ("enabled", "include_unlocked", "only_parked", "lock_button", "show_count", "show_timer", "show_updated"),
     },
 }
 ACTIONS = {"DEEPAL_COMPANION_LIVE_CLIMATE_OFF": "climate", "DEEPAL_COMPANION_LIVE_OPEN_LOCK": "open"}
@@ -154,9 +154,20 @@ class LiveStatus:
         return {"active": on, "current": current, "target": target, "outside": outside, "unit": unit if isinstance(unit, str) else "°C",
                 "updated": stamp(base)}
 
+    def running(self):
+        """True while the car is switched on or driving. An unknown reading counts as not running."""
+        engine, power = self.get("binary_sensor.engine"), self.get("sensor.power_status")
+        if engine is not None and str(engine.state).lower() == "on":
+            return True
+        return power is not None and str(power.state).lower() not in {"off", "unknown", "unavailable", "none", ""}
+
     def open_snapshot(self, now, options):
         if not self.connected(now, options):
             return None
+        if options["only_parked"] and self.running():
+            # Open windows while driving are normal: nothing to report, and a running notification ends.
+            lock = self.get("lock.doors")
+            return {"active": False, "items": [], "unlocked": False, "updated": stamp(lock) if lock else 0}
         items, known = [], False
         for key in options["items"]:
             logical, label = OPEN_ITEMS[key]
@@ -201,7 +212,8 @@ class LiveStatus:
         degree = "°" if snap.get("unit", "°C") in {"°C", "°F"} else ""
         data = {"tag": tag, "live_update": True, "notification_icon": options["icon"] or spec["icon"], "silent": True, "alert_once": True,
                 "chronometer": False, "color": self.color(kind, options, snap)}
-        data["notification_icon_color"] = data["progress_bar_color"] = data["color"]
+        # Every coloured part follows the one state colour from the card palette.
+        data["notification_icon_color"] = data["progress_bar_color"] = data["text_color"] = data["color"]
         parts = []
         if kind == "climate":
             cur, tar = snap["current"], snap["target"]
@@ -241,13 +253,18 @@ class LiveStatus:
         if options["url"]:
             data.update(url=options["url"], clickAction=options["url"])
         if options["show_timer"] and since:
-            data.update(chronometer=True, when=round(since), when_relative=False, text_color=data["color"])
+            data.update(chronometer=True, when=round(since), when_relative=False)
         if options["show_updated"] and snap.get("updated"):
             parts.append("Reported " + datetime.fromtimestamp(snap["updated"], timezone.utc).strftime("%H:%M UTC"))
         if test:
             parts.append("Test")
         # The title is the information itself; the message carries the details.
         return {"title": parts[0] if parts else spec["title"], "message": " · ".join(parts[1:]) or spec["title"], "data": data}
+
+    @staticmethod
+    def rule(kind):
+        spec = KINDS[kind]
+        return {"id": spec["key"], "name": spec["name"], "data": {"notification_icon": spec["icon"]}}
 
     def tag(self, kind, test=False):
         key = hashlib.sha256((self.runtime.vehicle + kind).encode()).hexdigest()[:20]
@@ -319,6 +336,9 @@ class LiveStatus:
                     del active[device]
         if not active and (not enabled or stop):
             kept = {key: state[key] for key in ("test_devices", "expired") if state.get(key)}
+            if state.get("logged"):
+                await self.owner.record(self.rule(kind), "live_ended")
+                await self.owner.persist()
             self.state[kind] = kept
             return
         if not (enabled and wanted) or state.get("expired") or now - state.get("since", now) < options["start_delay"]:
@@ -339,6 +359,10 @@ class LiveStatus:
             if result["status"] == "accepted":
                 active[device] = {"sent": now, "signature": signature, "updated": snap["updated"]}
                 self.last_errors.pop((kind, device), None)
+                if not state.get("logged"):  # one Recent activity entry per live notification, not one per update
+                    state["logged"] = True
+                    await self.owner.record(self.rule(kind), "live_started", deliveries=[result])
+                    await self.owner.persist()
             elif self.last_errors.get((kind, device)) != result["error"]:
                 self.last_errors[(kind, device)] = result["error"]
                 await self.owner.record({"id": spec["key"], "name": spec["name"]}, "error", error=result["error"])

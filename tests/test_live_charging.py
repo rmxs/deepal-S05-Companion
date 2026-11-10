@@ -119,20 +119,25 @@ class LiveCharging(unittest.IsolatedAsyncioTestCase):
         self.now += 30
         await self.activity.tick()
         self.assertEqual(self.calls[-1][1], {"message": "clear_notification", "data": {"tag": old_tag}})
+        self.assertEqual([(row[0]["id"], row[1]) for row in self.history], [("live_charging", "live_started"), ("live_charging", "live_ended")])
         self.now += 300
         self.readings()
         await self.activity.tick()
         self.assertNotEqual(self.calls[-1][1]["data"]["tag"], old_tag)
 
-    async def test_unknown_or_stale_readings_never_end_activity(self):
+    async def test_unknown_or_stale_readings_end_activity_only_after_the_age_limit(self):
         await self.activity.tick()
         self.state("battery", "unavailable")
         self.now += 300
         await self.activity.tick()
-        self.now += 1800
+        self.now += 1700
         await self.activity.tick()
         self.assertEqual(len(self.calls), 1)
-        self.assertTrue(self.activity.state["active"])
+        self.assertTrue(self.activity.state["active"], "a short outage does not end it")
+        self.now += 200
+        await self.activity.tick()
+        self.assertEqual(self.calls[-1][1]["message"], "clear_notification", "a car that stays unreachable does not leave it on the phone")
+        self.assertEqual(self.history[-1][1], "live_ended")
 
     async def test_global_disable_clears_and_keeps_test_targets(self):
         await self.activity.test(self.activity.options())

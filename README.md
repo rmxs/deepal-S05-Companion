@@ -10,7 +10,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
-## Latest release — v0.1.4
+## Latest release — v0.1.5
 
 - **Live notifications** on the Lock Screen for charging, climate and left-open doors, each with its own settings page.
 - New charging alerts: started, almost finished and reached target.
@@ -18,7 +18,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 - A Health tab that checks sensors, the recorder, the database, notification devices and prices.
 - Saving from two devices now merges both sets of changes instead of losing one.
 
-[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.4) · [Full changelog](CHANGELOG.md)
+[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.5) · [Full changelog](CHANGELOG.md)
 
 ## Release highlights
 

@@ -180,6 +180,21 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         await self.engine.test(self.engine.config["rules"][0])
         self.assertEqual(len(self.calls), 3)
 
+    async def test_all_recipients_filtered_waits_without_using_the_send(self):
+        allowed = {"value": "false"}
+        original = self.engine.render
+        async def render(text, variables):
+            return allowed["value"] if text == "AWAY" else await original(text, variables)
+        self.engine.render = render
+        await self.enable(delay=0, devices=["mobile_app_phone"], recipient_conditions={"mobile_app_phone": "AWAY"})
+        await self.engine.tick()
+        await self.engine.tick()
+        self.assertEqual(self.calls, [])
+        self.assertEqual([row["status"] for row in self.engine.history], ["waiting_recipient"], "one entry, not one per check")
+        allowed["value"] = "true"
+        await self.engine.tick()
+        self.assertEqual([call[1] for call in self.calls], ["mobile_app_phone"], "sent as soon as the recipient qualifies")
+
     async def test_recipient_condition_receives_rule_variables_and_repeat_index(self):
         seen = []
         original = self.engine.render

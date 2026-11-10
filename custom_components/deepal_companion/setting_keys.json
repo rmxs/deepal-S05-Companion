@@ -45,6 +45,7 @@
   "iso_wheels",
   "charge_style",
   "charge_curve",
+  "charge_curve_refresh",
   "charging_reminder",
   "charging_cost",
   "energy_sheet",

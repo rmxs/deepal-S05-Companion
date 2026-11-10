@@ -4,7 +4,7 @@ const OPEN_ITEMS = ['front_left_door', 'front_right_door', 'rear_left_door', 're
 const LOOK = {title: '', icon: '', color: '', url: ''};
 export const LIVE_DEFAULTS = {
   climate: {enabled: false, devices: [], min_interval: 120, max_age: 1800, start_delay: 0, end_delay: 30, temp_step: 1, ready_margin: 1, show_target: true, show_outside: false, show_progress: true, show_timer: true, show_updated: false, turn_off_button: true, max_run: 0, ...LOOK},
-  open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 60, end_delay: 10, items: OPEN_ITEMS, include_unlocked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
+  open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 60, end_delay: 10, items: OPEN_ITEMS, include_unlocked: true, only_parked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
 };
 const GROUPS = {doors: OPEN_ITEMS.slice(0, 4), windows: OPEN_ITEMS.slice(4, 8), hood: ['hood'], trunk: ['trunk']};
 const KINDS = {
@@ -14,7 +14,7 @@ const KINDS = {
     rows: [['switch', 'show_target', 'Show target temperature'], ['switch', 'show_outside', 'Show outside temperature'], ['switch', 'show_progress', 'Show progress bar'], ['switch', 'show_timer', 'Show running time'],
       ['switch', 'turn_off_button', '“Turn off” button', 'Android only'], ['number', 'min_interval', 'Update at most every', 'min', 60, 1, 60], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 10]]},
   open: {name: 'Left open or unlocked', icon: 'mdi:car-door-lock-open', sub: 'Open doors, windows and an unlocked car', info: 'One notification lists what is open or unlocked. Items drop off as they are closed, and it disappears when everything is secure.',
-    rows: [['group', 'doors', 'Doors'], ['group', 'windows', 'Windows'], ['group', 'hood', 'Bonnet'], ['group', 'trunk', 'Trunk'], ['switch', 'include_unlocked', 'Unlocked car'], ['switch', 'show_count', 'Show item count'], ['switch', 'show_timer', 'Show time open'],
+    rows: [['group', 'doors', 'Doors'], ['group', 'windows', 'Windows'], ['group', 'hood', 'Bonnet'], ['group', 'trunk', 'Trunk'], ['switch', 'include_unlocked', 'Unlocked car'], ['switch', 'only_parked', 'Only when the car is off', 'Nothing while driving'], ['switch', 'show_count', 'Show item count'], ['switch', 'show_timer', 'Show time open'],
       ['switch', 'lock_button', '“Lock vehicle” button', 'Android only'], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 60]]},
 };
 // Phones only show Material Design icons, so the choices are mdi: names (others are refused).

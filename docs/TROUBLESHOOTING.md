@@ -60,7 +60,7 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 2. Check the master switch and the individual alert switch.
 3. Save changes and send a test.
 4. Confirm the phone allows Home Assistant notifications.
-5. Check quiet hours, severity, away/parked conditions and old-data filtering.
+5. Check quiet hours, severity, away/parked conditions and old-data filtering. If every phone has a condition that is not met, the alert waits; choose **Why isn’t it sending?** on the alert to see which condition holds it.
 6. If the phone was replaced, recheck its Mobile App registration and recipient selection.
 7. For Live notifications, follow the separate [requirements and test steps](NOTIFICATIONS.md#live-notifications-on-the-lock-screen).
 

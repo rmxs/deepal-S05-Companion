@@ -303,6 +303,28 @@ class ChargingTests(unittest.TestCase):
         engine.feed(1000, 20, True, 18.4)
         self.assertTrue(engine.feed(1100, 20, None, 18.4)[0]["gap"])
 
+    def test_offline_car_does_not_split_one_charge(self):
+        engine = ChargingEngine()
+        first = engine.feed(1000, 20, True, 18.4)[0]["id"]
+        now = 1000
+        for _ in range(40):  # 40 minutes without a connection, with the one-minute heartbeat
+            now += 60
+            row = engine.feed(now, 20, None, 18.4)[0]
+        self.assertTrue(row["live"])
+        row = engine.feed(now + 60, 35, True, 18.4)[0]
+        self.assertEqual((row["id"], row["from"], row["to"], row["live"]), (first, 20, 35, True))
+
+    def test_charge_closes_when_the_car_never_comes_back(self):
+        engine = ChargingEngine()
+        engine.feed(1000, 20, True, 18.4)
+        now, row = 1000, None
+        while now < 1000 + 6 * 3600 + 120:
+            now += 600
+            row = engine.feed(now, None, None, 18.4)[0]
+        self.assertFalse(row["live"])
+        self.assertEqual(row["e"], 1000 * 1000, "it ends at the last known charging reading")
+        self.assertIsNone(engine.state["session"])
+
 
 class PricingTests(unittest.TestCase):
     def setUp(self):

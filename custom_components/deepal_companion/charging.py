@@ -5,6 +5,7 @@ import math
 from uuid import uuid4
 
 GAP = 15 * 60
+OFFLINE_LIMIT = 6 * 3600  # a charge whose car stays unreachable this long is closed at its last known reading
 JUMP = 20  # a single reading this many points above the session's level must be confirmed by the next one
 
 
@@ -30,6 +31,7 @@ class ChargingEngine:
             changed.append(dict(session))
             session = state["session"] = None
             state["off_since"] = None
+            state.pop("unknown_since", None)
         level = number(level)
         if level is not None and not 0 <= level <= 100:
             level = None
@@ -58,9 +60,18 @@ class ChargingEngine:
                 session["kwh"] = max(0, session["to"] - session["from"]) * session["capacity"] / 100
             if charging is True:
                 state["off_since"] = None
+                state.pop("unknown_since", None)
                 session["e"] = now * 1000
                 session["dc"] = session["dc"] or bool(dc)
+            elif charging is None:
+                # The car is unreachable: that is not a stop. The charge stays open and continues when the car reports again.
+                state["off_since"] = None
+                if now - state.setdefault("unknown_since", now) >= OFFLINE_LIMIT:
+                    session["live"] = False
+                    state["session"] = None
+                    state.pop("unknown_since", None)
             else:
+                state.pop("unknown_since", None)
                 if state.get("off_since") is None:
                     state["off_since"] = now
                     session["e"] = now * 1000
