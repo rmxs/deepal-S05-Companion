@@ -1,6 +1,6 @@
 """Constants for Deepal Companion."""
 DOMAIN = "deepal_companion"
-VERSION = "0.1.7"
+VERSION = "0.1.6"
 SIGNAL = f"{DOMAIN}_updated"
 FRONTEND_URL = f"/{DOMAIN}/frontend"
 PANEL_URL = "deepal-companion"

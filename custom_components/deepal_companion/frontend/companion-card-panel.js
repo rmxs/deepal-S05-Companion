@@ -1,4 +1,4 @@
-import "/deepal_companion/frontend/companion-card.js?v=0.1.7";
+import "/deepal_companion/frontend/companion-card.js?v=0.1.6";
 
 const TAG = "deepal-companion-card";
 const selectionKey = hass => "deepal-companion-selection:" + String(hass?.user?.id || "local");

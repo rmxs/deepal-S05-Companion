@@ -10,14 +10,11 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
-## Latest release — v0.1.7
+## Latest release — v0.1.6
 
 - **Light and dark themes everywhere:** the Notifications page and the Sessions filters now follow your Home Assistant theme, so alert rows, device buttons, time boxes, switches and lists are readable on a white theme.
 - **Interior view:** the temperature, the On/Off label and the power button on the car screen are always white and visible, also on a light theme.
 - Dark themes look the same as before.
-
-### Earlier in v0.1.6
-
 - **New Sessions page:** key figures for the selected period, compact session cards with the real battery start and end level, a daily energy chart split into free, paid and not-priced charging, and weekly history by default.
 - **Correct your charging history** (administrators): change a charge between AC and DC, remove false current readings, or delete a charge and restore it within 30 days.
 - A false DC reading right after an AC charge no longer turns the charge into a DC session.
@@ -29,7 +26,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 - **Back on the phone:** when you return to the dashboard, the card reconnects by itself and reloads its data.
 - **Redesigned Profile box** that starts closed (the arrow opens it), with a connection badge (**Active**, **Offline** or **No data**) for the Deepal Alternative link to the vehicle cloud.
 
-[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.7) · [Full changelog](CHANGELOG.md)
+[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.6) · [Full changelog](CHANGELOG.md)
 
 ## Release highlights
 

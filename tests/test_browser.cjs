@@ -78,7 +78,7 @@ const server=http.createServer((req,res)=>{
        return {sort,curves_synced:1,recorder_synced:window.forceRecorderSync?0:Date.now()/1000,rows:structuredClone(items),total:rows.length,locations:window.costs.profiles.map(p=>({id:p.id,name:p.name})),has_more:hasMore,next_before:hasMore?(['highest','lowest'].includes(sort)?{start:last.s,cost:last.pricing?.cost??null}:last.s):null};
      }
      if(m.op==='session_curve')return {start:Date.now()-3600000,end:Date.now(),session_id:m.data.session_id,series:{ac:[{lu:(Date.now()-3600000)/1000,s:'8'},{lu:(Date.now()-1800000)/1000,s:'16'}],dc:[],battery:[]}};
-     if(m.op==='charging_dashboard'){const rows=(window.pageRows||await hass.callWS({...m,op:'sessions',data:{}})).filter(r=>!r.live),priced=rows.filter(r=>r.pricing?.cost!=null);return {total:rows.length,priced:priced.length,unpriced:rows.length-priced.length,cost:priced.reduce((sum,r)=>sum+r.pricing.cost,0),energy:rows.reduce((sum,r)=>sum+(r.pricing?.energy??r.kwh??0),0),chart_rows:rows};}
+     if(m.op==='charging_dashboard'){const rows=(window.pageRows||await hass.callWS({...m,op:'sessions',data:{}})).filter(r=>!r.live),priced=rows.filter(r=>r.pricing?.cost!=null);return {total:rows.length,priced:priced.length,unpriced:rows.length-priced.length,cost:priced.reduce((sum,r)=>sum+r.pricing.cost,0),energy:rows.reduce((sum,r)=>sum+(r.pricing?.energy??r.kwh??0),0),chart_rows:(()=>{const days=new Map();for(const r of rows){const d=new Date(r.s);d.setHours(0,0,0,0);const b=days.get(d.getTime())||{s:d.getTime(),split:{paid:0,free:0,unpriced:0}},cost=r.pricing?.cost;b.split[cost==null?'unpriced':cost===0?'free':'paid']+=r.pricing?.energy??r.kwh??0;days.set(b.s,b);}return [...days.values()];})()};}
      if(m.op==="list")return [{id:"car",name:"Deepal S05",config:window.common,views:Object.keys(window.views).map(id=>({id,name:window.viewNames[id]||id,revision}))}];
      if(m.op==="config_get"){const value=structuredClone(config(m));if(window.delayGet?.[m.view_id])await new Promise(r=>setTimeout(r,window.delayGet[m.view_id]));return value;}
      if(m.op==="config_patch"){if(window.delayPatchMS)await new Promise(r=>setTimeout(r,window.delayPatchMS));if(m.data.reset)window.views[m.view_id]={};for(const[k,v]of Object.entries(m.data.patch||{}))(shared.has(k)?window.common:window.views[m.view_id])[k]=v;revision++;queueMicrotask(()=>window.subscribers.forEach(fn=>fn({vehicle_id:"car"})));return config(m);}
@@ -305,9 +305,11 @@ const server=http.createServer((req,res)=>{
   await p.locator(".history-line-chart svg.en-ch").waitFor();
   await p.locator(".history-line-chart svg.en-ch").hover();
   assert.equal(await p.locator(".history-line-chart .en-tip").isVisible(),true);
-  await p.locator(".cc-chart svg").first().hover();
-  assert.equal(await p.locator(".cc-chart-tip").isVisible(),true);
-  assert((await p.locator(".cc-chart-tip").textContent()).includes("kWh"));
+  const energyBar=p.locator(".energy-chart .energy-col:has(.energy-stack > b)").first(); /* a day with charging */
+  assert.equal(await energyBar.count(),1,"Energy delivered chart shows a bar for the charged day; tips: "+JSON.stringify(await p.locator(".energy-chart .energy-tip").allTextContents()));
+  await energyBar.hover();
+  assert.equal(await energyBar.locator(".energy-tip").isVisible(),true,"Energy delivered bar shows its tooltip on hover");
+  assert((await energyBar.locator(".energy-tip").textContent()).includes("kWh"));
   assert.equal(await p.locator('[data-action="export"]').isVisible(),false);
   await p.locator('[data-action="data-menu"]').click();
   assert.equal(await p.locator('[data-action="export"]').isVisible(),true);
@@ -324,7 +326,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>window.recorderFails=false);
   await p.locator('[data-mode="chargers"]').click();await p.locator(".cc-profile").first().waitFor({state:"attached"});
   await p.locator('[data-mode="history"]').click();await p.locator(".archive .charge-session-list").waitFor();
-  assert.equal(await p.locator(".cc-chart svg").count(),2);
+  assert.equal(await p.locator(".energy-chart").count()+await p.locator(".history-line-chart svg.en-ch").count(),2,"Sessions page shows the energy chart and the battery history chart");
   await p.locator('[data-action="edit-session"]').first().click();
   await p.locator('.history-editor [name=profile]').evaluate((select,value)=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value},bubbles:true})),"work");
   await page.evaluate(()=>window.failCostSave=true);

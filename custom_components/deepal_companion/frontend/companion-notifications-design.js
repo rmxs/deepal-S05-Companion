@@ -1,9 +1,9 @@
-import {createNotificationRules} from './notification-rules.js?v=0.1.7';
-import {mountActivity} from './notification-activity.js?v=0.1.7';
-import {mountLive,LIVE_DEFAULTS} from './companion-live.js?v=0.1.7&rev=live-12';
+import {createNotificationRules} from './notification-rules.js?v=0.1.6';
+import {mountActivity} from './notification-activity.js?v=0.1.6';
+import {mountLive,LIVE_DEFAULTS} from './companion-live.js?v=0.1.6&rev=live-12';
 /* Bind the supplied notification-design.html to the existing HA engine. */
-import {notificationLayoutCss,compactNotificationCss,notificationTitleCss,arrangeNotifications,compactIconPicker} from './notification-layout.js?v=0.1.7&rev=live-12';
-import {designHtml,designCss,designIcons,createDesignController} from './notification-design.js?v=0.1.7&rev=why-5';
+import {notificationLayoutCss,compactNotificationCss,notificationTitleCss,arrangeNotifications,compactIconPicker} from './notification-layout.js?v=0.1.6&rev=live-12';
+import {designHtml,designCss,designIcons,createDesignController} from './notification-design.js?v=0.1.6&rev=why-5';
 const buttonLabels={dismiss:'Dismiss',lock:'Lock vehicle',open:'Open dashboard'};
 const categoryLabels={charge:'Charging Events',security:'Security & Openings',tires:'Tyres',vehicle:'Vehicle Warnings',energy:'Battery & Range',other:'Other Alerts'};
 const categoryStyles={charge:["ok","mdi:lightning-bolt"],security:["info","mdi:shield-lock-outline"],tires:["warn","mdi:tire"],vehicle:["bad","mdi:car-info"],energy:["ok","mdi:battery-medium"],other:["info","mdi:bell-outline"]};
