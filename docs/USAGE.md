@@ -4,7 +4,9 @@
 
 ## 1. Open Companion
 
-1. Open **Deepal Companion** from the Home Assistant sidebar. For just the card, open **Deepal Card** (`/deepal-companion-card`) instead; it shows the profile you last chose in Card Settings. On a phone it fills the whole screen; on a computer it stays a normal card. To show it in the sidebar, turn on **Show “Deepal Card” in the sidebar** under **Card Settings → Advanced** (off by default).
+1. Open **Deepal Companion** from the Home Assistant sidebar. For just the card, open **Deepal Card** (`/deepal-companion-card`) instead; it shows the profile you last chose in Card Settings. On a phone it fills the whole screen; on a computer it stays a normal card.
+
+The card and the Companion pages follow your Home Assistant theme, light or dark. The vehicle photo areas (Car View and the interior view) always stay dark, with white text. To show it in the sidebar, turn on **Show “Deepal Card” in the sidebar** under **Card Settings → Advanced** (off by default).
 2. Choose your vehicle if you have more than one configured.
 3. Use the four pages at the top:
    - **Card Settings** — customise the dashboard card.

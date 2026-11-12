@@ -387,10 +387,16 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_view_only_settings_do_not_invalidate_shared_config(self):
         before = self.db.config('car', self.view)['revision']
-        await self.request('config_patch', {'patch': {'car_color': 'blue'}})
+        result = await self.request('config_patch', {'patch': {'companion_design': 'tablet'}})  # a display setting of this profile only
+        self.assertFalse(result.errors, result.errors)
         after = self.db.config('car', self.view)['revision']
         self.assertEqual((after[0], after[1]), (before[0], before[1] + 1))
         await self.request('config_patch', {'patch': {'battery_kwh': 20}})
+        self.assertEqual(self.db.config('car', self.view)['revision'][0], before[0] + 1)
+
+    async def test_car_look_is_shared_between_display_profiles(self):
+        before = self.db.config('car', self.view)['revision']
+        await self.request('config_patch', {'patch': {'car_color': 'blue'}})  # the car's colour is the same in every profile
         self.assertEqual(self.db.config('car', self.view)['revision'][0], before[0] + 1)
 
     async def test_minimum_charge_gain_setting_is_validated(self):

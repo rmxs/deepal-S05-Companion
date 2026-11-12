@@ -1,14 +1,14 @@
-import {createNotificationRules} from './notification-rules.js?v=0.1.6';
-import {mountActivity} from './notification-activity.js?v=0.1.6';
-import {mountLive,LIVE_DEFAULTS} from './companion-live.js?v=0.1.6&rev=live-12';
+import {createNotificationRules} from './notification-rules.js?v=0.1.7';
+import {mountActivity} from './notification-activity.js?v=0.1.7';
+import {mountLive,LIVE_DEFAULTS} from './companion-live.js?v=0.1.7&rev=live-12';
 /* Bind the supplied notification-design.html to the existing HA engine. */
-import {notificationLayoutCss,compactNotificationCss,notificationTitleCss,arrangeNotifications,compactIconPicker} from './notification-layout.js?v=0.1.6&rev=live-12';
-import {designHtml,designCss,designIcons,createDesignController} from './notification-design.js?v=0.1.6&rev=why-5';
+import {notificationLayoutCss,compactNotificationCss,notificationTitleCss,arrangeNotifications,compactIconPicker} from './notification-layout.js?v=0.1.7&rev=live-12';
+import {designHtml,designCss,designIcons,createDesignController} from './notification-design.js?v=0.1.7&rev=why-5';
 const buttonLabels={dismiss:'Dismiss',lock:'Lock vehicle',open:'Open dashboard'};
 const categoryLabels={charge:'Charging Events',security:'Security & Openings',tires:'Tyres',vehicle:'Vehicle Warnings',energy:'Battery & Range',other:'Other Alerts'};
 const categoryStyles={charge:["ok","mdi:lightning-bolt"],security:["info","mdi:shield-lock-outline"],tires:["warn","mdi:tire"],vehicle:["bad","mdi:car-info"],energy:["ok","mdi:battery-medium"],other:["info","mdi:bell-outline"]};
 const adapterCss=`
-:host{display:block;color:var(--design-fg);font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif);color-scheme:dark}
+:host{display:block;color:var(--design-fg);font-family:var(--paper-font-body1_-_font-family,Arial,sans-serif);color-scheme:var(--deepal-scheme,dark)}
 .design-root{min-height:0;padding:0;width:100%;background:transparent}.design-root>.max-w-5xl{max-width:100%}
 .fa-solid,.fa-regular{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;flex:none}.fa-solid>svg,.fa-regular>svg{fill:currentColor;width:1em;height:1em}
 .text-gray-100,.text-gray-200,.text-gray-300{color:var(--design-fg)}.text-gray-400,.text-gray-500{color:var(--design-muted)}input[aria-invalid=true]{outline:2px solid rgb(var(--design-bad))}.design-event-icon ha-icon{--mdc-icon-size:20px}.design-icon ha-icon{--mdc-icon-size:17px}.bg-emerald-400.text-slate-950{color:var(--design-accent-fg,#111)}
@@ -31,7 +31,7 @@ button,input{touch-action:manipulation}button:disabled{opacity:.45;cursor:defaul
 /* Match the other Companion tabs. Switch tracks anchor their own thumbs. */
 [hidden]{display:none!important}#preview-mini-icon{color:var(--design-accent-fg)!important}
 .design-root,.design-root *{font-family:var(--notification-font)!important}
-.design-root label>input.peer+div{position:relative;flex:none}
+.design-root label>input.peer+div{position:relative;flex:none}.design-root label>input.peer:not(:checked)+div{background:var(--design-track)}
 .design-root label:has(>input.peer){min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 .design-root label>input.peer+div::after{top:2px;left:2px}
 .design-root label>input.peer:focus-visible+div{outline:2px solid rgb(var(--design-info));outline-offset:3px}
@@ -48,7 +48,7 @@ button,input{touch-action:manipulation}button:disabled{opacity:.45;cursor:defaul
 #main-card .design-save-actions{flex-wrap:nowrap}#design-alert-title{overflow-wrap:anywhere}
 .design-editor-section>div:first-child h3{color:rgb(var(--section-color))!important}
 #sev-info.active{background:rgb(var(--design-info))!important}#sev-important.active{background:rgb(var(--design-warn))!important}#sev-critical.active{background:rgb(var(--design-bad))!important}
-.design-icon-picker{width:100%;min-width:0;box-sizing:border-box;border:1px solid #24262c;border-radius:10px;overflow:hidden;background:#121316;--ha-select-height:42px;--mdc-shape-small:10px;--ha-textfield-border-radius:10px;--mdc-text-field-fill-color:#121316;--mdc-text-field-idle-line-color:transparent;--mdc-text-field-hover-line-color:transparent;--mdc-text-field-focused-line-color:transparent;--mdc-typography-body1-font-family:var(--paper-font-body1_-_font-family,Arial)}
+.design-icon-picker{width:100%;min-width:0;box-sizing:border-box;border:1px solid var(--design-line);border-radius:10px;overflow:hidden;background:var(--design-inner);--ha-select-height:42px;--mdc-shape-small:10px;--ha-textfield-border-radius:10px;--mdc-text-field-fill-color:var(--design-inner);--mdc-text-field-idle-line-color:transparent;--mdc-text-field-hover-line-color:transparent;--mdc-text-field-focused-line-color:transparent;--mdc-typography-body1-font-family:var(--paper-font-body1_-_font-family,Arial)}
 @media(max-width:1450px){#main-card>div:first-child{grid-template-columns:minmax(0,1fr)}#main-card .design-header-actions{width:100%;justify-content:flex-start}}
 @media(max-width:640px){#main-card .design-header-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#main-card .design-save-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr auto;width:100%}.design-status{width:112px;font-size:10px}#main-card [data-command=test]{grid-column:1/-1}#main-card [data-command=reset]{order:2}#main-card .design-header-actions>div:has(#master-toggle){order:1}#main-card [data-command=test]{order:3}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
@@ -74,7 +74,7 @@ export async function mountNotifications(panel,host){
   let live={enabled:false,devices:[],min_interval:300,battery_step:5,show_timer:true,max_age:1800,...expected.live_charging},liveMore={live_climate:{...LIVE_DEFAULTS.climate,...expected.live_climate},live_open:{...LIVE_DEFAULTS.open,...expected.live_open}},liveHub,saved=snapshot(),rawSaved=JSON.stringify([NF.norm(n),extras,live,liveMore]),failedSnapshot=null,undoState=null,skipUndo=false,saveTimer,undoTimer,muteToasts=false;
   const surface=document.createElement('div');surface.className='local-notifications supplied-notification-design';surface.attachShadow({mode:'open'});UI.watchLanguage(surface.shadowRoot);UI.applyPalette(surface,panel.config);
   for(const key of ['ok','warn','bad','info'])surface.style.setProperty('--design-'+key,surface.style.getPropertyValue('--ds-'+key).replaceAll(',',' '));
-  for(const [key,value]of Object.entries({bg:'var(--primary-background-color,#121316)',card:'var(--card-background-color,#1b1c20)',inner:'color-mix(in srgb,var(--card-background-color,#1b1c20) 90%,#000)',soft:'color-mix(in srgb,var(--card-background-color,#1b1c20) 92%,#fff)',line:'var(--divider-color,#282a30)',fg:'var(--primary-text-color,#eee)',muted:'var(--secondary-text-color,#9ca3af)'}))surface.style.setProperty('--design-'+key,value);
+  for(const [key,value]of Object.entries({bg:'var(--primary-background-color,#121316)',card:'var(--card-background-color,#1b1c20)',inner:'color-mix(in srgb,var(--card-background-color,#1b1c20) 90%,#000)',soft:'color-mix(in srgb,var(--primary-text-color,#fff) 7%,var(--card-background-color,#1b1c20))',line:'var(--divider-color,#282a30)',track:'color-mix(in srgb,var(--primary-text-color,#fff) 14%,var(--card-background-color,#1b1c20))',fg:'var(--primary-text-color,#eee)',muted:'var(--secondary-text-color,#9ca3af)'}))surface.style.setProperty('--design-'+key,value);
   const rgb=surface.style.getPropertyValue('--ds-ok').split(',').map(Number);surface.style.setProperty('--design-accent-fg',rgb.reduce((sum,c,i)=>sum+(i===0?.2126:i===1?.7152:.0722)*(c/255),0)>.55?'#101512':'#fff');
   const root=surface.shadowRoot;root.innerHTML='<style>'+designCss+'\n'+adapterCss+'\n'+notificationLayoutCss+'\n'+compactNotificationCss+'\n'+notificationTitleCss+'</style><div class="design-root min-h-screen text-xs antialiased p-3 sm:p-6 flex flex-col items-center justify-center">'+designHtml+'</div>';
   host.classList.add('notification-design-stage');surface.style.setProperty('--notification-font',getComputedStyle(host).fontFamily);surface.style.fontFamily=getComputedStyle(host).fontFamily;host.append(surface);

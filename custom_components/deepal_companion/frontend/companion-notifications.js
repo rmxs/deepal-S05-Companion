@@ -1,2 +1,2 @@
 /* Notification UI uses the supplied HTML design and its HA bindings. */
-export {mountNotifications} from './companion-notifications-design.js?v=0.1.6&rev=why-17';
+export {mountNotifications} from './companion-notifications-design.js?v=0.1.7&rev=why-17';

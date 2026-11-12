@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.7 — Light and dark themes everywhere
+
+### Updating to 0.1.7
+- Restart Home Assistant after updating, then hard-refresh the browser (Ctrl+F5). In the Home Assistant app on a phone, use **Settings → Companion app → Debugging → Reset frontend cache** if the pages still look old.
+- No settings, profiles, charging sessions or notification choices are changed by this update.
+
+### Fixes
+- **Notifications page on a light theme**: the alert rows, the device buttons (**Devices to notify**), the quiet-hours time boxes, the **Silent / No notification** switch, the filter tabs (**Basic / Recommended / All**), the live notification rows and the on/off switches kept a fixed dark colour, so their text was almost invisible on a white Home Assistant theme. They now use your theme colours, with a visible border on every row and a clear track on switches that are off.
+- **Sessions page on a light theme**: the **Location** and **Sort by** lists and the **Grid / Table** switch were dark with dark text. They now follow the theme.
+- **Time and list pickers** on these pages use the light or dark style of your theme, so the clock, the drop-down lists and the scrollbars match.
+- **Interior view of the card** (the Climate tab): the temperature on the car screen (for example 23 °C), the **On / Off** label and the power button sat on a dark photo but used the theme text colour, so they disappeared on a light theme. They are now always white.
+- **Dark themes look the same as before.** The colours that were fixed on the dark design now come from the theme, so a custom dark theme with other background colours is followed too.
+- **Updated files load on the first refresh**: the version number is raised, so the phone and the browser fetch the new card and pages instead of keeping the old ones.
+
+### Checks and maintenance
+- The automatic checks now match the shared car colour and wheels introduced in 0.1.6: two checks that still treated them as per-profile settings are corrected to use a real per-profile setting (card design and background), and a new check confirms that changing the car colour is shared by every display profile.
+- Light and dark themes were checked on the Notifications and Sessions pages, the other Companion pages, the card designs and the interior view.
+
 ## 0.1.6 — New Sessions page and safer saving
 
 ### Updating to 0.1.6

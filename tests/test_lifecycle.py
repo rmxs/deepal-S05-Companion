@@ -611,14 +611,18 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(config["car_color"], "white")
             self.assertEqual(config["iso_wheels"], "pro")
         first, second = views[0]["id"], views[1]["id"]
-        await hub.db("patch_config", "vehicle", first, {"car_color": "blue", "powertrain": "ev"})
+        await hub.db("patch_config", "vehicle", first, {"car_color": "blue", "powertrain": "ev", "hero_style": "photo"})
         await self.runtime.stop()
         await integration.async_setup_entry(self.hass, self.entry)
         self.runtime = self.entry.runtime_data
         await self.runtime.queue.join()
-        self.assertEqual((await hub.db("config", "vehicle", first))["config"]["car_color"], "blue")
-        self.assertEqual((await hub.db("config", "vehicle", second))["config"]["car_color"], "white")
-        self.assertEqual((await hub.db("config", "vehicle", first))["config"]["powertrain"], "ev")
+        # The car's look and powertrain are shared by every display profile and survive the reload...
+        for view in (first, second):
+            config = (await hub.db("config", "vehicle", view))["config"]
+            self.assertEqual((config["car_color"], config["powertrain"]), ("blue", "ev"))
+        # ...while display settings stay with the profile that changed them.
+        self.assertEqual((await hub.db("config", "vehicle", first))["config"]["hero_style"], "photo")
+        self.assertNotEqual((await hub.db("config", "vehicle", second))["config"].get("hero_style"), "photo")
 
     def add_battery(self, ident, platform="deepal", key="battery_level", disabled=None):
         entry = types.SimpleNamespace(id=ident+"_registry", entity_id=ident, platform=platform,

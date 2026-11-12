@@ -85,6 +85,12 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 3. If the message stays, close the Home Assistant app completely, open it again and check your network.
 
 
+## Colours or text look wrong after an update
+
+1. Hard-refresh the browser (Ctrl+F5).
+2. In the Home Assistant app on a phone, open **Settings → Companion app → Debugging → Reset frontend cache**, then reopen the dashboard.
+3. The Companion pages and the card follow your Home Assistant theme. If a page still looks dark on a light theme, check **Profile → Theme** in Home Assistant, and tell us which page it is.
+
 ## The connection badge shows Offline or No data
 
 1. **Offline** means Deepal Alternative reports the vehicle cloud connection as off or unavailable. Check that integration and its sign-in.
