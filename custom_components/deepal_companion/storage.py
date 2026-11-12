@@ -47,6 +47,10 @@ class HistoryStorage:
         before = self._prior_reading(db, vehicle, entity, start)
         if before:
             rows[before["t"]] = before
+        excluded = db.execute("SELECT start,end FROM reading_exclusions WHERE vehicle=? AND entity=? AND end>=? AND start<=?",
+                              (vehicle, entity, min(rows) if rows else start, end)).fetchall()
+        if excluded:  # readings a user removed from the curve, whether hot or already compressed
+            rows = {t: r for t, r in rows.items() if not any(x["start"] <= t <= x["end"] for x in excluded)}
         return [rows[t] for t in sorted(rows)]
 
     def maintain_storage(self, vehicle, now=None, limit=64):

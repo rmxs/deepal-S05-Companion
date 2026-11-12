@@ -12,6 +12,8 @@ from uuid import uuid4
 from .const import DEFAULT_PROFILES, DEFAULT_PROMPT_MIN_GAIN, DEFAULT_PROMPT_RECENT, RANGES, SHARED_KEYS
 from .storage import HistoryStorage
 
+UNDO_DAYS = 30  # a deleted charge can be restored for this long
+
 
 def encode(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
@@ -79,8 +81,15 @@ class Database(HistoryStorage):
                     cost REAL, PRIMARY KEY(vehicle,session)
                 );
                 CREATE INDEX IF NOT EXISTS session_costs_order ON session_costs(vehicle,cost);
+                CREATE TABLE IF NOT EXISTS reading_exclusions (
+                    vehicle TEXT NOT NULL REFERENCES vehicles(id), entity TEXT NOT NULL,
+                    start REAL NOT NULL, end REAL NOT NULL, created REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS reading_exclusions_time ON reading_exclusions(vehicle,entity,start);
                 PRAGMA user_version=2;
             """)
+            if "deleted" not in {r["name"] for r in db.execute("PRAGMA table_info(sessions)")}:
+                db.execute("ALTER TABLE sessions ADD COLUMN deleted REAL")  # when a user removed the charge; NULL = kept
 
     def ensure_vehicle(self, vehicle, name, config):
         config = {**config, "_configured_prefix": config["prefix"],
@@ -141,6 +150,15 @@ class Database(HistoryStorage):
             # Internal source fields never reach the renderer's settings object.
             shared.pop("battery_entity", None)
             shared = {k: v for k, v in shared.items() if not k.startswith("_")}
+            # Car colour and wheels became vehicle-wide: until one is saved at vehicle level, every profile
+            # uses the value already chosen in the oldest profile that has one (nothing is overwritten).
+            for key in ("car_color", "iso_wheels"):
+                if key not in shared:
+                    for row in db.execute("SELECT config FROM views WHERE vehicle=? ORDER BY rowid", (vehicle,)):
+                        local = json.loads(row["config"])
+                        if key in local:
+                            shared[key] = local[key]
+                            break
             return {"vehicle_id": vehicle, "view_id": v["id"], "view_name": v["name"],
                     "revision": [car["revision"], v["revision"]],
                     "config": {**json.loads(v["config"]), **shared}}
@@ -208,6 +226,17 @@ class Database(HistoryStorage):
         with self.connect() as db:
             db.execute("INSERT OR REPLACE INTO readings VALUES(?,?,?,?,?)", (vehicle, entity, t, str(state), unit))
 
+    def last_good_readings(self, vehicle, entities):
+        """Last stored state per entity, skipping later 'unavailable' readings. Entities with no reading are left out."""
+        result = {}
+        with self.connect() as db:
+            for entity in entities:
+                row = db.execute("SELECT state FROM readings WHERE vehicle=? AND entity=? AND state!='unavailable' ORDER BY t DESC LIMIT 1",
+                                 (vehicle, entity)).fetchone()
+                if row:
+                    result[entity] = row["state"]
+        return result
+
     def save_costs(self, vehicle, value, expected=None):
         """Reject stale editors before they can replace another user's receipts."""
         with self.connect() as db:
@@ -225,7 +254,7 @@ class Database(HistoryStorage):
             db.executemany("INSERT OR REPLACE INTO readings VALUES(?,?,?,?,?)",
                            [(vehicle, entity, t, str(state), unit) for entity, t, state, unit in samples])
             for data in sessions:
-                db.execute("""INSERT INTO sessions VALUES(?,?,?,?,?,?)
+                db.execute("""INSERT INTO sessions(id,vehicle,start,end,active,data) VALUES(?,?,?,?,?,?)
                               ON CONFLICT(vehicle,start) DO UPDATE SET
                               end=excluded.end,active=excluded.active,data=excluded.data""",
                            (data["id"], vehicle, data["s"] / 1000, data["e"] / 1000, int(data["live"]), encode(data)))
@@ -304,7 +333,7 @@ class Database(HistoryStorage):
 
     def save_session(self, vehicle, data):
         with self.connect() as db:
-            db.execute("""INSERT INTO sessions VALUES(?,?,?,?,?,?)
+            db.execute("""INSERT INTO sessions(id,vehicle,start,end,active,data) VALUES(?,?,?,?,?,?)
                           ON CONFLICT(vehicle,start) DO UPDATE SET
                           end=excluded.end,active=excluded.active,data=excluded.data""",
                        (data["id"], vehicle, data["s"] / 1000, data["e"] / 1000, int(data["live"]), encode(data)))
@@ -335,9 +364,84 @@ class Database(HistoryStorage):
                             recovered_pricing=row.get("pricing"), recovered_assignment=row.get("assignment"))
                 if row.get("curve"):
                     data["curve"] = row["curve"]
-                db.execute("INSERT INTO sessions VALUES(?,?,?,?,?,?)", (data["id"], vehicle, start, end, 0, encode(data)))
+                db.execute("INSERT INTO sessions(id,vehicle,start,end,active,data) VALUES(?,?,?,?,?,?)", (data["id"], vehicle, start, end, 0, encode(data)))
                 count += 1
         return count
+
+    # Charges a user removed stay in the table for UNDO_DAYS so they can be restored and so a recorder
+    # import cannot bring them back; maintenance purges them afterwards.
+    def _session_row(self, db, vehicle, ident):
+        row = db.execute("SELECT id,data,deleted FROM sessions WHERE vehicle=? AND id=?", (vehicle, ident)).fetchone()
+        if not row:
+            raise ValueError("Charging session was not found")
+        return row
+
+    def delete_session(self, vehicle, ident, now=None):
+        with self.connect() as db:
+            row = self._session_row(db, vehicle, ident)
+            if json.loads(row["data"]).get("live"):
+                raise ValueError("A running charge cannot be deleted; wait until it ends")
+            if row["deleted"] is None:
+                db.execute("UPDATE sessions SET deleted=? WHERE vehicle=? AND id=?", (now if now is not None else time.time(), vehicle, ident))
+
+    def restore_session(self, vehicle, ident):
+        with self.connect() as db:
+            self._session_row(db, vehicle, ident)
+            db.execute("UPDATE sessions SET deleted=NULL WHERE vehicle=? AND id=?", (vehicle, ident))
+
+    def deleted_sessions(self, vehicle):
+        with self.connect() as db:
+            rows = db.execute("SELECT data,deleted FROM sessions WHERE vehicle=? AND deleted IS NOT NULL ORDER BY deleted DESC", (vehicle,))
+            result = []
+            for r in rows:
+                session = json.loads(r["data"])
+                session.pop("curve", None)
+                session["deleted"] = r["deleted"] * 1000
+                result.append(session)
+            return result
+
+    def purge_deleted(self, vehicle, now=None):
+        """Remove charges deleted more than UNDO_DAYS ago, with their costs index and receipts."""
+        cutoff = (now if now is not None else time.time()) - UNDO_DAYS * 86400
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute("SELECT id,data FROM sessions WHERE vehicle=? AND deleted IS NOT NULL AND deleted<?", (vehicle, cutoff)).fetchall()
+            if not rows:
+                return 0
+            keys = {str(int(json.loads(r["data"])["s"] / 1000 + .5)) for r in rows}
+            record = db.execute("SELECT value FROM kv WHERE vehicle=? AND key='costs'", (vehicle,)).fetchone()
+            if record:
+                costs = json.loads(record["value"])
+                receipts = costs.get("sessions", {})
+                if any(key in receipts for key in keys):
+                    costs["sessions"] = {k: v for k, v in receipts.items() if k not in keys}
+                    db.execute("UPDATE kv SET value=? WHERE vehicle=? AND key='costs'", (encode(costs), vehicle))
+            ids = {r["id"] for r in rows}
+            db.executemany("DELETE FROM session_costs WHERE vehicle=? AND session=?", [(vehicle, i) for i in ids])
+            db.executemany("DELETE FROM sessions WHERE vehicle=? AND id=?", [(vehicle, i) for i in ids])
+            self._store_prompt_queue(db, vehicle, [ident for ident in self._prompt_queue(db, vehicle) if ident not in ids])
+            return len(rows)
+
+    def set_session_mode(self, vehicle, ident, dc):
+        """Correct a charge recorded with the wrong type (a false DC reading after an AC charge)."""
+        with self.connect() as db:
+            row = self._session_row(db, vehicle, ident)
+            session = json.loads(row["data"])
+            session["dc"] = bool(dc)
+            db.execute("UPDATE sessions SET data=? WHERE vehicle=? AND id=?", (encode(session), vehicle, ident))
+            session.pop("curve", None)
+            return session
+
+    def exclude_readings(self, vehicle, entities, start, end, now=None):
+        """Hide current readings in a time range from every curve. Battery readings are never excluded."""
+        entities = [e for e in entities if e]
+        if not entities:
+            raise ValueError("No charging current sensor to edit")
+        with self.connect() as db:
+            created = now if now is not None else time.time()
+            for entity in entities:
+                db.execute("INSERT INTO reading_exclusions VALUES(?,?,?,?,?)", (vehicle, entity, start, end, created))
+                db.execute("DELETE FROM readings WHERE vehicle=? AND entity=? AND t>=? AND t<=?", (vehicle, entity, start, end))
 
     def session_curve(self, vehicle, ident, entities):
         with self.connect() as db:
@@ -362,7 +466,7 @@ class Database(HistoryStorage):
 
     def sessions(self, vehicle, start=None, end=None, include_curve=False):
         with self.connect() as db:
-            rows = db.execute("SELECT data FROM sessions WHERE vehicle=? AND end>=? AND start<=? ORDER BY start",
+            rows = db.execute("SELECT data FROM sessions WHERE vehicle=? AND deleted IS NULL AND end>=? AND start<=? ORDER BY start",
                               (vehicle, start if start is not None else 0, end if end is not None else time.time() + 86400))
             result = [json.loads(r["data"]) for r in rows]
             if not include_curve:
@@ -390,7 +494,7 @@ class Database(HistoryStorage):
                 locations.setdefault(ident, "Manual charge" if ident == "manual" else profile.get("name") or ident)
                 if ident == location:
                     matching.append(int(key))
-            where, params = "s.vehicle=?", [vehicle]
+            where, params = "s.vehicle=? AND s.deleted IS NULL", [vehicle]
             if location:
                 where += " AND CAST(s.start+0.5 AS INTEGER) " + ("NOT IN" if location == "__unset__" else "IN") + " (SELECT value FROM json_each(?))"
                 params.append(encode(assigned if location == "__unset__" else matching))
@@ -447,7 +551,7 @@ class Database(HistoryStorage):
         minimum = setting("charge_prompt_min_gain", DEFAULT_PROMPT_MIN_GAIN)
         recent = int(setting("charge_prompt_recent", DEFAULT_PROMPT_RECENT))
         queue = Database._prompt_queue(db, vehicle)
-        rows = [db.execute("SELECT data FROM sessions WHERE vehicle=? AND id=?", (vehicle, ident)).fetchone() for ident in queue]
+        rows = [db.execute("SELECT data FROM sessions WHERE vehicle=? AND id=? AND deleted IS NULL", (vehicle, ident)).fetchone() for ident in queue]
         rows = [row for row in rows if row]
         if not rows:
             return None

@@ -9,7 +9,7 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "0.1.5"; // the build overwrites this with the package version
+const CARD_VERSION = "0.1.6"; // the build overwrites this with the package version
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-s05-card";
 const SETTINGS_TAG = "deepal-s05-settings";
@@ -35,6 +35,8 @@ const SCRIPT_BASE = (() => {
 })();
 
 /* ───────────────────────── Defaults ───────────────────────── */
+/* sections the Minimal / Cockpit designs do not draw: shown greyed out in the Sections list, saved order and visibility stay untouched */
+const DESIGN_UNUSED = { minimal: ["hero", "actions", "status", "stats", "costs"], ultra: ["hero", "actions", "status", "stats", "costs"], cockpit: ["stats"] };
 const SECTIONS = ["hero", "actions", "status", "charge", "curve", "stats", "info", "costs", "reminder"]; /* diagnostics is no longer a section: warnings live on the top Diagnostics button */
 const SECTION_LABELS = {
   hero: "Vehicle image",
@@ -667,7 +669,8 @@ const INT_LAYERS = ["seat_heat_driver_on", "seat_heat_passenger_on", "seat_vent_
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : "");
 const STATE_TX = { not_charging: "Not charging", charging: "Charging", charge_complete: "Charge complete", charged: "Charge complete", fully_charged: "Charge complete", on: "On", off: "Off", locked: "Locked", unlocked: "Unlocked", open: "Open", closed: "Closed", unknown: "Unknown", unavailable: "unavailable", parked: "Parked", driving: "Driving" };
 const stateText = (s) => { const k = String(s).trim().toLowerCase().replace(/[\s-]+/g, "_"); return STATE_TX[k] || cap(String(s).replace(/_/g, " ")); };
-const CONF_ICO = { unlock: "unlock", lock: "lock", trunk: "trunkopen", windows: "windowopen", climate: "snow", climate_temp: "snow" };
+const CONF_ICO = { unlock: "unlock", lock: "lock", trunk: "trunkopen", windows: "windowopen", climate: "snow", climate_temp: "snow", flash: "headlight", honk: "horn", find: "find", refresh: "refresh" };
+const CONF_HEAD = { unlock: "Doors", lock: "Doors", trunk: "Trunk", windows: "Windows", climate: "Climate", climate_temp: "Climate", flash: "Lights", honk: "Horn", find: "Locate", refresh: "Refresh" };
 const CONFIRM_TEXT = {
   unlock: ["Unlock the vehicle?", "The vehicle will unlock."],
   trunk: ["Open the trunk?", "The trunk will open."],
@@ -734,7 +737,7 @@ ha-icon.i { --mdc-icon-size: var(--is, 20px); width: var(--is, 20px); height: va
 .on > .sw, .sw.on { background: rgb(var(--ds-info)); } .on > .sw::after, .sw.on::after { transform: translateX(14px); }
 `;
 const VARS = `
-  --ds-r: 22px; --ds-ok: 52,211,153; --ds-warn: 251,191,36; --ds-bad: 248,113,113; --ds-info: 56,189,248; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
+  --ds-r: 22px; --ds-tr: 22px; --ds-ok: 52,211,153; --ds-warn: 251,191,36; --ds-bad: 248,113,113; --ds-info: 56,189,248; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
   --ds-fg: var(--primary-text-color, #fff); --ds-fg2: rgba(255,255,255,.72); --ds-fg2: color-mix(in srgb, var(--primary-text-color, #fff) 72%, transparent);
   --ds-line: rgba(var(--rgb-primary-text-color, 255,255,255), .12); --ds-soft: rgba(var(--rgb-primary-text-color, 255,255,255), .06);
 `;
@@ -748,8 +751,9 @@ ha-card { ${VARS}
     radial-gradient(90% 60% at 100% 0%, rgba(var(--ds-fu), .08), transparent 60%),
     var(--ha-card-background, var(--card-background-color, #1c1c1c)); }
 ha-card[data-pad="half"] { padding:7px; gap:12px; }
-ha-card[data-pad="none"] { padding:0 0 8px; gap:8px; }
+ha-card[data-pad="none"] { padding:0 0 3px; gap:8px; --ds-tr: 25px; } /* tiles sit 3px from every edge; 25px keeps their corners concentric with the 28px card */
 ha-card[data-pad="none"] > :not(.hero):not(.sheet) { margin-inline:3px; }
+ha-card[data-pad="none"] .stats { gap:8px; }
 ha-card[data-pad="none"] > .hero { border-radius:0; }
 ha-card[data-ppad="half"] .sheet { padding:5px; } ha-card[data-ppad="half"] .box { padding:8px 7px 6px; }
 ha-card[data-ppad="none"] .sheet { padding:0; } ha-card[data-ppad="none"] .box { padding:8px 4px 4px; border-radius:24px 24px 0 0; border-inline:0; border-bottom:0; }
@@ -817,7 +821,7 @@ ${BASE_CSS}
   background: rgba(10,11,15,.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border:1px solid rgba(255,255,255,.16); -webkit-tap-highlight-color: transparent; transition: transform .14s ease; }
 .rfs[hidden] { display:none; } .rfs .i { --is:20px; } .rfs:active { transform: scale(.9); } .rfs.ok { color: rgb(var(--ds-ok)); border-color: rgb(var(--ds-ok) / .55); } .rfs.bad { color: rgb(var(--ds-bad)); border-color: rgb(var(--ds-bad) / .55); } .rfs.success { color: rgb(var(--ds-ok)); } .rfs.error { color: rgb(var(--ds-bad)); }
 .rfs .bdg { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background: rgb(var(--ds-bad)); color:#fff; font-size:10px; font-weight:800; font-style:normal; line-height:16px; text-align:center; pointer-events:none; box-shadow:0 0 0 1.5px rgba(10,11,15,.85); }
-.rfs .age { position:absolute; top:-9px; right:-3px; z-index:2; min-width:18px; height:16px; padding:0 5px; box-sizing:border-box; border-radius:8px; font-size:10px; font-weight:800; font-style:normal; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; pointer-events:none; --c: var(--ds-ok); color: rgb(var(--c)); background: linear-gradient(rgba(var(--c), .26), rgba(var(--c), .26)), rgba(10,11,15,.86); box-shadow: 0 0 0 1px rgba(var(--c), .5); } .rfs .age.warn { --c: var(--ds-warn); } .rfs .age.bad { --c: var(--ds-bad); }
+.rfs .age { position:absolute; top:-8px; right:-10px; z-index:2; min-width:18px; height:16px; padding:0 5px; box-sizing:border-box; border-radius:8px; font-size:10px; font-weight:800; font-style:normal; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; pointer-events:none; --c: var(--ds-ok); color: rgb(var(--c)); background: linear-gradient(rgba(var(--c), .26), rgba(var(--c), .26)), rgba(10,11,15,.86); box-shadow: 0 0 0 1px rgba(var(--c), .5); } .rfs .age.warn { --c: var(--ds-warn); } .rfs .age.bad { --c: var(--ds-bad); }
 .rfs .ring { position:absolute; inset:-3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events:none; overflow:visible; }
 .rfs .ring rect { fill:none; stroke: rgba(255,255,255,.85); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 20 80; animation: ds-dash 1.2s linear infinite; }
 .meta .dgb:not(.warnb) { color: rgb(var(--ds-ok)) !important; }
@@ -875,15 +879,15 @@ ${BASE_CSS}
 @media (prefers-reduced-motion: reduce) { .toast { transition: opacity .01s; } .toast .tp { animation:none; display:none; } }
 
 /* Buttons (round, like the app) */
-.actions { --bs: 52px; container-type: inline-size; padding: 2px 0; }
+.actions { --bs: 52px; container-type: inline-size; padding: 2px 0; margin-block: -2px; } /* the padding only keeps the button glow unclipped; the negative margin keeps the space to the next block equal to the card gap */
 .actions.sz-s { --bs: 42px; } .actions.sz-l { --bs: 62px; }
-.actions.grid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 18px 4px; }
-.actions.scroll { display:flex; gap: 12px; overflow-x:auto; scrollbar-width:none; padding: 2px 2px 4px; scroll-snap-type:x proximity; }
+.actions.grid { display:flex; flex-wrap:wrap; justify-content:center; gap: 18px 4px; } .actions.grid .cell { flex: 0 0 calc((100% - 16px) / 5); min-width:0; } /* five per row; a shorter last row is centred */
+.actions.scroll { display:flex; gap: 12px; overflow-x:auto; scrollbar-width:none; padding: 2px 2px 4px; margin-block: -2px -4px; scroll-snap-type:x proximity; }
 .actions.scroll::-webkit-scrollbar { display:none; }
 .actions.scroll[data-r] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); }
 .actions.scroll[data-l] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px); mask-image: linear-gradient(90deg, transparent, #000 34px); }
 .actions.scroll[data-l][data-r] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); }
-.actions.scroll .cell { flex:none; width: calc(var(--bs) + 22px); scroll-snap-align:start; }
+.actions.scroll .cell { flex:none; width: var(--cw, calc(var(--bs) + 22px)); scroll-snap-align:start; }
 .actions.fit { display:flex; gap:4px; justify-content:space-between; }
 .actions.fit .cell { flex:1 1 0; } .actions.fit .act { --bs: clamp(32px, 11cqw, 52px); }
 .cell { --c: var(--ds-info); display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; }
@@ -931,7 +935,7 @@ ${BASE_CSS}
 
 /* Temperature / battery tiles */
 .stats { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.t2 { position:relative; overflow:hidden; min-height:118px; padding: 10px 14px 12px; border-radius: 22px; background: var(--ds-soft); border:1px solid var(--ds-line); text-align:left; color: var(--ds-fg); }
+.t2 { position:relative; overflow:hidden; min-height:118px; padding: 10px 14px 12px; border-radius: var(--ds-tr); background: var(--ds-soft); border:1px solid var(--ds-line); text-align:left; color: var(--ds-fg); }
 .t2[data-open] { cursor:pointer; -webkit-tap-highlight-color: transparent; transition: transform .14s ease; } .t2[data-open]:active { transform: scale(.985); }
 .t2 .tt { position:relative; z-index:1; font-size: 14.5px; font-weight: 600; letter-spacing:-.01em; }
 .t2 .ts { margin-top: 4px; font-size: 12.5px; color: var(--ds-fg2); line-height:1.35; }
@@ -1103,7 +1107,10 @@ ${BASE_CSS}
 
 /* Information */
 .info { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; } .info::-webkit-scrollbar { display:none; }
-.tile { flex:1 0 auto; min-width: 88px; display:flex; align-items:center; gap:11px; padding:12px 15px; border-radius:18px; background: var(--ds-soft); border:1px solid var(--ds-line); }
+.info[data-r] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 34px), transparent); }
+.info[data-l] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px); mask-image: linear-gradient(90deg, transparent, #000 34px); }
+.info[data-l][data-r] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); mask-image: linear-gradient(90deg, transparent, #000 34px, #000 calc(100% - 34px), transparent); }
+.tile { flex:1 0 auto; min-width: 88px; display:flex; align-items:center; gap:11px; padding:12px 15px; border-radius: var(--ds-tr); background: var(--ds-soft); border:1px solid var(--ds-line); }
 .tile .i { --is: 24px; color: rgb(var(--ds-ok)); }
 ha-card[data-ti="custom"] .tile:not(.bad) .i { color: var(--ds-tile-custom); } ha-card[data-ti="blue"] .tile:not(.bad) .i { color: rgb(var(--ds-info)); } ha-card[data-ti="neutral"] .tile:not(.bad) .i { color: var(--ds-fg2); } .tile .v { font-size:16px; font-weight:600; color: var(--ds-fg); white-space:nowrap; } .tile .l { font-size:13px; color: var(--ds-fg2); white-space:nowrap; }
 .tells { position:absolute; right:14px; bottom:14px; z-index:8; display:flex; align-items:center; gap:4px; } .tells[hidden] { display:none; }
@@ -1151,12 +1158,27 @@ ha-card[data-ti="custom"] .tile:not(.bad) .i { color: var(--ds-tile-custom); } h
 .chgline.s-text, .chgline.s-big, .chgline.s-beside { display:none; }
 .chgbox[hidden], .chgline[hidden] { display:none; }
 /* Car View: the socket is in a different place than in the photos and moves with the width and zoom; the charging text is tied to it (cqw = 1% of the hero width) */
+/* Car View background by time of day: dark-theme friendly skies (deep blue by day, dusk in the evening); the soft ground shadow under the car stays */
+.hero[data-style="carview"][data-sky="morning"] { background: radial-gradient(ellipse 60% calc(.5 * 100cqw / var(--ds-ar0, 1.4)) at 56% calc(100% - .2 * 100cqw / var(--ds-ar0, 1.4)), rgba(20,30,45,.38) 0%, rgba(20,30,45,0) 70%), linear-gradient(180deg, #1f3a5a 0%, #3e6388 52%, #86806f 100%); }
+.hero[data-style="carview"][data-sky="afternoon"] { background: radial-gradient(ellipse 60% calc(.5 * 100cqw / var(--ds-ar0, 1.4)) at 56% calc(100% - .2 * 100cqw / var(--ds-ar0, 1.4)), rgba(15,30,50,.40) 0%, rgba(15,30,50,0) 70%), linear-gradient(180deg, #17365a 0%, #2c5b8e 52%, #5683b0 100%); }
+.hero[data-style="carview"][data-sky="evening"] { background: radial-gradient(ellipse 60% calc(.5 * 100cqw / var(--ds-ar0, 1.4)) at 56% calc(100% - .2 * 100cqw / var(--ds-ar0, 1.4)), rgba(20,10,30,.45) 0%, rgba(20,10,30,0) 70%), linear-gradient(180deg, #1c1d4a 0%, #54386a 50%, #a8654f 100%); }
+.hero[data-style="carview"][data-sky="morning"] .shade-top, .hero[data-style="carview"][data-sky="afternoon"] .shade-top, .hero[data-style="carview"][data-sky="evening"] .shade-top { opacity:.6; }
+.hero[data-style="carview"][data-sky="morning"] .shade-left, .hero[data-style="carview"][data-sky="afternoon"] .shade-left, .hero[data-style="carview"][data-sky="evening"] .shade-left { opacity:.7; }
+.hero[data-style="carview"][data-sky="morning"] .hero-top, .hero[data-style="carview"][data-sky="afternoon"] .hero-top, .hero[data-style="carview"][data-sky="evening"] .hero-top { text-shadow: 0 1px 6px rgba(0,0,0,.45); }
 .hero[data-style="carview"] { --ds-px: calc(50% + var(--ds-cvs, 1.08) * 26.47cqw); --ds-py: calc(50% + var(--ds-cvs, 1.08) * .27cqw); }
 .hero[data-style="carview"] .chgbox { top: calc(var(--ds-py) - 55px); left: min(calc(var(--ds-px) + 1px), calc(100% - 20px)); }
 .hero[data-style="carview"] .chgbox.text, .hero[data-style="carview"] .chgbox.big { top: calc(var(--ds-py) - 58px); left: min(calc(var(--ds-px) - 16px), calc(100% - 20px)); }
 .hero[data-style="carview"] .chgbox.beside { top: var(--ds-py); left: calc(var(--ds-px) - 24px); } /* the guide dot sits on the centre of the port pulse */
 .hero[data-style="carview"] .chgline { left: var(--ds-px); top: calc(var(--ds-py) - 37px); height: 27px; }
 .hero { container-type: inline-size; }
+/* "Card only" page: on a phone the card is at least as tall as the screen, like an app (computers keep the normal card). The hero takes the height the other blocks leave and the photo keeps its ratio at the bottom of it. If the blocks are taller than the screen, the card grows and the page scrolls normally – the card never scrolls inside itself. */
+@media (max-width:699px) {
+  :host([data-app]) { height:auto; }
+  :host([data-app]) ha-card { height:auto; min-height: calc(var(--card-page-h, 100dvh) - var(--card-pad, 0px)); box-sizing:border-box; }
+  :host([data-app]) ha-card > .hero { flex:1 1 0; aspect-ratio:auto; min-height:max(230px, 32dvh); }
+  :host([data-app]) .hbox { top:auto; height: calc(100cqw / var(--ds-ar0, 1.7778)); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16%); mask-image: linear-gradient(to bottom, transparent 0, #000 16%); }
+  :host([data-app]) ha-card > :not(.hero):not(.sheet) { flex:none; }
+}
 @container (max-width: 370px) { .chgbox.line { font-size:12.5px; } .chgbox .a { font-size:18px; } .chgbox.big .a { font-size:28px; } }
 .charge { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; padding: 12px; border-radius:18px; border:1px solid rgba(var(--ds-ok), .28); background: linear-gradient(145deg, rgba(var(--ds-ok), .10), var(--ds-soft)); }
 .charge > div { min-width:0; } .charge .l { font-size:11.5px; color: var(--ds-fg2); }
@@ -1167,6 +1189,7 @@ ha-card[data-ti="custom"] .tile:not(.bad) .i { color: var(--ds-tile-custom); } h
 .foot { position:absolute; right:12px; bottom:12px; z-index:3; width:26px; height:26px; padding:0; justify-content:center; border-radius:50%; background: rgba(10,11,15,.55); border:1px solid rgba(255,255,255,.16); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: rgba(255,255,255,.8); opacity:1; }
 .foot .sets { gap:0; } .foot .i { --is:15px !important; }
 .foot { display:inline-flex; align-items:center; cursor:pointer; }
+.foot::before { content:""; position:absolute; inset:-9px; } /* 44px touch area around the 26px button */
 .companion-credit{font-size:10px;line-height:1.5;color:var(--ds-fg2);opacity:.7;text-align:center;margin:0 12px 10px;pointer-events:none}.foot:hover, .foot:focus-visible { opacity:1; } .foot .i { --is: 14px; } .foot .sets { display:inline-flex; align-items:center; gap:6px; } .foot.nosets { cursor:default; pointer-events:none; } .foot.nosets .sets { display:none; }
 
 /* Sheet */
@@ -1211,7 +1234,7 @@ ${LOADER_CSS}
 .total .big, .gauge .c, .t2 .lg b, .t2 .ts b, .tile .v, .cur, .cv b, .tp .v, .picker, .pk * { font-variant-numeric: tabular-nums; }
 
 /* buttons: main row + "More" */
-.actions.split { --bs: 60px; display:block; padding:2px 0 4px; }
+.actions.split { --bs: 60px; display:block; padding:2px 0 4px; margin-block: -2px -4px; }
 .actions.split.sz-s { --bs: 50px; } .actions.split.sz-l { --bs: 68px; }
 .actions.split .prow { display:grid; grid-template-columns: repeat(var(--np, 4), 1fr); gap: 4px; }
 .actions.split .mrow { display:flex; flex-wrap:wrap; justify-content:center; gap: 14px 4px; padding: 0; transition: padding .28s ease; }
@@ -1224,7 +1247,7 @@ ${LOADER_CSS}
 .morebtn { position:relative; display:flex; align-items:center; justify-content:center; margin:0 auto; padding:0; width:52px; height:22px; min-height:0; border-radius:999px; border:1px solid var(--ds-line); background: var(--ds-soft); color: var(--ds-fg2); cursor:pointer; -webkit-tap-highlight-color: transparent; }
 .morebtn::before { content:""; position:absolute; inset:-12px -14px; } /* large touch area, invisible */
 .morebtn > span:not(.mdot) { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
-.actions.split .morebtn { margin-top:6px; margin-bottom:2px; } .actions.split .morebtn:hover { color: var(--ds-fg); }
+.actions.split .morebtn { margin-top:6px; margin-bottom:0; } .actions.split .morebtn:hover { color: var(--ds-fg); }
 .morebtn .i { --is:16px; transition: transform .25s ease; } .actions.moreopen .morebtn .i { transform: rotate(180deg); }
 .morebtn:focus-visible { outline: 2px solid rgb(var(--ds-info)); outline-offset: 2px; }
 .morebtn .mdot { position:absolute; top:3px; right:9px; width:7px; height:7px; border-radius:50%; background: rgb(var(--ds-warn)); }
@@ -1267,7 +1290,7 @@ h4 { margin:0 0 2px; font-size:11.5px; font-weight:700; letter-spacing:.08em; te
 .list { display:flex; flex-direction:column; gap:4px; }
 .row { display:flex; align-items:center; gap:8px; padding:7px 8px 7px 11px; border-radius:13px; background: var(--ds-soft); min-height:44px; }
 .row > span { flex:1; min-width:0; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; } .row > span small { display:block; font-size:11px; color: var(--ds-fg2); }
-.row.off > span { opacity:.45; } .row > .i { color: var(--ds-fg2); }
+.row.off > span { opacity:.45; } .row.unused { opacity:.4; pointer-events:none; } .row > .i { color: var(--ds-fg2); }
 .row.tg { cursor:pointer; text-align:left; border:0; width:100%; } .row.tg.on > .i { color: rgb(var(--ds-info)); }
 .swb { border:0; background:transparent; padding:6px 2px 6px 6px; cursor:pointer; display:grid; place-items:center; }
 .field { display:flex; flex-direction:column; gap:4px; font-size:12px; color: var(--ds-fg2); }
@@ -1367,10 +1390,10 @@ function mergeConfig(yaml, local) {
 
 /* Car View background: on top of black, sun/moon, clouds, hills and the curved wall line are added, depending on the time of day. */
 const SKY_PH = {
-  morning:   { sun: [16, 27, "#ffe9bf"], r: 3.2, glow: .27, cl: "#f4f8ff", ca: .35, line: "#ffffff", la: .57, hill: "#9fb3c8", ha: .44, stars: 0, moon: 0 },
-  afternoon: { sun: [80, 9, "#ffffff"], r: 3.6, glow: .30, cl: "#ffffff", ca: .50, line: "#ffffff", la: .75, hill: "#8fb0d2", ha: .52, stars: 0, moon: 0 },
-  evening:   { sun: [84, 26, "#ffb871"], r: 3.8, glow: .33, cl: "#ffb98a", ca: .46, line: "#ffcfa8", la: .63, hill: "#8a5f86", ha: .60, stars: .25, moon: 0 },
-  night:     { sun: [82, 11, "#eaf0ff"], r: 2.6, glow: .18, cl: "#7f9ad8", ca: .18, line: "#8fb0ff", la: .42, hill: "#35508f", ha: .44, stars: 1, moon: 1 },
+  morning:   { sun: [30, 24, "#ffe9bf"], r: 3.2, glow: .27, cl: "#f4f8ff", ca: .35, line: "#ffffff", la: .57, hill: "#9fb3c8", ha: .44, stars: 0, moon: 0 },
+  afternoon: { sun: [66, 10, "#ffffff"], r: 3.6, glow: .30, cl: "#ffffff", ca: .50, line: "#ffffff", la: .75, hill: "#8fb0d2", ha: .52, stars: 0, moon: 0 },
+  evening:   { sun: [68, 24, "#ffb871"], r: 3.8, glow: .33, cl: "#ffb98a", ca: .46, line: "#ffcfa8", la: .63, hill: "#8a5f86", ha: .60, stars: .25, moon: 0 },
+  night:     { sun: [66, 11, "#eaf0ff"], r: 2.6, glow: .18, cl: "#7f9ad8", ca: .18, line: "#8fb0ff", la: .42, hill: "#35508f", ha: .44, stars: 1, moon: 1 },
 };
 const skySvg = (ph) => {
   const T = SKY_PH[ph], [sx, sy, sc] = T.sun;
@@ -1448,8 +1471,9 @@ class DeepalS05Card extends HTMLElement {
   }
 
   disconnectedCallback() {
+    for (const a of [this._el && this._el.actions, this._el && this._el.info]) if (a && a._scRO) { a._scRO.disconnect(); a._scRO = null; }
     for (const image of this.shadowRoot.querySelectorAll("img")) { clearTimeout(image._retryTimer); image._retryTimer = null; }
-    clearInterval(this._skyTick); this._skyTick = 0;
+    clearInterval(this._skyTick); this._skyTick = 0; clearInterval(this._nfTimer); this._nfTimer = 0;
     for (const p of Object.values(this._pending || {})) clearTimeout(p.timer); this._pending = {}; for (const f of Object.values(this._flashes || {})) clearTimeout(f.timer); this._flashes = {};
     /* timers that concern only the screen (not the saving ones) */
     for (const t of ["_toastTimer", "_confirmTimer", "_pkT", "_pkUT", "_pkPT", "_tTimer", "_tTimer2", "_optTimer"]) clearTimeout(this[t]);
@@ -1641,10 +1665,23 @@ class DeepalS05Card extends HTMLElement {
     return { unlocked, lights, charging, plugged, battery, open, blind, img };
   }
   _scUpd() {
-    const a = this._el && this._el.actions; if (!a) return;
-    if (!a._scBound) { a._scBound = true; a.addEventListener("scroll", () => this._scUpd(), { passive: true }); }
-    const r = a.scrollWidth - a.clientWidth - a.scrollLeft > 6, l = a.scrollLeft > 6;
-    a.toggleAttribute("data-r", r); a.toggleAttribute("data-l", l);
+    /* edge fades for the two scrolling rows (action buttons, info tiles) */
+    for (const a of [this._el && this._el.actions, this._el && this._el.info]) {
+      if (!a) continue;
+      if (!a._scBound) { a._scBound = true; a.addEventListener("scroll", () => this._scUpd(), { passive: true }); }
+      if (!a._scRO && typeof ResizeObserver === "function") { a._scRO = new ResizeObserver(() => this._scUpd()); a._scRO.observe(a); }
+      if (a === this._el.actions) {
+        /* scrolling buttons: size the cells so the next button always shows half, instead of a blank edge */
+        if (a.classList.contains("scroll") && a.clientWidth) {
+          const bs = parseFloat(getComputedStyle(a).getPropertyValue("--bs")) || 52, base = bs + 22, av = a.clientWidth - 4;
+          const n = Math.max(1, Math.round((av - base / 2) / (base + 12)));
+          const cw = (a.childElementCount > n ? Math.max(bs + 6, (av - n * 12) / (n + .5)) : base).toFixed(1) + "px";
+          if (a.style.getPropertyValue("--cw") !== cw) a.style.setProperty("--cw", cw);
+        } else if (a.style.getPropertyValue("--cw")) a.style.removeProperty("--cw");
+      }
+      const r = a.scrollWidth - a.clientWidth - a.scrollLeft > 6, l = a.scrollLeft > 6;
+      a.toggleAttribute("data-r", r); a.toggleAttribute("data-l", l);
+    }
   }
   _ageMin() { const t = new Date(this._s("sensor.last_updated") || "").getTime(); return Number.isFinite(t) ? Math.max(0, Math.round((Date.now() - t) / 60000)) : 0; }
   /* Data age as a short tint badge on the refresh button: 1m, 3m, 1h ... yellow after 2 h, red after 4 h */
@@ -1924,11 +1961,29 @@ class DeepalS05Card extends HTMLElement {
     const off = !!p || !(locked || unl);
     const seg = (k, ic, lb, on) => `<button data-lk="${k}" class="${on ? "on" : ""} ${k === "unlock" ? "w" : ""}"${off ? " disabled" : ""}>${ico(ic)}<span>${esc(lb)}</span></button>`;
     const ask = this._lockAsk && !p ? CONFIRM_TEXT[this._lockAsk] : null; /* confirmation inside this window, no second popup */
-    if (ask) return `${sheetHd(unl ? "unlock" : "lock", T("Doors"))}<div class="lkb" style="--st:${rgb}"><div class="lkt">${esc(text)}</div><div class="lks">${esc(sub)}</div></div>
-      <div class="lksw"><button data-lk="no">${ico("close")}<span>${esc(T("Cancel"))}</span></button><button data-lk="yes" class="go">${ico(CONF_ICO[this._lockAsk])}<span>${esc(T("Confirm"))}</span></button></div>
-      <p class="lkh q">${esc(T(ask[0]))}</p>`;    return `${sheetHd(unl ? "unlock" : "lock", T("Doors"))}<div class="lkb" style="--st:${rgb}"><div class="lkt">${esc(text)}</div><div class="lks">${esc(sub)}</div></div>
+    if (ask) return this._askHtml(this._lockAsk, { icon: unl ? "unlock" : "lock", text, sub, rgb, no: "data-lk=\"no\"", yes: "data-lk=\"yes\"" });
+    return `${sheetHd(unl ? "unlock" : "lock", T("Doors"))}<div class="lkb" style="--st:${rgb}"><div class="lkt">${esc(text)}</div><div class="lks">${esc(sub)}</div></div>
       <div class="lksw">${seg("lock", "lock", T("Lock"), locked)}${seg("unlock", "unlock", T("Unlock"), unl)}</div>
       <p class="lkh">${esc(T("Tap the other side to change"))}</p>`;
+  }
+  /* Confirmation window: the same layout as the Doors window (header, current state, Cancel / Confirm, question) for every command that asks first */
+  _askHtml(key, o = {}) {
+    const q = (CONFIRM_TEXT[key] || ["Continue?", ""])[0];
+    let icon = o.icon, text = o.text, sub = o.sub, rgb = o.rgb;
+    if (text === undefined) {
+      const open = (e) => { const v = this._s(e); return v === "open" || v === "opening"; };
+      const st = this._status(this._vehicle());
+      if (key === "windows") { const v = this._s("cover.windows"); text = v ? stateText(v) : T("Unavailable"); rgb = open("cover.windows") ? "var(--ds-warn)" : "var(--ds-ok)"; }
+      else if (key === "trunk") { const v = this._s("cover.trunk"); text = v ? stateText(v) : T("Unavailable"); rgb = open("cover.trunk") ? "var(--ds-warn)" : "var(--ds-ok)"; }
+      else if (key === "climate" || key === "climate_temp") { text = this._climateIsOn() ? T("On") : T("Off"); rgb = "var(--ds-ok)"; }
+      else { text = st.text; rgb = "var(--ds-ok)"; }
+      sub = this._statusMsgs(st, "roll").map((m) => m.t).join(" · ");
+    }
+    icon = icon || CONF_ICO[key] || "check";
+    const no = o.no || "data-close", yes = o.yes || 'data-sheet="yes"';
+    return `${sheetHd(icon, T(CONF_HEAD[key] || "Confirm"))}<div class="lkb" style="--st:${rgb}"><div class="lkt">${esc(text)}</div><div class="lks">${esc(sub || "")}</div></div>
+      <div class="lksw"><button ${no}>${ico("close")}<span>${esc(T("Cancel"))}</span></button><button ${yes} class="go">${ico(CONF_ICO[key] || "check")}<span>${esc(T("Confirm"))}</span></button></div>
+      <p class="lkh q">${esc(T(q))}</p>`;
   }
   _lockPick(want) {
     const s = this._s("lock.doors");
@@ -1970,7 +2025,24 @@ class DeepalS05Card extends HTMLElement {
   _paintNotificationLink() {
     const button=this._el?.nfbell;if(!button)return;
     button.hidden=(this._c.top_buttons_hidden||[]).includes('bell');
-    button.innerHTML=ico('chat');button.title=T('Notifications');button.setAttribute('aria-label',button.title);
+    const n=button.hidden||this._isCompanionPreview?0:this._nfUnread||0,key=String(n);
+    if(button._drawn!==key){button._drawn=key;button.innerHTML=ico('chat')+(n?`<i class="bdg">${n>9?'9+':n}</i>`:'');button.title=T('Notifications')+(n?` · ${n}`:'');button.setAttribute('aria-label',button.title);}
+    if(!button.hidden&&!this._nfTimer){this._nfCheck();this._nfTimer=setInterval(()=>this._nfCheck(),60000);}
+  }
+  /* Unread alerts for this Home Assistant user, kept by the backend (so it follows the user across devices). One small request a minute while the page is visible. */
+  async _nfCheck(mark) {
+    if (this._isCompanionPreview) return; /* the settings preview has no unread alerts and never calls the backend */
+    const h = this._hass; if ((!mark && (document.hidden || this._nfSheet)) || !h || !h.companionRequest || (h.user && h.user.is_admin === false) || this._nfBusy) return;
+    this._nfBusy = true;
+    try {
+      const r = await h.companionRequest("notifications_unread", mark ? { mark: true } : {}), n = Number(r && r.unread) || 0;
+      if (n !== this._nfUnread) { this._nfUnread = n; this._paintNotificationLink(); }
+    } catch (e) { /* the badge is optional */ } finally { this._nfBusy = false; }
+  }
+  _nfMarkSeen() {
+    if (this._isCompanionPreview) return;
+    if (this._nfUnread) { this._nfUnread = 0; this._paintNotificationLink(); }
+    this._nfBusy = false; this._nfCheck(true);
   }
   /* Settings live in the Companion dashboard (admins only); the card just links there. */
   _openDashboard() {
@@ -2216,7 +2288,7 @@ class DeepalS05Card extends HTMLElement {
     const el = this._el.sky; if (!el) return;
     const ph = on ? this._skyPhase() : "";
     if (this._skyP === ph) return;
-    this._skyP = ph; el.dataset.p = ph; el.innerHTML = ph ? skySvg(ph) : "";
+    this._skyP = ph; el.dataset.p = ph; el.innerHTML = ph ? skySvg(ph) : ""; this._el.hero.dataset.sky = ph;
   }
   /* "Car View" style hero: 3/4 render with live doors/bonnet/tailgate/windows/lights; when the charger is connected
      (or the car is charging) it switches to the translucent view (vista_carga) with the cable and the same charging effects as the photos. */
@@ -2453,7 +2525,7 @@ class DeepalS05Card extends HTMLElement {
       if (t.dataset.id) return this._onAction(t.dataset.id);
       if (t.dataset.tp) return this._tempStep(Number(t.dataset.tp));
     });
-    this._el.nfbell.addEventListener("click", () => { this._nfSheet = true; this._force(); });
+    this._el.nfbell.addEventListener("click", () => { this._nfMarkSeen(); this._nfSheet = true; this._force(); });
     this._el.dgb.addEventListener("click", () => { this._diagSheet = true; this._force(); });
     this._el.tells.addEventListener("click", (e) => { if (e.target.closest("[data-diag-open]")) { this._diagSheet = true; this._force(); } });
     this._el.foot.addEventListener("click", () => { if (this._c.show_customize === false) return; this._openDashboard(); });
@@ -2619,6 +2691,8 @@ class DeepalS05Card extends HTMLElement {
     const climOn = this._climateIsOn(), tgt = (() => { const t = this._tgt(); const n = t ? parseFloat(t.state) : NaN; return Number.isFinite(n) ? n : null; })(), pendC = !!this._pending.climate, climOk = this._s("climate.cabin_climate") !== null;
     const tgtShown = this._tpend ?? tgt;
     const leftTxt = this._fmtLeft(this._s("sensor.remaining_charge_time_h_mm"));
+    { const t = new Date(this._s("sensor.last_updated")).getTime(); /* one shared set of values for the Minimal / Cockpit layouts (companion-design.js) */
+      this._dv = { bat, range, fuel, fu, total, evRgb, fuRgb, fuelPct: fuelPct === null ? null : cl(fuelPct), charging: !!v.charging, left: leftTxt, st, off: this._offline(), age: this._age(), ageMin: Number.isFinite(t) ? Math.round((Date.now() - t) / 60000) : null }; }
     const chgSub = "";
     /* Circle: the percentage corresponds to the VISIBLE arc (from the bottom edge of the tile to the right edge), not the whole circle */
     const GD = 40, GS = 1.5, arc = (r) => { const rp = r * GS, a = (x) => (x * 180) / Math.PI; return [180 - a(Math.asin(Math.min(1, GD / rp))) - 4, 360 - a(Math.acos(Math.min(1, GD / rp))) + 4]; };
@@ -2694,6 +2768,7 @@ class DeepalS05Card extends HTMLElement {
     el.tells.toggleAttribute("hidden", dgOn || !shown.length);
     el.info.innerHTML = tiles.join("");
     el.info.toggleAttribute("data-off", !tiles.length || hidSec.has("info"));
+    this._scUpd();
     /* the block of indicators at the bottom of the card is gone: warnings show as a number on the Diagnostics button and the full list opens from it */
     el.diag.innerHTML = ""; el.diag.toggleAttribute("data-empty-diag", true);
 
@@ -2716,9 +2791,8 @@ class DeepalS05Card extends HTMLElement {
 
     /* sheets */
     if (this._confirm) {
-      const [title, text] = CONFIRM_TEXT[this._confirm.key] || ["Continue?", ""];
-      el.box.className = "box confirm";
-      el.box.innerHTML = `<h3>${esc(title)}</h3><p class="c">${esc(text)}</p><div class="btnrow"><button class="btn ic" data-close>${ico("close")}Cancel</button><button class="btn go ic" data-sheet="yes">${ico(CONF_ICO[this._confirm.key] || "check")}Confirm</button></div>`;
+      el.box.className = "box confirm lk";
+      el.box.innerHTML = this._askHtml(this._confirm.key);
       el.sheet.classList.add("show");
     } else if (this._diagSheet) {
       el.box.className = "box wide dg";
@@ -3043,10 +3117,10 @@ class DeepalS05Settings extends HTMLElement {
     return `<div class="tabbar"><button class="tn l" data-tn="-1" aria-label="Previous tabs" hidden>${ico("chevr")}</button><div class="tabs">${T.map(([k, l, i]) => `<button data-tab="${k}" class="${this.tab === k ? "on" : ""}">${ico(i)}<span>${l}</span></button>`).join("")}</div><button class="tn r" data-tn="1" aria-label="Next tabs" hidden>${ico("chevr")}</button></div>`;
   }
   _sortKey(kind) { return {sec:'order',top:'top_buttons',info:'info_order',info_custom:'info_custom',diag_custom:'diag_custom'}[kind]||'buttons'; }
-  _orderList(all, order, hidden, labelOf, kind) {
+  _orderList(all, order, hidden, labelOf, kind, unused = []) {
     return `<div class="list">${order.map((id, i) => {
-      const off = hidden.includes(id);
-      return `<div class="row ${off ? "off" : ""}" data-dk="${kind}"><i class="grip" aria-hidden="true" title="${T("Drag to reorder")}"></i><span>${esc(labelOf(id))}</span>
+      const off = hidden.includes(id), un = unused.includes(id);
+      return `<div class="row ${off ? "off" : ""} ${un ? "unused" : ""}" data-dk="${kind}"${un ? ` title="${esc(T("Not used by this card design"))}"` : ""}><i class="grip" aria-hidden="true" title="${T("Drag to reorder")}"></i><span>${esc(labelOf(id))}</span>
         <button class="mv" data-mv="${kind}|${id}|-1" ${i === 0 ? "disabled" : ""} aria-label="Up">${ico("up")}</button>
         <button class="mv" data-mv="${kind}|${id}|1" ${i === order.length - 1 ? "disabled" : ""} aria-label="Down">${ico("down")}</button>
         <button class="swb" data-vis="${kind}|${id}" aria-label="Show"><i class="sw ${off ? "" : "on"}"></i></button></div>`;
@@ -3095,7 +3169,8 @@ class DeepalS05Settings extends HTMLElement {
         return `${this._datalist()}
       <h4>Sections</h4>
       <p class="hint">${T("Put the sections in the order you want (e.g. buttons first, then the image, then the range) and hide the ones you don't need.")}</p>
-      ${this._orderList(SECTIONS, c.order, [...c.hidden,...(c.charge_curve?[]:['curve']),...(c.charging_reminder?[]:['reminder']),...(c.charging_cost===false?['costs']:[])], (i) => SECTION_LABELS[i], "sec")}
+      ${(DESIGN_UNUSED[c.companion_design] || []).length ? `<p class="hint">${T("Greyed-out sections are not used by this card design. Your choices for them are kept.")}</p>` : ""}
+      ${this._orderList(SECTIONS, c.order, [...c.hidden,...(c.charge_curve?[]:['curve']),...(c.charging_reminder?[]:['reminder']),...(c.charging_cost===false?['costs']:[])], (i) => SECTION_LABELS[i], "sec", DESIGN_UNUSED[c.companion_design] || [])}
       <h4>On the image</h4>
       <div class="list">${HERO_SHOW_OPTS.map(([k, l]) => `<button class="row tg ${(c.hero_show || []).includes(k) ? "on" : ""}" data-hs="${k}"><span>${l}</span><i class="sw ${(c.hero_show || []).includes(k) ? "on" : ""}"></i></button>`).join("")}${this._tg("show_customize", c.show_customize !== false, "Settings button")}</div>
       ${this._opt("Message under the status", this._seg("status_sub", c.status_sub === "off" || c.status_sub === "ticker" ? c.status_sub : "roll", [["off", "None"], ["roll", "Rolling"], ["ticker", "With dots"]]), "Under “Locked / Unlocked”: a rolling line (lock time, all closed) or 3 facts (time, parked, range) with dots.")}
@@ -3134,10 +3209,54 @@ class DeepalS05Settings extends HTMLElement {
       <div class="btnrow"><button class="btn sm" data-dall="0">None</button><button class="btn sm" data-dall="1">All</button></div>
       ${this._tabTires(c)}`;
   }
+  _cardPageSection() {
+    const on = this._cardPageSidebar === true, admin = !!this._hass?.user?.is_admin;
+    const pin = this._cardPagePin || {}, rows = this._cardPageViews || [], dsg = pin.design || "";
+    const opts = [["", T("Automatic (last profile used in this browser)")], ...rows.map((r) => [r.vehicle_id + "|" + r.view_id, r.label])];
+    const cur = pin.view_id ? pin.vehicle_id + "|" + pin.view_id : "";
+    const mk = (attr, val, list) => `<select ${attr}${admin ? "" : " disabled"}>${list.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(val) ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+    const designs = [["", T("Profile default")], ["mobile", "Mobile"], ["tablet", "Tablet"], ["energy", "Energy"], ["minimal", T("Minimal")], ["cockpit", "Modern Cockpit"], ["ultra", T("Ultra minimal")]];
+    return `<h4>${T("Card page")}</h4><p class="hint">${T("This page always shows the profile and design chosen here, so changing the profile elsewhere does not change it. The design applies only to this page.")}</p>
+      <label class="field inline">${T("Profile")} ${mk("data-card-page-view", cur, opts)}</label>
+      <label class="field inline">${T("Design")} ${mk("data-card-page-design", dsg, designs)}</label>
+      <h4>${T("Sidebar")}</h4><p class="hint">${T("Shows only the card, without the Companion controls. Reload the page after changing it.")}</p><div class="list"><button class="row tg${on ? " on" : ""}" data-card-page-sidebar aria-pressed="${on}"${admin ? "" : " disabled"}><span>${T("Show “Deepal Card” in the sidebar")}</span><i class="sw${on ? " on" : ""}"></i></button></div>`;
+  }
+  async _loadCardPageSwitch() {
+    if (this._cardPageSidebar !== undefined || typeof this._hass?.callWS !== "function") return;
+    try {
+      const info = await this._hass.callWS({ type: "deepal_companion/card_panel" });
+      this._cardPageSidebar = !!info.sidebar; this._cardPagePin = { vehicle_id: info.vehicle_id || "", view_id: info.view_id || "", design: info.design || "" };
+    } catch (_) { this._cardPageSidebar = false; }
+    try {
+      const cars = await this._hass.callWS({ type: "deepal_companion/request", op: "list" });
+      this._cardPageViews = cars.flatMap((car) => car.views.map((v) => ({ vehicle_id: car.id, view_id: v.id, label: cars.length > 1 ? car.name + " · " + v.name : v.name })));
+    } catch (_) { this._cardPageViews = []; }
+    this._render?.();
+  }
+  async _setCardPagePin(patch) {
+    const before = this._cardPagePin;
+    this._cardPagePin = { ...before, ...patch };
+    try { this._cardPagePin = { ...this._cardPagePin, ...(await this._hass.callWS({ type: "deepal_companion/card_panel", ...patch })) }; delete this._cardPagePin.sidebar; delete this._cardPagePin.url; }
+    catch (_) { this._cardPagePin = before; }
+    this._render?.();
+  }
+  _paintCardPage() {
+    const b = this.shadowRoot?.querySelector("[data-card-page-sidebar]"); if (!b) return;
+    const on = this._cardPageSidebar === true;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on)); b.querySelector(".sw")?.classList.toggle("on", on);
+    b.disabled = !this._hass?.user?.is_admin;
+  }
+  async _setCardPageSidebar() {
+    const wanted = this._cardPageSidebar !== true, b = this.shadowRoot?.querySelector("[data-card-page-sidebar]");
+    if (b) b.disabled = true;
+    try { this._cardPageSidebar = !!(await this._hass.callWS({ type: "deepal_companion/card_panel", sidebar: wanted })).sidebar; }
+    catch (_) { this._cardPageSidebar = !wanted; }
+    this._paintCardPage();
+  }
   _tabVehicle(c) {
     const ents = Object.entries(c.entities);
     const cc = CAR_COLORS.some((x) => x[0] === c.car_color) ? c.car_color : "black";
-    return `${this._datalist()}${this._tabGeneral(c)}<h4>Vehicle setup</h4>
+    return `${this._datalist()}${this._tabGeneral(c)}${this.mode === "app" ? this._cardPageSection() : ""}<h4>Vehicle setup</h4>
       <label class="field">Entity prefix (e.g. s05)<input type="text" data-set="prefix" data-text value="${esc(c.prefix)}" list="dl-pfx"></label>
       <datalist id="dl-pfx">${pfxCandidates(this._hass).map((p) => `<option value="${esc(p)}"></option>`).join("")}</datalist>
       ${(() => { const e = effPrefix(this._hass, c); return e !== c.prefix ? `<p class="hint">${T("Prefix {0} was not found; {1} is being used automatically. Edit the field to save it.", `<code>${esc(c.prefix)}</code>`, `<code>${esc(e)}</code>`)}</p>` : ""; })()}
@@ -3281,7 +3400,14 @@ class DeepalS05Settings extends HTMLElement {
     const snap = UI.pillSnap(this.shadowRoot);
     this.shadowRoot.innerHTML = `<style>${SETTINGS_CSS}</style><div class="wrap">${this._tabs()}${grouped}</div>`;
     this._bind(); this._wireTabs(); UI.pillApply(this.shadowRoot, snap);
-    if (this.tab === "vehicle") this._probe();
+    if (this.tab === "vehicle") {
+      this._probe();
+      if (this.mode === "app") {
+        this.shadowRoot.querySelector("[data-card-page-sidebar]")?.addEventListener("click", () => this._setCardPageSidebar()); this._loadCardPageSwitch();
+        this.shadowRoot.querySelector("[data-card-page-view]")?.addEventListener("change", (e) => { const [vehicle_id = "", view_id = ""] = e.target.value.split("|"); this._setCardPagePin({ vehicle_id, view_id }); });
+        this.shadowRoot.querySelector("[data-card-page-design]")?.addEventListener("change", (e) => this._setCardPagePin({ design: e.target.value }));
+      }
+    }
   }
 
   _navUpd() {

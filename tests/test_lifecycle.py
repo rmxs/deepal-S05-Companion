@@ -1,5 +1,8 @@
 """Integration lifecycle/flow tests against explicit HA API doubles, not a live HA core."""
 import asyncio
+import json
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 import importlib
 import importlib.util
@@ -13,17 +16,26 @@ from test_api import module, identity, ROOT
 
 clock = [datetime.now(timezone.utc)]
 listeners = []
-module("homeassistant.const", Platform=types.SimpleNamespace(SENSOR="sensor"), EVENT_HOMEASSISTANT_STOP="stop")
-module("homeassistant.components.frontend", add_extra_js_url=lambda hass, url: hass.urls.append(url))
+module("homeassistant.const", Platform=types.SimpleNamespace(SENSOR="sensor"), EVENT_HOMEASSISTANT_STOP="stop",
+       EntityCategory=types.SimpleNamespace(DIAGNOSTIC="diagnostic"))
+def remove_panel(hass, url_path, warn_if_unknown=True):
+    hass.panels[:] = [p for p in hass.panels if p["frontend_url_path"] != url_path]
+module("homeassistant.components.frontend", add_extra_js_url=lambda hass, url: hass.urls.append(url), async_remove_panel=remove_panel)
 module("homeassistant.components.http", StaticPathConfig=lambda *args: args)
+class SensorEntity:
+    def async_write_ha_state(self):
+        pass
+module("homeassistant.components.sensor", SensorEntity=SensorEntity,
+       SensorDeviceClass=types.SimpleNamespace(ENERGY="energy", MONETARY="monetary", ENUM="enum"),
+       SensorStateClass=types.SimpleNamespace(TOTAL="total"))
 async def register_panel(hass, **kwargs):
     hass.panels.append(kwargs)
 module("homeassistant.components.panel_custom", async_register_panel=register_panel)
 module("homeassistant.components.lovelace")
 module("homeassistant.components.lovelace.const", LOVELACE_DATA="lovelace")
-module("homeassistant.helpers.entity_registry", async_get=lambda hass: hass.registry)
+module("homeassistant.helpers.entity_registry", async_get=lambda hass: hass.registry, EVENT_ENTITY_REGISTRY_UPDATED="entity_registry_updated")
 module("homeassistant.helpers.config_validation", config_entry_only_config_schema=lambda domain: {"config_entry_only": domain})
-module("homeassistant.helpers.device_registry", async_get=lambda hass: getattr(
+module("homeassistant.helpers.device_registry", DeviceInfo=lambda **kwargs: kwargs, async_get=lambda hass: getattr(
     hass, "device_registry", types.SimpleNamespace(async_get=lambda ident: None)))
 module("homeassistant.helpers.event", async_track_state_change_event=lambda *args: lambda: None,
        async_track_time_interval=lambda *args: lambda: None)
@@ -159,15 +171,307 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.runtime = self.entry.runtime_data
         await self.runtime.queue.join()
         self.runtime.stop_timeout = .1
-        self.runtime.queue._unfinished_tasks += 1  # an item whose task_done() never arrives
+        self.runtime.queue._unfinished_tasks += 1
+        self.runtime.queue._finished.clear()  # put_nowait() would clear it; the forced count must too
         await asyncio.wait_for(self.runtime.stop(), 3)
         self.assertIsNone(self.runtime.worker)
         self.runtime = None
 
+    async def test_tick_queue_is_coalesced_while_writes_stall(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        hub = self.hass.data[integration.DOMAIN]
+        release = threading.Event()
+        real_record = hub.archive.record_update
+        def stalled(*args):
+            release.wait(5)
+            return real_record(*args)
+        hub.archive.record_update = stalled
+        try:
+            self.runtime._tick(None)
+            for _ in range(50):
+                self.runtime._tick(None)
+            await asyncio.sleep(0.05)  # the worker takes the first tick, then blocks in the write
+            ticks = [item for item in self.runtime.queue._queue if item is not None and item[1] is None]
+            self.assertLessEqual(len(ticks), 1)
+        finally:
+            release.set()
+            hub.archive.record_update = real_record
+            await asyncio.sleep(0.1)
+            await asyncio.wait_for(self.runtime.stop(), 3)
+        self.runtime = None
+
+    async def test_tick_flag_resets_even_when_that_tick_fails(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        runtime_module = sys.modules["companion_lifecycle.runtime"]
+        real_deepcopy = runtime_module.deepcopy
+        calls = {"n": 0}
+        def failing_once(value):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("tick failed once")
+            return real_deepcopy(value)
+        runtime_module.deepcopy = failing_once
+        try:
+            self.runtime._tick(None)
+            await asyncio.wait_for(self.runtime.queue.join(), 3)
+        finally:
+            runtime_module.deepcopy = real_deepcopy
+        self.assertFalse(self.runtime._tick_pending)
+        self.runtime._tick(None)
+        self.assertTrue(self.runtime._tick_pending)
+        await asyncio.wait_for(self.runtime.queue.join(), 3)
+        await asyncio.wait_for(self.runtime.stop(), 3)
+        self.runtime = None
+
+    async def test_registry_events_refresh_only_related_sensors_once(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        self.runtime.refresh_delay = .05
+        calls = []
+        real_refresh = self.runtime.refresh
+        async def counting_refresh():
+            calls.append(1)
+            await real_refresh()
+        self.runtime.refresh = counting_refresh
+        self.runtime._registry_event(types.SimpleNamespace(data={"action": "create", "entity_id": "sensor.unrelated"}))
+        await asyncio.sleep(.2)
+        self.assertEqual(calls, [])  # unrelated entities are ignored
+        known = next(iter(self.runtime.entities.values()))
+        renamed = types.SimpleNamespace(data={"action": "update", "entity_id": "sensor.renamed", "old_entity_id": known})
+        self.runtime._registry_event(renamed)
+        self.runtime._registry_event(renamed)  # a second event in the same quiet period adds no refresh
+        await asyncio.sleep(.2)
+        self.assertEqual(len(calls), 1)
+        await asyncio.wait_for(self.runtime.stop(), 3)
+        self.runtime = None
+
+    async def test_archive_status_reports_ok_degraded_and_stopped(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        status = importlib.import_module("companion_lifecycle.sensor").ArchiveStatusSensor(self.runtime)
+        await status.async_update()
+        self.assertEqual(status._attr_native_value, "ok")
+        self.runtime.degraded_reason = "Repeated recording failures"
+        await status.async_update()
+        self.assertEqual(status._attr_native_value, "degraded")
+        self.assertEqual(status._attr_extra_state_attributes["problem"], "Repeated recording failures")
+        self.runtime.degraded_reason = None
+        await asyncio.wait_for(self.runtime.stop(), 3)
+        await status.async_update()
+        self.assertEqual(status._attr_native_value, "stopped")
+        self.runtime = None
+
+    async def test_entity_removal_and_recreation_refresh_once_with_one_listener(self):
+        registrations = []
+        def record(event, fn):
+            entry = (event, fn)
+            registrations.append(entry)
+            return lambda: registrations.remove(entry)
+        self.hass.bus.async_listen = record
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        self.assertEqual(len([e for e in registrations if e[0] == "entity_registry_updated"]), 1)
+        self.runtime.refresh_delay = .05
+        calls = []
+        real_refresh = self.runtime.refresh
+        async def counting_refresh():
+            calls.append(1)
+            await real_refresh()
+        self.runtime.refresh = counting_refresh
+        known = next(iter(self.runtime.entities.values()))
+        self.runtime._registry_event(types.SimpleNamespace(data={"action": "remove", "entity_id": known}))
+        await asyncio.sleep(.2)
+        self.assertEqual(len(calls), 1)  # removing a known sensor refreshes once
+        self.runtime._registry_event(types.SimpleNamespace(data={"action": "create", "entity_id": known}))
+        await asyncio.sleep(.2)
+        self.assertEqual(len(calls), 2)  # recreating it refreshes once more
+        await asyncio.wait_for(self.runtime.stop(), 3)
+        self.assertEqual([e for e in registrations if e[0] == "entity_registry_updated"], [])  # no leaked listener
+        self.runtime = None
+
+    async def test_failed_setup_clears_hub_entry_even_when_cleanup_also_fails(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        hub = self.hass.data[integration.DOMAIN]
+        runtime_cls = integration.VehicleRuntime
+        original_start, original_stop = runtime_cls.start, runtime_cls.stop
+        async def failing_start(runtime):
+            raise RuntimeError("startup failed")
+        async def failing_stop(runtime):
+            raise RuntimeError("cleanup failed")
+        runtime_cls.start, runtime_cls.stop = failing_start, failing_stop
+        try:
+            with self.assertRaisesRegex(RuntimeError, "startup failed"):
+                await integration.async_setup_entry(self.hass, self.entry)
+        finally:
+            runtime_cls.start, runtime_cls.stop = original_start, original_stop
+        self.assertNotIn(self.entry.unique_id, hub.vehicles)
+        self.assertIsNone(self.entry.runtime_data)
+
+    async def test_transient_engine_copy_failure_keeps_the_worker_running(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        runtime_module = sys.modules["companion_lifecycle.runtime"]
+        real_deepcopy = runtime_module.deepcopy
+        calls = {"n": 0}
+        def flaky_deepcopy(value):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("copy failed once")
+            return real_deepcopy(value)
+        runtime_module.deepcopy = flaky_deepcopy
+        try:
+            now = clock[0].timestamp()
+            self.runtime.queue.put_nowait((now, None, None, "", {}))
+            self.runtime.queue.put_nowait((now, None, None, "", {}))
+            await asyncio.wait_for(self.runtime.queue.join(), 3)
+        finally:
+            runtime_module.deepcopy = real_deepcopy
+        self.assertFalse(self.runtime.worker.done())
+        self.assertEqual(self.runtime._worker_failures, 0)
+        self.assertIsNone(self.runtime.degraded_reason)
+        self.runtime = None
+
+    async def test_incomplete_shutdown_keeps_last_checkpoint_and_writes_marker(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        hub = self.hass.data[integration.DOMAIN]
+        vehicle = self.entry.unique_id
+        before = hub.archive.get(vehicle, "engine")
+        self.runtime.engine.state["unsaved_in_memory"] = True
+        self.runtime.stop_timeout = .1
+        self.runtime.incomplete_wait = .1
+        self.runtime.queue._unfinished_tasks += 1
+        self.runtime.queue._finished.clear()  # put_nowait() would clear it; the forced count must too
+        await asyncio.wait_for(self.runtime.stop(), 3)
+        self.assertEqual(hub.archive.get(vehicle, "engine"), before)
+        marker = hub.archive.get(vehicle, "archive_incomplete_shutdown")
+        self.assertIsNotNone(marker)
+        self.runtime = None
+
+    async def test_interrupted_shutdown_marker_survives_restart(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        self.runtime.stop_timeout = .1
+        self.runtime.incomplete_wait = .1
+        self.runtime.queue._unfinished_tasks += 1
+        self.runtime.queue._finished.clear()  # put_nowait() would clear it; the forced count must too
+        await asyncio.wait_for(self.runtime.stop(), 3)
+        self.runtime = None
+        hub = self.hass.data[integration.DOMAIN]
+        vehicle = self.entry.unique_id
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        self.assertIsNotNone(hub.archive.get(vehicle, "archive_incomplete_shutdown"))
+        self.runtime = None
+
+    async def test_late_commit_after_shutdown_keeps_batch_and_checkpoint_consistent(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        hub = self.hass.data[integration.DOMAIN]
+        vehicle = self.entry.unique_id
+        release = threading.Event()
+        real_record = hub.archive.record_update
+        def slow_record(*args):
+            release.wait(5)  # the write is still running in the executor when shutdown gives up
+            return real_record(*args)
+        hub.archive.record_update = slow_record
+        self.runtime.stop_timeout = .1
+        self.runtime.incomplete_wait = .1
+        self.runtime.marker_timeout = 1
+        self.runtime.queue.put_nowait((clock[0].timestamp(), None, None, "", {}))
+        for _ in range(200):
+            if self.runtime._inflight is not None:
+                break
+            await asyncio.sleep(.01)
+        self.assertIsNotNone(self.runtime._inflight)
+        self.runtime.queue._unfinished_tasks += 1
+        self.runtime.queue._finished.clear()  # put_nowait() would clear it; the forced count must too
+        started = time.monotonic()
+        try:
+            await asyncio.wait_for(self.runtime.stop(), 5)
+        finally:
+            release.set()
+            await asyncio.sleep(0.3)
+        elapsed = time.monotonic() - started
+        self.assertLess(elapsed, 3)  # shutdown stays bounded while the write is still running
+        self.assertIsNotNone(hub.archive.get(vehicle, "archive_incomplete_shutdown"))
+        expected = json.loads(json.dumps(self.runtime.engine.state))
+        release.set()
+        for _ in range(300):  # wait for the late commit to finish
+            if self.runtime._inflight is None:
+                break
+            await asyncio.sleep(.01)
+        await asyncio.sleep(.1)
+        hub.archive.record_update = real_record
+        self.assertEqual(json.loads(json.dumps(hub.archive.get(vehicle, "engine"))), expected)
+        self.runtime = None
+
+    async def test_marker_write_timeout_does_not_block_shutdown(self):
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        hub = self.hass.data[integration.DOMAIN]
+        release = threading.Event()
+        real_put = hub.archive.put
+        def stuck_put(*args):
+            if args[1] == "archive_incomplete_shutdown":
+                release.wait(5)
+            return real_put(*args)
+        hub.archive.put = stuck_put
+        self.runtime.stop_timeout = .1
+        self.runtime.incomplete_wait = .1
+        self.runtime.marker_timeout = .2
+        self.runtime.queue._unfinished_tasks += 1
+        self.runtime.queue._finished.clear()  # put_nowait() would clear it; the forced count must too
+        started = time.monotonic()
+        try:
+            await asyncio.wait_for(self.runtime.stop(), 5)
+        finally:
+            release.set()
+            await asyncio.sleep(0.3)
+        elapsed = time.monotonic() - started
+        hub.archive.put = real_put
+        self.assertLess(elapsed, 3)  # a stuck marker write is abandoned after marker_timeout
+        self.runtime = None
+
+    async def test_card_page_sidebar_switch_keeps_page_registered(self):
+        await integration.async_setup(self.hass, {})
+        hub = self.hass.data["deepal_companion"]
+        card = lambda: [p for p in self.hass.panels if p["frontend_url_path"] == "deepal-companion-card"]
+        self.assertIsNone(card()[0]["sidebar_title"])  # default off
+        await hub.set_card_panel(False)
+        self.assertEqual(len(card()), 1)
+        self.assertIsNone(card()[0]["sidebar_title"])
+        self.assertEqual(len(self.hass.panels), 2)
+        await hub.set_card_panel(True)
+        self.assertEqual(card()[0]["sidebar_title"], "Deepal Card")
+
     async def test_setup_resources_and_backend_start_stop(self):
         self.assertTrue(await integration.async_setup(self.hass, {}))
-        self.assertEqual(len(self.hass.commands), 2)
-        self.assertEqual(len(self.hass.panels), 1)
+        self.assertEqual(len(self.hass.commands), 3)
+        self.assertEqual(len(self.hass.panels), 2)
+        self.assertEqual(self.hass.panels[1]["frontend_url_path"], "deepal-companion-card")
         self.assertEqual(len(self.hass.data["lovelace"].resources.items), 1)
         self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
         self.runtime = self.entry.runtime_data

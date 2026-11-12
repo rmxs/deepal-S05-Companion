@@ -1,12 +1,14 @@
 """Constants for Deepal Companion."""
 DOMAIN = "deepal_companion"
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 SIGNAL = f"{DOMAIN}_updated"
 FRONTEND_URL = f"/{DOMAIN}/frontend"
 PANEL_URL = "deepal-companion"
+CARD_PANEL_URL = "deepal-companion-card"  # page that shows only the card
 SHARED_KEYS = frozenset({
     "prefix", "entities", "powertrain", "battery_kwh", "fuel_max",
     "fuel_tank_liters", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump",
+    "car_color", "iso_wheels",  # what the car physically looks like: the same in every display profile
 })
 # User settings (card Settings): defaults and allowed ranges, shared by the API and the backend.
 DEFAULT_PROMPT_MIN_GAIN = 3  # battery percentage points a charge must add before it asks for a profile

@@ -3,6 +3,7 @@ module.exports=async page=>{
   const panel=page.locator('deepal-companion-panel');
   const change=async(name,value)=>panel.locator('[name="'+name+'"]').evaluate((field,value)=>{if(field._compPicker)field._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value},bubbles:true}));else{field.value=value;field.dispatchEvent(new Event('change',{bubbles:true}));}},value);
   const emit=async patch=>{await panel.evaluate((root,patch)=>root.settings._emit(patch),patch);await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').pending);};
+  await panel.evaluate(p=>{if(p.shadowRoot.querySelector('.profile-setup.ps-closed'))p.shadowRoot.querySelector('[data-profile-toggle]').click();});
   await panel.locator('[name=profile_name]').fill('Everyday');await panel.locator('h1').click();
   await page.waitForFunction(()=>window.viewNames.mobile==='Everyday'&&!document.querySelector('deepal-companion-panel').pending);
   assert.equal(await panel.locator('[data-action=rename]').count(),0);

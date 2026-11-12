@@ -15,7 +15,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 
-from .const import DEFAULT_PROFILES, DOMAIN, RANGES, SIGNAL
+from .const import CARD_PANEL_URL, DEFAULT_PROFILES, DOMAIN, RANGES, SIGNAL
+from .database import UNDO_DAYS
 
 _LOGGER = logging.getLogger(__name__)
 ENTITY = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
@@ -33,6 +34,9 @@ def timestamp(value, fallback):
     if parsed is None or parsed.tzinfo is None:
         raise ValueError("Expected an ISO timestamp including timezone")
     return parsed.timestamp()
+
+
+EXPORT_LIMIT_BYTES = 25_000_000
 
 
 def check_json(value, max_bytes=2_000_000):
@@ -62,7 +66,7 @@ def validate_costs(data):
             raise ValueError("Efficiency must be between 1 and 100")
         for key in ("price",):
             value = p.get(key)
-            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 10000):
+            if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 10000):
                 raise ValueError("Invalid tariff")
     for p in data["profiles"]:
         profile(p)
@@ -127,7 +131,8 @@ async def request(hass, connection, msg):
         if runtime is None:
             raise ValueError("Vehicle is not loaded")
         authorize(connection, runtime)
-        if op in {"config_patch", "view", "costs_set", "backup", "charge_profile_assign", "sessions_import"} and not connection.user.is_admin:
+        if op in {"config_patch", "view", "costs_set", "backup", "charge_profile_assign", "sessions_import",
+                  "session_delete", "session_restore", "sessions_deleted", "session_mode", "curve_exclude"} and not connection.user.is_admin:
             raise PermissionError("Administrator access is required to change shared Companion data")
         if op.startswith("notifications_"):
             if not connection.user.is_admin:
@@ -140,6 +145,8 @@ async def request(hass, connection, msg):
                 result = {"value": engine.config, "history": activity["rows"], "activity": activity, "state": engine.state, "recipients": engine.recipients(),
                           "live_supported": supported(), "live_test_active": bool(engine.live.state.get("test_devices")),
                           "live_status_test_active": {kind: bool(engine.live_status.state.get(kind, {}).get("test_devices")) for kind in ("climate", "open")}}
+            elif op == "notifications_unread":
+                result = await engine.unread(str(connection.user.id), data.get("mark") is True)
             elif op == "notifications_history":
                 result = engine.history_page(data.get("limit", 5), data.get("before"))
             elif op == "notifications_history_delete":
@@ -167,7 +174,10 @@ async def request(hass, connection, msg):
                 rule = validate({"enabled": False, "rules": [data.get("rule")]})["rules"][0]
                 if op == "notifications_test" and not rule["devices"]:
                     raise ValueError("Choose a test device")
-                result = await (engine.test(rule) if op == "notifications_test" else engine.preview(rule))
+                samples = data.get("samples", {})
+                if not isinstance(samples, dict) or len(samples) > 8 or any(not isinstance(k, str) or not isinstance(v, str) or len(v) > 200 for k, v in samples.items()):
+                    raise ValueError("Invalid example values")
+                result = await (engine.test(rule, samples) if op == "notifications_test" else engine.preview(rule, samples=samples))
             else:
                 raise ValueError("Unknown notification operation")
         elif op == "health_get":
@@ -202,7 +212,7 @@ async def request(hass, connection, msg):
             expected_revision = data.get("expected_revision")
             if not isinstance(expected_revision, list) or len(expected_revision) != 2 or any(isinstance(n, bool) or not isinstance(n, int) for n in expected_revision):
                 raise ValueError("Settings revision missing. Reload before saving.")
-            if "companion_design" in patch and patch["companion_design"] not in ("", "mobile", "tablet", "energy"):
+            if "companion_design" in patch and patch["companion_design"] not in ("", "mobile", "tablet", "energy", "minimal", "cockpit", "ultra"):
                 raise ValueError("Invalid card design")
             if "companion_width" in patch:
                 width = patch["companion_width"]
@@ -257,15 +267,24 @@ async def request(hass, connection, msg):
                         raise ValueError("Invalid recovered session " + key)
                 if row["e"] <= row["s"] or row["to"] <= row["from"]:
                     raise ValueError("Invalid charging interval")
+                hours = (row["e"] - row["s"]) / 3600000
+                if hours > 7 * 24:
+                    raise ValueError("A charging session cannot last more than 7 days")
+                if row["kwh"] > 400 * hours + 1:
+                    raise ValueError("Charged energy is not plausible for the session length")
                 curve = row.get("curve", {})
                 if not isinstance(curve, dict) or set(curve) - {"ac", "dc", "battery"}:
                     raise ValueError("Invalid charging curve")
                 for samples in curve.values():
                     if not isinstance(samples, list) or len(samples) > 10000:
                         raise ValueError("Charging curve is too large")
+                    last_time = None
                     for point in samples:
                         if not isinstance(point, list) or len(point) != 2 or type(point[0]) not in (int,float) or not math.isfinite(point[0]) or not row["s"]-86400000 <= point[0] <= row["e"]:
                             raise ValueError("Invalid charging curve timestamp")
+                        if last_time is not None and point[0] < last_time:
+                            raise ValueError("Charging curve readings must be in time order")
+                        last_time = point[0]
                         if point[1] is not None and (type(point[1]) not in (int,float) or not math.isfinite(point[1]) or not 0 <= point[1] <= 100000):
                             raise ValueError("Invalid charging curve reading")
                 pricing = row.get("pricing", {})
@@ -288,6 +307,32 @@ async def request(hass, connection, msg):
                 raise ValueError("Choose a charging session")
             result = await hub.db("session_curve", vehicle, data["session_id"],
                                   {key: runtime.entities.get(role) for key, role in (("ac","ac"),("dc","dc"),("battery","batt"))})
+        elif op in {"session_delete", "session_restore", "session_mode"}:
+            if not isinstance(data.get("session_id"), str):
+                raise ValueError("Choose a charging session")
+            if op == "session_delete":
+                await hub.db("delete_session", vehicle, data["session_id"])
+                result = {}
+            elif op == "session_restore":
+                await hub.db("restore_session", vehicle, data["session_id"])
+                result = {}
+            else:
+                if not isinstance(data.get("dc"), bool):
+                    raise ValueError("Choose AC or DC")
+                result = await hub.db("set_session_mode", vehicle, data["session_id"], data["dc"])
+            await runtime.refresh()
+        elif op == "sessions_deleted":
+            result = {"rows": await hub.db("deleted_sessions", vehicle), "undo_days": UNDO_DAYS}
+        elif op == "curve_exclude":
+            start, end = data.get("start"), data.get("end")
+            if any(type(n) not in (int, float) or not math.isfinite(n) for n in (start, end)) or end <= start or end - start > 7 * 86400000:
+                raise ValueError("Choose a time range inside the charge")
+            if start > (time.time() + 60) * 1000:
+                raise ValueError("Choose a time range inside the charge")
+            entities = [runtime.entities.get(role) for role in ("ac", "dc")]
+            await hub.db("exclude_readings", vehicle, entities, start / 1000, end / 1000)
+            await runtime.refresh()
+            result = {}
         elif op == "sessions_page":
             before, limit = data.get("before"), data.get("limit", 5)
             sort = data.get("sort", "newest")
@@ -326,6 +371,9 @@ async def request(hass, connection, msg):
             if not connection.user.is_admin:
                 result.pop("notifications", None)
                 result.pop("notification_history", None)
+            # Measure the JSON that will be sent; the browser cannot take an unbounded response.
+            if len(json.dumps(result, allow_nan=False).encode()) > EXPORT_LIMIT_BYTES:
+                raise ValueError("This export is too large for the browser. Use Database backup, which saves a complete file.")
         elif op == "summary":
             result = await hub.db("summary", vehicle)
         elif op == "backup":
@@ -335,7 +383,8 @@ async def request(hass, connection, msg):
         else:
             raise ValueError("Unknown Companion operation")
         connection.send_result(msg["id"], result)
-        if op in {"config_patch", "view", "costs_set", "charge_prompt_dismiss", "charge_profile_assign"}:
+        if op in {"config_patch", "view", "costs_set", "charge_prompt_dismiss", "charge_profile_assign",
+                  "session_delete", "session_restore", "session_mode", "curve_exclude"}:
             hub.changed(vehicle)
     except PermissionError as err:
         connection.send_error(msg["id"], "unauthorized", str(err))
@@ -364,6 +413,30 @@ def subscribe(hass, connection, msg):
     connection.send_result(msg["id"])
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): DOMAIN + "/card_panel", vol.Optional("sidebar"): bool,
+    vol.Optional("vehicle_id"): vol.All(str, vol.Length(max=64)), vol.Optional("view_id"): vol.All(str, vol.Length(max=64)),
+    vol.Optional("design"): vol.In(("", "mobile", "tablet", "energy", "minimal", "cockpit", "ultra")),
+})
+@websocket_api.async_response
+async def card_panel(hass, connection, msg):
+    """Read or change the card-only page: sidebar entry and the fixed profile and design (changing needs an admin)."""
+    hub = hass.data[DOMAIN]
+    changing = any(k in msg for k in ("sidebar", "vehicle_id", "view_id", "design"))
+    if changing and not connection.user.is_admin:
+        connection.send_error(msg["id"], "unauthorized", "Only an administrator can change this")
+        return
+    if "sidebar" in msg:
+        await hub.set_card_panel(msg["sidebar"])
+    pin = {k: msg[k] for k in ("vehicle_id", "view_id", "design") if k in msg}
+    if "view_id" in pin and not pin["view_id"]:
+        pin["vehicle_id"] = ""
+    if pin:
+        await hub.set_card_panel_pin(pin)
+    connection.send_result(msg["id"], {"sidebar": hub.card_panel_in_sidebar, "url": "/" + CARD_PANEL_URL, **hub.card_panel_pin})
+
+
 def register(hass):
     websocket_api.async_register_command(hass, request)
+    websocket_api.async_register_command(hass, card_panel)
     websocket_api.async_register_command(hass, subscribe)

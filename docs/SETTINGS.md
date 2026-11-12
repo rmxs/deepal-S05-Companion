@@ -6,11 +6,14 @@ Open **Deepal Companion** from the sidebar. The paths below use the English menu
 
 ## Card Settings → Profile and Card design
 
+The **Profile** box starts closed. Use the arrow next to the connection badge to open or close it; the badge stays visible.
+
+- **Connection badge:** shows whether Deepal Alternative is connected to the vehicle cloud. **Active** (green): connected. **Offline** (red): the connection is lost or unavailable. **No data** (grey): the status is not available yet. It updates live.
 - **Vehicle:** choose the vehicle when more than one is configured.
 - **Card profile:** select a profile or edit its name in the same field.
 - **Duplicate / New profile / Delete:** manage independent card appearances.
-- **Design:** Mobile, Tablet or Energy.
-- **Maximum width:** automatic, or 280–1600 px. Dashboard column width still limits the card.
+- **Design style:** Profile default, Mobile, Tablet or Energy.
+- **Max width:** automatic (0), or 280–1600 px. Dashboard column width still limits the card.
 
 ## Card Settings → Layout
 
@@ -40,7 +43,7 @@ Open **Deepal Companion** from the sidebar. The paths below use the English menu
 | Image zoom | Adjust the car image size |
 | Aspect ratio | Automatic or a ratio such as 16 / 9 |
 | Space around the car | Compact, Standard or Roomy |
-| Car View background | Black, Automatic, Morning, Afternoon, Evening or Night |
+| Car View background | Black, Automatic, Morning, Afternoon, Evening or Night. Morning and afternoon are a deeper blue sky, evening is a dusk sky, night keeps the moon and stars. Automatic follows the sun. |
 | Card margins | Normal, Half or None |
 | Popup margins | Normal, Half or None |
 | On-screen messages | On/off |
@@ -101,6 +104,7 @@ New warning sensors and custom diagnostic indicators are managed in Advanced.
 | Setting | What you can change |
 | --- | --- |
 | Card name | Name shown on the card |
+| Show “Deepal Card” in the sidebar | Lists the **Deepal Card** page (just the card) in the sidebar. Off by default; an administrator changes it, then reloads the browser. The page keeps working from its address (`/deepal-companion-card`) and from notifications while hidden |
 | Entity prefix | Vehicle entity prefix |
 | Vehicle type | Automatic, Plug-in hybrid or Electric |
 | Paint colour | Black, blue, grey, silver or white |
@@ -162,14 +166,14 @@ The **Notifications** page contains the integration’s notification controls:
 - Quiet hours: enable, start/end times and Silent/No notification behaviour.
 - Individual alert enable switches.
 - Per-alert delay, repeat interval and maximum notifications where available.
-- Alert thresholds and relevant away/parked conditions.
+- Alert thresholds and relevant away/parked conditions, **Car on, not moving for** and **Advanced conditions** (your own sensor rules for the parked alerts).
 - Information, Important or Critical severity.
 - Notification icon, title and message, with supported vehicle-value tags.
 - Supported action buttons, including Lock vehicle and Dismiss.
 - Per-alert reset, preview and test.
 - Ignore old data threshold.
 - Save and Cancel changes.
-- Live notifications (Live charging, Live climate, Left open or unlocked): switches, options, title, icon and tests.
+- Live notifications (Live charging, Live climate, Left open or unlocked): switches, options, title, icon and tests. For Left open or unlocked: **Only when the car is parked** and **Wait before showing** (5 minutes by default).
 - Where the phone opens when you tap a notification.
 - Recent activity pagination, delete and delete all.
 

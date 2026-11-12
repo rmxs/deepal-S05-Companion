@@ -38,7 +38,7 @@ class Base(unittest.IsolatedAsyncioTestCase):
                                services=SimpleNamespace(async_call=call))
         self.config = {"enabled": True, "rules": [],
                        "live_climate": {**status.KINDS["climate"]["default"], "enabled": True, "devices": ["notify.phone"]},
-                       "live_open": {**status.KINDS["open"]["default"], "enabled": True, "devices": ["notify.phone"], "start_delay": 60}}
+                       "live_open": {**status.KINDS["open"]["default"], "enabled": True, "devices": ["notify.phone"], "start_delay": 60, "only_parked": False}}
         self.owner = SimpleNamespace(config=self.config, lock=asyncio.Lock(), db=db, send_to_recipient=send, record=record, persist=persist, hass=hass,
                                      runtime=SimpleNamespace(vehicle="vin", config={"prefix": "s05", "name": "Car", "entities": {}}))
         self.live = status.LiveStatus(self.owner)
@@ -228,7 +228,7 @@ class OpenOrUnlocked(Base):
         self.assertEqual(self.calls[-1][1]["message"], "clear_notification")
 
     async def test_nothing_while_the_car_is_running(self):
-        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=False)
+        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=False, only_parked=True)
         self.doors(("front_left_window",))
         self.state("binary_sensor.s05_engine", "on")
         self.state("sensor.s05_power_status", "on")
@@ -237,6 +237,11 @@ class OpenOrUnlocked(Base):
         self.state("binary_sensor.s05_engine", "off")
         await self.live.tick()
         self.assertEqual(self.calls, [], "power still on")
+        self.state("sensor.s05_power_status", "off")
+        await self.live.tick()
+        self.assertEqual(self.calls, [], "parked: it still waits (the car reports about every 5 minutes)")
+        self.now += 181
+        self.doors(("front_left_window",))
         self.state("sensor.s05_power_status", "off")
         await self.live.tick()
         self.assertEqual(self.calls[0][1]["title"], "Front left window")
@@ -248,6 +253,26 @@ class OpenOrUnlocked(Base):
         self.now += 60
         await self.live.tick()
         self.assertEqual(self.calls[-1][1]["title"], "Front left window", "the switch restores the old behaviour")
+
+    def test_wait_is_at_least_five_minutes_while_parked(self):
+        wait = status.LiveStatus.wait
+        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 60}), 180)
+        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 300}), 180)
+        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 600}), 480)
+        self.assertEqual(wait("open", {"only_parked": False, "start_delay": 60}), 60)
+        self.assertEqual(wait("climate", {"only_parked": True, "start_delay": 0}), 0)
+        self.assertEqual(status.KINDS["open"]["default"]["start_delay"], 300)
+
+    async def test_odometer_tells_driving_from_a_car_left_on(self):
+        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=False, only_parked=True)
+        self.doors(("trunk",))
+        self.state("sensor.s05_power_status", "on")
+        self.state("sensor.s05_total_odometer", 1000, age=30)
+        self.assertTrue(self.live.running(), "odometer changed 30 s ago: driving")
+        await self.live.tick()
+        self.assertEqual(self.calls, [])
+        self.state("sensor.s05_total_odometer", 1000, age=400)
+        self.assertFalse(self.live.running(), "power is on but the odometer is still: parked")
 
     async def test_recent_activity_gets_one_start_and_one_end(self):
         self.config["live_open"].update(start_delay=0, end_delay=0)

@@ -66,6 +66,14 @@
       },
       "unpriced": {
         "name": "Cargas sin precio"
+      },
+      "archive_status": {
+        "name": "Estado del archivo",
+        "state": {
+          "ok": "Correcto",
+          "degraded": "Con problemas",
+          "stopped": "Detenido"
+        }
       }
     }
   },

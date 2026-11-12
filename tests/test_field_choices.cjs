@@ -3,6 +3,7 @@ module.exports=async page=>{
   const panel=page.locator('deepal-companion-panel');
   await panel.locator('[data-mode=settings]').click();await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').settings);
   assert.equal(await panel.locator('.profile-name input').count(),1);
+  await panel.evaluate(p=>{if(p.shadowRoot.querySelector('.profile-setup.ps-closed'))p.shadowRoot.querySelector('[data-profile-toggle]').click();});
   await panel.locator('[data-profile-choose]').click();
   await panel.locator('.profile-selector deepal-companion-choice').getByRole('option',{name:/^tablet$/i}).click();
   await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').selected.view_id==='tablet'&&!!document.querySelector('deepal-companion-panel').preview);

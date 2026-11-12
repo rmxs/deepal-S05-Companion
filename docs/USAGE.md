@@ -4,7 +4,7 @@
 
 ## 1. Open Companion
 
-1. Open **Deepal Companion** from the Home Assistant sidebar.
+1. Open **Deepal Companion** from the Home Assistant sidebar. For just the card, open **Deepal Card** (`/deepal-companion-card`) instead; it shows the profile you last chose in Card Settings. On a phone it fills the whole screen; on a computer it stays a normal card. To show it in the sidebar, turn on **Show “Deepal Card” in the sidebar** under **Card Settings → Advanced** (off by default).
 2. Choose your vehicle if you have more than one configured.
 3. Use the four pages at the top:
    - **Card Settings** — customise the dashboard card.
@@ -16,12 +16,12 @@ The selected page is kept in the URL, so refreshing returns you to it.
 
 ## 2. Choose and name a card profile
 
-1. Open **Card Settings → Profile**.
+1. Open **Card Settings → Profile** and use the arrow at the right of its header to open it. The badge shows whether Deepal Alternative is connected (**Active**, **Offline** or **No data**).
 2. Open the arrow in **Card profile** to select a profile.
 3. To rename it, edit the name in that same field and leave the field or press Enter.
 4. Use **Duplicate** to copy a profile, **New profile** to start another, or **Delete** to remove one.
-5. Under **Card design**, select **Mobile**, **Tablet** or **Energy**.
-6. Leave **Maximum width** automatic, or enter a width in pixels.
+5. Under **Card design**, choose the **Design style**: Profile default, **Mobile**, **Tablet** or **Energy**.
+6. Leave **Max width** at 0 for automatic, or enter a width in pixels.
 
 Each dashboard card selects a profile. You can use a compact mobile profile and a wider tablet profile for the same vehicle. Charging history and charging locations remain shared.
 
@@ -62,7 +62,7 @@ Simulated states use the same card display with example vehicle readings. Demo c
 1. Open **Card Settings → Appearance**.
 2. Choose **Photos** or **Car View**, and select the default view.
 3. Adjust image zoom, aspect ratio and space around the car.
-4. Choose a plain background, an automatic day/night background, or a fixed time of day.
+4. Choose a plain background, an automatic day/night background, or a fixed time of day. Morning and afternoon show a deeper blue sky that suits the dark theme, the evening shows a dusk sky, and the night keeps the moon and stars.
 5. Set margins and on-screen messages.
 6. Open **Card Settings → Colours**. Choose Green, Grey or Blue tile icons, or select **Custom** and pick a colour. Set airflow colours and battery/fuel level colours here too.
 7. Open **Card Settings → Advanced** to change paint, wheels or custom photos.
@@ -76,7 +76,7 @@ Card appearance changes update the preview as you work. Check the save feedback 
 3. Check the card’s response message and the next vehicle update.
 4. Open climate, cabin or tyres for the detailed controls and readings.
 
-To change confirmation prompts, open **Card Settings → Controls**. That menu also contains climate tile style, temperature selector and climate-on mode. Available actions depend on your vehicle entities.
+Every command that asks first (lock, unlock, windows, trunk, climate, lights, horn, locate and refresh) uses the same window as the lock on the car image: the current state, **Cancel** and **Confirm**, with the question underneath. To change which commands ask, open **Card Settings → Controls**. That menu also contains climate tile style, temperature selector and climate-on mode. Available actions depend on your vehicle entities.
 
 ## 7. Set up a charging location
 
@@ -91,7 +91,7 @@ To change confirmation prompts, open **Card Settings → Controls**. That menu a
    - **Session energy meter** — select the charger’s session energy sensor.
    - **Charger power** — select the charger’s power sensor.
 7. Select the matching entity if the source needs one.
-8. Set charging efficiency when using battery estimates.
+8. Set charging efficiency when using battery estimates. The field is also shown for free profiles, because it still sets the estimated kWh of those charges.
 9. Choose **Save profiles**.
 
 Each location can use a different charger sensor. Energy sensors use Wh or kWh; power sensors use W or kW. Choose a total or session energy meter rather than a daily energy meter.
@@ -145,8 +145,10 @@ On the real card, the reminder needs a finished charge that added at least the m
 3. Choose newest/oldest first or highest/lowest cost.
 4. Select **Grid** or **Table**.
 5. Use **Load more** to fetch the next six sessions.
-6. Change the chart period and use its arrows to browse earlier dates.
-7. Hover over or touch a chart to inspect its values.
+6. Change the chart period (it opens on the weekly view) and use its arrows to browse earlier dates.
+7. Hover over or touch a chart or a bar to inspect its values.
+
+Under the header, four figures follow the chart period: **Energy from charger**, **Charging cost**, **Paid price** per kWh and the **Free charging** share of energy. The boxes in the header show all-time totals. In each session card the bar spans only the battery levels the charge covered, and the pencil edits the charge.
 
 Filtering and sorting apply to the saved archive, including sessions that have not been loaded on screen. The grid shows three cards per row on wide screens, two on medium screens and one on phones.
 
@@ -168,6 +170,16 @@ Curves use amps over time and fit the recorded charging interval. Dots mark chan
 To display the current charge on the main card, enable **Card Settings → Layout → Sections → Charging curve**. It appears while charging. Saved curves remain available from each archived charge when readings were captured or imported.
 
 Dots on the curve mark the moments the charging current changed. While the car charges, the line continues from the last dot to the current time and battery level, so a steady current still shows progress. If the car reports nothing new, the line is refreshed every few minutes (**Card Settings → Advanced → Refresh the charging curve every (min)**, default 5).
+
+### Correct or delete a charge (administrators)
+
+Open the charging curve from **Sessions**; the tools under the graph let you:
+
+1. **AC / DC** – change the charge type when it was recorded wrongly, for example a false DC reading at the end of an AC charge.
+2. **Remove readings** – switch it on, then drag across the graph to choose a time range. The charging-current readings in that range are removed from every curve. Battery readings are kept. This cannot be undone.
+3. **Delete charge** – removes the charge from the lists, totals, charts and export.
+
+A deleted charge is kept for 30 days under **Data options → Deleted charges**, where **Restore** brings it back. After 30 days it is removed for good, together with its receipt. The bin icon next to a session does the same as **Delete charge**. A deleted charge is not brought back by **Import older Recorder charges**.
 
 ## 11. Keep and recover history
 
@@ -199,7 +211,9 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 
 Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. A problem says what is wrong and what to do. The page only reads; it never changes settings or sends a notification.
 
-In **Notifications**, choose **Why isn’t it sending?** on an alert to see why it is or is not being sent right now: switches, condition, delay, send limit, repeat, quiet hours and devices.
+In **Notifications**, choose **Why isn’t it sending?** on an alert to see why it is or is not being sent right now: switches, condition (each part with its current value), delay, send limit, repeat, quiet hours and devices. Tap **?** beside a line to learn what the sensor is and when it changes.
+
+The notifications button on the card shows a red number for alerts you have not opened yet. It is saved per Home Assistant user and clears when you open the list.
 
 ## Saved settings and updates
 

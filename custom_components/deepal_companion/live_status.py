@@ -37,7 +37,7 @@ KINDS = {
     },
     "open": {
         "key": "live_open", "name": "Live left open or unlocked", "icon": "mdi:car-door-lock-open", "title": "Left open",
-        "default": {"enabled": False, "devices": [], "min_interval": 30, "max_age": 3600, "start_delay": 60, "end_delay": 10,
+        "default": {"enabled": False, "devices": [], "min_interval": 30, "max_age": 3600, "start_delay": 300, "end_delay": 10,
                     "items": list(OPEN_ITEMS), "include_unlocked": True, "only_parked": True, "lock_button": True, "max_shown": 4, "show_count": True,
                     "show_timer": True, "show_updated": False, "title": "", "icon": "", "color": "", "url": ""},
         "ranges": {"min_interval": (15, 3600), "max_age": (300, 86400), "start_delay": (0, 3600), "end_delay": (0, 600), "max_shown": (1, 10)},
@@ -154,8 +154,21 @@ class LiveStatus:
         return {"active": on, "current": current, "target": target, "outside": outside, "unit": unit if isinstance(unit, str) else "°C",
                 "updated": stamp(base)}
 
+    @staticmethod
+    def wait(kind, options):
+        """Seconds the alert must stay true before it shows. For "left open" while parked, the vehicle reports about every 5 minutes
+        and the odometer must also be still for 2 minutes first, so a shorter wait could show it on a car that is still driving
+        (it would flicker on and off). The wait is therefore at least 5 minutes, counted from the moment the car stopped."""
+        if kind == "open" and options["only_parked"]:
+            return max(options["start_delay"], 300) - 120
+        return options["start_delay"]
+
     def running(self):
-        """True while the car is switched on or driving. An unknown reading counts as not running."""
+        """True while the car is moving. The car never switches itself off, so "on" does not mean in use: it counts as moving
+        only while the odometer changed in the last 2 minutes. Without an odometer, the engine and power status decide."""
+        odo = self.get("sensor.total_odometer")
+        if odo is not None and str(odo.state).lower() not in {"unknown", "unavailable", "none", ""}:
+            return time.time() - stamp(odo) < 120
         engine, power = self.get("binary_sensor.engine"), self.get("sensor.power_status")
         if engine is not None and str(engine.state).lower() == "on":
             return True
@@ -341,7 +354,7 @@ class LiveStatus:
                 await self.owner.persist()
             self.state[kind] = kept
             return
-        if not (enabled and wanted) or state.get("expired") or now - state.get("since", now) < options["start_delay"]:
+        if not (enabled and wanted) or state.get("expired") or now - state.get("since", now) < self.wait(kind, options):
             return
         if not state.get("tag"):
             state["tag"] = self.tag(kind)

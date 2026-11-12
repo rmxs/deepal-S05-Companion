@@ -1,2 +1,15 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Keep development-only files out of the downloaded ZIP (GitHub archive, HACS)
+/tests export-ignore
+/scripts export-ignore
+/source export-ignore
+/docs export-ignore
+/.github export-ignore
+/package.json export-ignore
+/package-lock.json export-ignore
+/requirements-test.txt export-ignore
+/.gitignore export-ignore
+/.gitattributes export-ignore
+/.claudeignore export-ignore

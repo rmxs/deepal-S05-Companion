@@ -16,6 +16,39 @@ IDENTITY = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
 DEFAULT = {"enabled": False, "rules": []}
 
 
+PARKED_PRESETS = ("unlocked", "open", "lights", "climate", "comfort")
+
+
+def migrate_parked(config, vehicle_config, has_entity):
+    """Update saved alerts that still use the old "parked" check (power status off for a fixed time) to the current one:
+    the car is off, or it is on but the odometer has not changed. Nothing has to be saved again by hand. Only the saved
+    condition changes; the user's times, texts and switches stay as they are. Returns True when something changed."""
+    changed = False
+    live = config.get("live_open")
+    if isinstance(live, dict) and type(live.get("start_delay")) is int and live["start_delay"] < 300:
+        live["start_delay"], changed = 300, True  # the old 1-minute default is shorter than the car's update interval
+    prefix, mapped = vehicle_config.get("prefix", "s05"), vehicle_config.get("entities", {})
+    power = mapped.get("sensor.power_status") or f"sensor.{prefix}_power_status"
+    odo = mapped.get("sensor.total_odometer") or f"sensor.{prefix}_total_odometer"
+    if not has_entity(power) or not has_entity(odo):
+        return changed
+    old = re.compile(r"\(is_state\('" + re.escape(power) + r"', 'off'\) and \(now\(\) - states\." + re.escape(power) + r"\.last_changed\)\.total_seconds\(\) >= \d+\)")
+    for rule in config.get("rules", []):
+        condition = rule.get("condition", "")
+        options = rule.get("preset_options") if isinstance(rule.get("preset_options"), dict) else {}
+        advanced = options.get("adv") if isinstance(options.get("adv"), dict) else {}
+        if rule.get("preset") not in PARKED_PRESETS or advanced.get("on") is True or odo in condition or not old.search(condition):
+            continue
+        delay = options.get("delay") if type(options.get("delay")) is int else int(rule.get("delay", 0)) // 60
+        wait = options.get("wait") if type(options.get("wait")) is int else 30
+        seconds = max(120, (max(wait, 10) - delay) * 60)
+        fresh = (f"(is_state('{power}', 'off') or (is_state('{power}', 'on') and (now() - states.{power}.last_changed).total_seconds() >= {seconds}"
+                 f" and (now() - states.{odo}.last_changed).total_seconds() >= {seconds}))")
+        rule["condition"] = old.sub(lambda _: fresh, condition, count=1)
+        changed = True
+    return changed
+
+
 def notification_tag(vehicle, rule_id, *, test=False):
     """HA maps tag to APNs collapse ID, which is limited to 64 UTF-8 bytes."""
     if test:
@@ -101,6 +134,12 @@ def validate(value):
         if not isinstance(buttons, list) or any(b not in {"dismiss", "open", "lock"} for b in buttons):
             raise ValueError("Unknown notification button")
         rule["buttons"] = list(dict.fromkeys(buttons))
+        checks = rule.get("checks", [])
+        if not isinstance(checks, list) or len(checks) > 24 or any(
+                not isinstance(c, dict) or any(not isinstance(c.get(k, ""), str) for k in ("label", "test", "show", "help")) or not c.get("label") or not c.get("test")
+                or len(c["label"]) > 160 or len(c["test"]) > 3000 or len(c.get("show", "")) > 1500 or len(c.get("help", "")) > 1500 for c in checks):
+            raise ValueError("Invalid condition checks")
+        rule["checks"] = [{"label": c["label"], "test": c["test"], "show": c.get("show", ""), "help": c.get("help", "")} for c in checks]
         rule["clear_on_resolve"] = rule.get("clear_on_resolve", True)
         if type(rule["clear_on_resolve"]) is not bool:
             raise ValueError("Clear on resolve must be true or false")
@@ -162,6 +201,8 @@ class NotificationEngine:
         from homeassistant.helpers.event import async_track_time_interval
         from datetime import timedelta
         self.config = validate(await self.db("get", self.runtime.vehicle, "local_notifications", DEFAULT))
+        if migrate_parked(self.config, self.runtime.config, lambda entity: self.hass.states.get(entity) is not None):
+            await self.db("put", self.runtime.vehicle, "local_notifications", self.config)
         self.state = await self.db("get", self.runtime.vehicle, "local_notification_state", {})
         self.history = await self.db("get", self.runtime.vehicle, "local_notification_history", [])
         if any("id" not in item for item in self.history):
@@ -286,8 +327,12 @@ class NotificationEngine:
             context[key] = await self.render(template, context)
         return context
 
-    async def preview(self, rule, index=1):
+    async def preview(self, rule, index=1, samples=None):
         context = await self.context(rule, index)
+        # Tests and previews: a value that is empty only because nothing is wrong right now gets an example so the message reads naturally.
+        for key, example in (samples or {}).items():
+            if key in context and not str(context[key]).strip():
+                context[key] = example
         active = str(await self.render(rule["condition"], context)).strip().lower() == "true"
         # Simple {name} placeholders coexist with advanced HA {{ templates }}.
         def simple(text):
@@ -317,6 +362,21 @@ class NotificationEngine:
         more = start + len(rows) < len(self.history)
         return {"rows": deepcopy(rows), "total": len(self.history), "has_more": more,
                 "next_before": rows[-1]["id"] if more and rows else None}
+
+    async def unread(self, user, mark=False):
+        """Alerts newer than the last time this Home Assistant user opened the list. A new user starts at zero, so old alerts are not shown as new."""
+        if not isinstance(user, str) or not user:
+            raise ValueError("Unknown user")
+        key = "local_notification_seen"
+        seen = await self.db("get", self.runtime.vehicle, key, {})
+        seen = seen if isinstance(seen, dict) else {}
+        latest = float(self.history[0].get("time", 0)) if self.history else 0.0
+        if user not in seen or (mark and seen[user] != latest):
+            if user not in seen and len(seen) >= 50:
+                seen.pop(next(iter(seen)))
+            seen[user] = latest
+            await self.db("put", self.runtime.vehicle, key, seen)
+        return {"unread": sum(1 for item in self.history if float(item.get("time", 0)) > seen[user])}
 
     async def delete_history(self, ident=None):
         if ident is not None and (not isinstance(ident, str) or not re.fullmatch(r"[a-f0-9]{32}", ident)):
@@ -389,9 +449,9 @@ class NotificationEngine:
                 return True  # a broken condition is reported by the delivery itself
         return False
 
-    async def test(self, rule):
+    async def test(self, rule, samples=None):
         async with self.lock:
-            preview = await self.preview(rule)
+            preview = await self.preview(rule, samples=samples)
             test_rule = deepcopy(rule)
             lifted = test_rule["severity"] == "info"
             if lifted:
@@ -432,6 +492,21 @@ class NotificationEngine:
                     await self.persist()
                     return
 
+    async def explain_checks(self, rule, index, step):
+        """Each part of the condition on its own, with the values right now, so the user sees which one is not true."""
+        checks = rule.get("checks") or []
+        if not checks:
+            return
+        context = await self.context(rule, index)
+        for number, check in enumerate(checks):
+            try:
+                ok = str(await self.render(check["test"], context)).strip().lower() == "true"
+                shown = str(await self.render(check["show"], context)).strip()[:200] if check.get("show") else ""
+            except Exception:
+                step("check" + str(number), "wait", check["label"], "Could not be checked.", check.get("help", ""))
+                continue
+            step("check" + str(number), "pass" if ok else "block", check["label"], ("Now: " + shown) if shown else "", check.get("help", ""))
+
     async def explain(self, rule_id):
         """Say why a saved alert is or is not being sent right now. Read-only: no state change, nothing is sent."""
         rule = next((r for r in self.config["rules"] if r["id"] == rule_id), None)
@@ -441,8 +516,8 @@ class NotificationEngine:
         state = self.state.get(rule_id, {})
         steps = []
 
-        def step(ident, status, title, detail=""):
-            steps.append({"id": ident, "status": status, "title": title, "detail": detail})
+        def step(ident, status, title, detail="", help=""):
+            steps.append({"id": ident, "status": status, "title": title, "detail": detail, **({"help": help} if help else {})})
 
         def verdict(kind, summary, retry=None):
             return {"rule_id": rule_id, "name": rule["name"], "verdict": kind, "summary": summary, "retry_in": retry,
@@ -468,6 +543,7 @@ class NotificationEngine:
             return verdict("blocked", "The condition has an error, so the alert cannot fire.")
         if not preview["active"]:
             step("condition", "block", "Condition", "The condition is not true right now.")
+            await self.explain_checks(rule, index, step)
             return verdict("inactive", "The condition is not true, so there is nothing to send.")
         step("condition", "pass", "Condition", "True right now.")
         if state.get("dismissed"):

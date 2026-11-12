@@ -1,6 +1,7 @@
 const assert=require('assert');
 module.exports=async page=>{
  const panel=page.locator('deepal-companion-panel');
+ await panel.evaluate(p=>{if(p.shadowRoot.querySelector('.profile-setup.ps-closed'))p.shadowRoot.querySelector('[data-profile-toggle]').click();});
  const baseline=await panel.evaluate(root=>({companion_design:root.config.companion_design||'',companion_width:root.config.companion_width||0}));
  assert.equal(await panel.locator('.profile-editable input').count(),1);assert.equal(await panel.locator('.profile-design').count(),1);
  const profileSpace=await panel.evaluate(root=>{const label=root.shadowRoot.querySelector('.profile-name').getBoundingClientRect(),actions=root.shadowRoot.querySelector('.profile-controls .actions').getBoundingClientRect();return actions.top-label.bottom;});assert(profileSpace<20,'Profile actions must immediately follow the field without legacy flex-basis spacing');

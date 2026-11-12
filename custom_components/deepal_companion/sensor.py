@@ -2,18 +2,24 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import timedelta
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import DOMAIN, SIGNAL
+from .health import BACKLOG_LIMIT
+
+SCAN_INTERVAL = timedelta(seconds=60)  # only used by the archive status sensor, which reads runtime flags
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(hass, entry, async_add_entities) -> None:
     runtime = entry.runtime_data
-    async_add_entities([CompanionSensor(runtime, key) for key in ("sessions", "battery_kwh", "cost", "unpriced")])  # async_added_to_hass loads the first value
+    async_add_entities([CompanionSensor(runtime, key) for key in ("sessions", "battery_kwh", "cost", "unpriced")]  # async_added_to_hass loads the first value
+                       + [ArchiveStatusSensor(runtime)])
 
 
 class CompanionSensor(SensorEntity):
@@ -80,7 +86,7 @@ class CompanionSensor(SensorEntity):
         finally:
             self._refreshing = False
 
-    async def async_update(self):
+    async def async_update(self) -> None:
         values = await self.runtime.summary_values()
         unpriced = values["unpriced"]
         self._attr_native_value = values[self.key]
@@ -88,4 +94,40 @@ class CompanionSensor(SensorEntity):
             "archive": "Companion SQLite", "unpriced_sessions": unpriced,
             "cost_is_partial": bool(unpriced),
             "energy_basis": "Estimated energy added to the battery",
+        }
+
+
+class ArchiveStatusSensor(SensorEntity):
+    """Diagnostic: shows whether the charging archive is running, degraded or stopped."""
+    _attr_has_entity_name = True
+    _attr_should_poll = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["ok", "degraded", "stopped"]
+
+    def __init__(self, runtime):
+        self.runtime = runtime
+        self._attr_unique_id = runtime.vehicle + "_archive_status"
+        self._attr_translation_key = "archive_status"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, runtime.vehicle)},
+            name=runtime.entry.title,
+            manufacturer="Deepal Companion",
+            model="Vehicle companion",
+            configuration_url="homeassistant://deepal-companion",
+        )
+
+    async def async_update(self) -> None:
+        runtime = self.runtime
+        backlog = runtime.queue.qsize() if runtime.queue else 0
+        if runtime.engine is None or runtime.worker is None or runtime.worker.done():
+            state = "stopped"
+        elif runtime.degraded_reason or backlog > BACKLOG_LIMIT:
+            state = "degraded"
+        else:
+            state = "ok"
+        self._attr_native_value = state
+        self._attr_extra_state_attributes = {
+            "queued_readings": backlog,
+            "problem": runtime.degraded_reason,
         }

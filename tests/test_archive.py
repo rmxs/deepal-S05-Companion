@@ -102,9 +102,11 @@ class ArchiveTests(unittest.TestCase):
 
     def test_three_independent_views(self):
         ids = [v["id"] for v in self.views]
-        for view, color in zip(ids, ("black", "blue", "white")):
-            self.db.patch_config("one", view, {"car_color": color, "hero_space": "airy"})
-        self.assertEqual([self.db.config("one", v)["config"]["car_color"] for v in ids], ["black", "blue", "white"])
+        for view, space in zip(ids, ("compact", "standard", "airy")):
+            self.db.patch_config("one", view, {"hero_space": space})
+        self.assertEqual([self.db.config("one", v)["config"]["hero_space"] for v in ids], ["compact", "standard", "airy"])
+        self.db.patch_config("one", ids[0], {"car_color": "black"})
+        self.assertEqual([self.db.config("one", v)["config"]["car_color"] for v in ids], ["black"] * len(ids), "car colour is the same in every profile")
 
     def test_common_capacities_and_independent_layout(self):
         self.db.patch_config("one", self.views[0]["id"], {"battery_kwh": 22, "fuel_tank_liters": 51,
@@ -179,11 +181,11 @@ class ArchiveTests(unittest.TestCase):
             self.db.patch_config("two", self.views[0]["id"], {"car_color": "red"})
 
     def test_profile_reset_keeps_other_views(self):
-        self.db.patch_config("one", self.views[0]["id"], {"car_color": "blue"})
-        self.db.patch_config("one", self.views[1]["id"], {"car_color": "white"})
+        self.db.patch_config("one", self.views[0]["id"], {"hero_space": "airy"})
+        self.db.patch_config("one", self.views[1]["id"], {"hero_space": "compact"})
         self.db.patch_config("one", self.views[0]["id"], {}, True)
-        self.assertNotIn("car_color", self.db.config("one", self.views[0]["id"])["config"])
-        self.assertEqual(self.db.config("one", self.views[1]["id"])["config"]["car_color"], "white")
+        self.assertNotIn("hero_space", self.db.config("one", self.views[0]["id"])["config"])
+        self.assertEqual(self.db.config("one", self.views[1]["id"])["config"]["hero_space"], "compact")
 
     def test_persistent_readings_and_boundary(self):
         for stamp, state in ((100, 80), (200, 79), (300, 78)):

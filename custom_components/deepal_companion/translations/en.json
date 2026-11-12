@@ -66,6 +66,14 @@
       },
       "unpriced": {
         "name": "Unpriced charges"
+      },
+      "archive_status": {
+        "name": "Archive status",
+        "state": {
+          "ok": "OK",
+          "degraded": "Degraded",
+          "stopped": "Stopped"
+        }
       }
     }
   },

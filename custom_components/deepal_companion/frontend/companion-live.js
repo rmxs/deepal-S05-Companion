@@ -4,7 +4,7 @@ const OPEN_ITEMS = ['front_left_door', 'front_right_door', 'rear_left_door', 're
 const LOOK = {title: '', icon: '', color: '', url: ''};
 export const LIVE_DEFAULTS = {
   climate: {enabled: false, devices: [], min_interval: 120, max_age: 1800, start_delay: 0, end_delay: 30, temp_step: 1, ready_margin: 1, show_target: true, show_outside: false, show_progress: true, show_timer: true, show_updated: false, turn_off_button: true, max_run: 0, ...LOOK},
-  open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 60, end_delay: 10, items: OPEN_ITEMS, include_unlocked: true, only_parked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
+  open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 300, end_delay: 10, items: OPEN_ITEMS, include_unlocked: true, only_parked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
 };
 const GROUPS = {doors: OPEN_ITEMS.slice(0, 4), windows: OPEN_ITEMS.slice(4, 8), hood: ['hood'], trunk: ['trunk']};
 const KINDS = {
@@ -14,7 +14,7 @@ const KINDS = {
     rows: [['switch', 'show_target', 'Show target temperature'], ['switch', 'show_outside', 'Show outside temperature'], ['switch', 'show_progress', 'Show progress bar'], ['switch', 'show_timer', 'Show running time'],
       ['switch', 'turn_off_button', '“Turn off” button', 'Android only'], ['number', 'min_interval', 'Update at most every', 'min', 60, 1, 60], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 10]]},
   open: {name: 'Left open or unlocked', icon: 'mdi:car-door-lock-open', sub: 'Open doors, windows and an unlocked car', info: 'One notification lists what is open or unlocked. Items drop off as they are closed, and it disappears when everything is secure.',
-    rows: [['group', 'doors', 'Doors'], ['group', 'windows', 'Windows'], ['group', 'hood', 'Bonnet'], ['group', 'trunk', 'Trunk'], ['switch', 'include_unlocked', 'Unlocked car'], ['switch', 'only_parked', 'Only when the car is off', 'Nothing while driving'], ['switch', 'show_count', 'Show item count'], ['switch', 'show_timer', 'Show time open'],
+    rows: [['group', 'doors', 'Doors'], ['group', 'windows', 'Windows'], ['group', 'hood', 'Bonnet'], ['group', 'trunk', 'Trunk'], ['switch', 'include_unlocked', 'Unlocked car'], ['switch', 'only_parked', 'Only when the car is parked', 'Nothing while driving'], ['switch', 'show_count', 'Show item count'], ['switch', 'show_timer', 'Show time open'],
       ['switch', 'lock_button', '“Lock vehicle” button', 'Android only'], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 60]]},
 };
 // Phones only show Material Design icons, so the choices are mdi: names (others are refused).
@@ -23,6 +23,7 @@ const el = (tag, className, text) => { const node = document.createElement(tag);
 
 export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, request, toast, changed, setInvalid, busy, response}) {
   const template = q('.alert-row'), firstGrid = template.parentElement, firstCategory = firstGrid.parentElement, overview = q('#view-overview');
+  let syncCardTap = () => {};
   const supported = response.live_supported === true, active = {charging: !!response.live_test_active, ...response.live_status_test_active};
   // The LIVE tag is yellow while a notification is on and grey while it is off.
   const tags = [];
@@ -89,6 +90,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
     }
     for (const node of tags) { const on = node.dataset.liveTag ? state[node.dataset.liveTag].enabled : Object.keys(KINDS).some((id) => state[id].enabled), tone = on ? '--design-warn' : '--design-muted'; node.style.background = `rgb(var(${tone})/.15)`; node.style.color = `rgb(var(${tone}))`; }
     tapPicker.value = getUrl() || '';
+    syncCardTap();
   };
   const run = async (id, stop) => {
     if (busy()) return; setInvalid(); busy(true); const page = pages[id], cfg = getState()[id];
@@ -107,6 +109,18 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
   tapPicker.hass = getHass(); tapPicker.selector = {navigation: {}}; tapPicker.label = ''; tapPicker.required = false; tapPicker.className = 'design-icon-picker';
   tapPicker.addEventListener('value-changed', (event) => { event.stopPropagation(); if (busy() || typeof event.detail?.value !== 'string' && event.detail?.value != null) return; setUrl(event.detail.value || ''); changed(); });
   tapPanel.append(el('div', 'font-bold text-[11px] text-gray-300', 'When you tap a notification'), el('p', 'text-[11px] text-gray-400 leading-relaxed', 'The dashboard page the phone opens. Empty opens the page the Home Assistant app shows by default. Alerts and live notifications use the same page.'), tapPicker);
+  // The page that shows only the card: one button to choose it as the tap target.
+  const CARD_PAGE = '/deepal-companion-card';
+  const cardTap = el('button', 'px-3.5 py-1.5 rounded-full text-[11px] border');
+  cardTap.type = 'button'; cardTap.dataset.liveCardTap = ''; cardTap.textContent = 'Card only page';
+  syncCardTap = () => {
+    const on = (getUrl() || '') === CARD_PAGE;
+    cardTap.className = 'px-3.5 py-1.5 rounded-full text-[11px] border ' + (on ? 'bg-emerald-400 text-slate-950 font-bold border-transparent' : 'bg-[#151619] border-[#282a30] text-gray-300');
+    cardTap.setAttribute('aria-pressed', on ? 'true' : 'false'); cardTap.disabled = !!busy();
+  };
+  cardTap.addEventListener('click', () => { if (busy()) return; const on = (getUrl() || '') === CARD_PAGE; setUrl(on ? '' : CARD_PAGE); tapPicker.value = on ? '' : CARD_PAGE; syncCardTap(); changed(); });
+  tapPicker.addEventListener('value-changed', () => queueMicrotask(syncCardTap));
+  tapPanel.append(cardTap); syncCardTap();
   const old = q('#input-fresh')?.closest('.ha-card');
   if (old) { const first = el('div', 'space-y-3'); first.append(...old.childNodes); old.classList.remove('space-y-3'); old.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:start'; old.append(first, tapPanel); }
   else { const card = el('section', 'ha-card p-4'); card.append(tapPanel); overview.append(card); }

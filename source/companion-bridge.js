@@ -204,10 +204,12 @@ DeepalS05Card.prototype._saveRemote = function() { this._saveYaml(); };
 DeepalS05Card.prototype.connectedCallback = function() {
   companionOriginalConnected.call(this);
   if (this._rawHass) this._loadRemote();
+  this._compUnwatch?.(); this._compUnwatch = window.__DEEPAL_COMPANION_UI.watchConnection(() => this._rawHass, () => { if (!this._compDirty && !this._compSaving) this._loadRemote(); });
 };
 DeepalS05Card.prototype.disconnectedCallback = function() {
   this._compEnergyHost?.energyCleanup?.();this._compEnergyHost=null;
   clearTimeout(this._compTimer);
+  this._compUnwatch?.(); this._compUnwatch = null;
   if (this._compUnsubscribe) { this._compUnsubscribe(); this._compUnsubscribe = null; }
   if (this._compDirty) this._doSaveYaml();
   companionOriginalDisconnected.call(this);

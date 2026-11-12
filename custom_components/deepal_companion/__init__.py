@@ -14,7 +14,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import register
-from .const import DOMAIN, FRONTEND_URL, PANEL_URL, SIGNAL, VERSION
+from .const import CARD_PANEL_URL, DOMAIN, FRONTEND_URL, PANEL_URL, SIGNAL, VERSION
 from .database import Database
 from .runtime import VehicleRuntime
 
@@ -31,6 +31,23 @@ class Hub:
         self.lock = asyncio.Lock()
         self.vehicles = {}
         self.setting_keys = set()
+        self.card_panel_in_sidebar = False  # default off; an admin can turn it on in Card Settings > Advanced
+        self._card_panel_registered = False
+        self._card_panel_store = None
+        self.card_panel_pin = {"vehicle_id": "", "view_id": "", "design": ""}  # profile and design fixed for the card page
+
+    async def set_card_panel_pin(self, pin):
+        self.card_panel_pin = {**self.card_panel_pin, **pin}
+        if self._card_panel_store is not None:
+            await self._card_panel_store.async_save({"sidebar": self.card_panel_in_sidebar, **self.card_panel_pin})
+
+    async def set_card_panel(self, visible):
+        """Show or hide the card-only page in the sidebar. The page itself stays reachable by its address."""
+        visible = bool(visible)
+        if self._card_panel_store is not None:
+            await self._card_panel_store.async_save({"sidebar": visible, **self.card_panel_pin})
+        self.card_panel_in_sidebar = visible
+        await _register_card_panel(self.hass, self)
 
     async def db(self, method, *args):
         async with self.lock:
@@ -38,6 +55,20 @@ class Hub:
 
     def changed(self, vehicle):
         async_dispatcher_send(self.hass, SIGNAL, vehicle)
+
+
+async def _register_card_panel(hass, hub):
+    if hub._card_panel_registered:
+        from homeassistant.components.frontend import async_remove_panel
+        async_remove_panel(hass, CARD_PANEL_URL, warn_if_unknown=False)
+    await async_register_panel(
+        hass, frontend_url_path=CARD_PANEL_URL, webcomponent_name="deepal-companion-card-panel",
+        sidebar_title="Deepal Card" if hub.card_panel_in_sidebar else None,
+        sidebar_icon="mdi:car-electric-outline" if hub.card_panel_in_sidebar else None,
+        module_url=FRONTEND_URL + "/companion-card-panel.js?v=" + VERSION,
+        require_admin=False,
+    )
+    hub._card_panel_registered = True
 
 
 async def async_setup(hass, config):
@@ -58,6 +89,17 @@ async def async_setup(hass, config):
         module_url=FRONTEND_URL + "/companion-panel.js?v=" + VERSION,
         require_admin=False,
     )
+    try:
+        from homeassistant.helpers.storage import Store
+        hub._card_panel_store = Store(hass, 1, DOMAIN + ".card_panel")
+        saved = await hub._card_panel_store.async_load()
+        if isinstance(saved, dict) and isinstance(saved.get("sidebar"), bool):
+            hub.card_panel_in_sidebar = saved["sidebar"]
+        if isinstance(saved, dict):
+            hub.card_panel_pin = {k: saved[k] if isinstance(saved.get(k), str) else "" for k in ("vehicle_id", "view_id", "design")}
+    except Exception:
+        _LOGGER.exception("Could not read the card page setting; showing it in the sidebar")
+    await _register_card_panel(hass, hub)
     # Register the bundled card in Lovelace's resource collection when using storage mode.
     from homeassistant.components.lovelace.const import LOVELACE_DATA
     lovelace = hass.data.get(LOVELACE_DATA)
@@ -85,8 +127,13 @@ async def async_setup_entry(hass, entry):
         entry.runtime_data = runtime
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception:
-        await runtime.stop()
-        hub.vehicles.pop(entry.unique_id, None)
+        try:
+            await runtime.stop()
+        except Exception:
+            _LOGGER.exception("Runtime cleanup failed during setup")
+        finally:
+            hub.vehicles.pop(entry.unique_id, None)
+            entry.runtime_data = None
         raise
     entry.async_on_unload(entry.add_update_listener(_options_updated))
     hub.changed(entry.unique_id)

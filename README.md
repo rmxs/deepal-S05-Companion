@@ -10,20 +10,26 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
-## Latest release — v0.1.5
+## Latest release — v0.1.6
 
-- **Live notifications** on the Lock Screen for charging, climate and left-open doors, each with its own settings page.
-- New charging alerts: started, almost finished and reached target.
-- A notifications popup on the card, a data-age badge on the refresh button, a clearer lock status and a round Settings gear on the image.
-- A Health tab that checks sensors, the recorder, the database, notification devices and prices.
-- Saving from two devices now merges both sets of changes instead of losing one.
+- **New Sessions page:** key figures for the selected period, compact session cards with the real battery start and end level, a daily energy chart split into free, paid and not-priced charging, and weekly history by default.
+- **Correct your charging history** (administrators): change a charge between AC and DC, remove false current readings, or delete a charge and restore it within 30 days.
+- A false DC reading right after an AC charge no longer turns the charge into a DC session.
+- Safer saving: temporary database errors are retried, a slow database can no longer pile up readings, and a sensor that becomes unavailable keeps its last good value.
+- Charging efficiency is now visible for free profiles too.
+- **Card only page:** a second page, **Deepal Card**, shows just the card. On a phone it fills the whole screen like an app; on a computer it stays a normal card. It is hidden from the sidebar by default; turn it on under **Card Settings → Advanced → Sidebar**. New installations open it when a notification is tapped.
+- **Car View backgrounds by time of day:** morning and afternoon show a deeper blue sky that suits the dark theme, the evening shows a dusk sky, and the night keeps the moon and stars.
+- **One confirmation window for every command:** lock, unlock, windows, trunk, climate, lights, horn, locate and refresh all show the same window you get from the lock on the car image.
+- **Back on the phone:** when you return to the dashboard, the card reconnects by itself and reloads its data.
+- **Redesigned Profile box** that starts closed (the arrow opens it), with a connection badge (**Active**, **Offline** or **No data**) for the Deepal Alternative link to the vehicle cloud.
 
-[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.5) · [Full changelog](CHANGELOG.md)
+[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.6) · [Full changelog](CHANGELOG.md)
 
 ## Release highlights
 
 - **Live notifications:** keep **Live charging**, **Live climate** and **Left open or unlocked** on your phone’s Lock Screen with iPhone Live Activities or Android Live Updates. Each has its own settings page and follows the car’s reported readings, even while the dashboard is closed.
 - **Clearer card status:** the age of the vehicle data sits on the refresh button, the lock line says **In use** while the engine runs, and the Settings gear sits on the image.
+- **Sessions at a glance:** the Sessions page shows energy, cost, paid price and free share for the period you are viewing, with compact session cards and a daily free/paid energy chart.
 - **Saved charging curves:** inspect current readings, charging time and recorded battery percentages for each session. Captured curves stay in Companion’s archive alongside the charge and its cost.
 - **Charging networks for Spain, Italy and Greece:** when you name a charging profile, pick a ready-made network such as Zunder, Iberdrola | bp pulse, Plenitude On the Road, PPC blue or EKO Charge & Go, or type your own name and tariff.
 - **Charging expenses:** organise Home, Work, Public and custom locations, set tariffs or free charging, enter receipt totals and review your charging energy and costs in session cards and charts.
@@ -36,6 +42,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 <tr><td width="50%"><img src="docs/images/feature-vehicle-overview.png" alt="Your whole car on one card"></td><td width="50%"><img src="docs/images/feature-battery-range.png" alt="Range, battery and fuel"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-controls-state.png" alt="Buttons that show the state"></td><td width="50%"><img src="docs/images/feature-climate.png" alt="Climate controls"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-tyres-warnings.png" alt="Tyre pressure and warnings"></td><td width="50%"><img src="docs/images/feature-diagnostics.png" alt="Diagnostic warnings"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-card-only-phone.png" alt="Deepal Card page filling a phone screen"></td><td width="50%"><img src="docs/images/feature-confirm-window.png" alt="One confirmation window for every command"></td></tr>
 </table>
 
 ### Car view and interior
@@ -43,6 +50,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 <table>
 <tr><td width="50%"><img src="docs/images/presentation-car-colour.png" alt="Car colours"></td><td width="50%"><img src="docs/images/presentation-climate.png" alt="Cabin climate"></td></tr>
 <tr><td width="50%"><img src="docs/images/presentation-seats.png" alt="Seat heating and ventilation"></td><td width="50%"><img src="docs/images/presentation-custom.png" alt="Custom sensors and buttons"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-car-view-day.png" alt="Car View with a day sky"></td><td width="50%"><img src="docs/images/feature-car-view-dusk.png" alt="Car View with a dusk sky"></td></tr>
 </table>
 
 ### Charging and costs
@@ -64,6 +72,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 <table>
 <tr><td width="50%"><img src="docs/images/control-panel-feature.png" alt="Set up the card and see it live"></td><td width="50%"><img src="docs/images/feature-panel-layout.png" alt="Layout settings"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-panel-advanced.png" alt="Vehicle setup and sensors"></td><td width="50%"><img src="docs/images/feature-panel-charging-profiles.png" alt="Charging profiles"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-sessions-page.png" alt="Sessions page with the battery and petrol history"></td><td width="50%"><img src="docs/images/feature-notifications-page.png" alt="Notifications page"></td></tr>
 </table>
 
 ## How it started
@@ -107,16 +116,17 @@ Made for my car, shared for yours.
 
 - Automatic charging-session recording while dashboards are closed.
 - A permanent charging archive containing sessions, saved prices and available charging curves.
-- Weekly and monthly battery/fuel history with previous-period navigation.
+- Weekly (default) and monthly battery/fuel history with previous-period navigation.
 - Daily distance, charged energy, estimated battery use and estimated petrol use.
 - Smooth charging-current curves with changed-reading dots, touch/keyboard inspection, Low/High current and battery percentages when recorded.
 - Optional on-card charging curve while charging.
 - Charging details, cable flow, charge-port pulse and light-sweep effects.
 - Charging locations with individual tariffs, free charging and optional charger entities.
 - Searchable charging-network name suggestions, custom names and profile deletion that preserves saved charges.
-- Energy calculation from battery estimates, total energy meters, session energy meters or charger power.
+- Energy calculation from battery estimates, total energy meters, session energy meters or charger power, with an adjustable charging efficiency for every profile, including free ones.
 - Per-session location, price per kWh, measured energy and total-payment editing.
-- Euro cost totals and energy/cost charts with historical date navigation.
+- Euro cost totals for the selected period (energy, cost, paid price per kWh and free share) and a daily energy chart that separates free, paid and not-priced charging.
+- Compact session cards with the real battery start and end level, charge duration and quick curve and edit buttons.
 - Grid and table views, location and Not set filters, and date/cost sorting across the archive.
 - Six sessions fetched per page, with up to three cards per row on wide screens.
 - Charging-detected reminders with location assignment or dismissal until the next charge.
@@ -130,7 +140,9 @@ Made for my car, shared for yours.
 - Recipients selected from your Home Assistant Mobile App devices.
 - Basic, Recommended and All presets.
 - Quiet hours, alert delays, repeat intervals and maximum notification counts.
-- Configurable thresholds and supported away-from-home or parked conditions.
+- Configurable thresholds and supported away-from-home or parked conditions, including cars left switched on, with optional Advanced conditions you build from sensors.
+- “Why isn’t it sending?” explains each condition with current values and a **?** help for every line.
+- A red unread counter on the card’s notifications button, saved per Home Assistant user.
 - Information, Important and Critical severity.
 - Editable titles, messages and icons, with vehicle-value tags and message previews.
 - Supported action buttons, including Lock vehicle and Dismiss.
@@ -176,14 +188,14 @@ The dashboard has four main pages: **Card Settings → Notifications → Session
 
 | Open | What you can configure |
 | --- | --- |
-| **Card Settings → Profile / Card design** | Profile name, Mobile/Tablet/Energy design and maximum width |
+| **Card Settings → Profile / Card design** | Profile name, Duplicate / New profile / Delete, design style (Mobile/Tablet/Energy), maximum width and the Deepal Alternative connection badge |
 | **Card Settings → Layout** | Section order and visibility, buttons, information tiles and items on the vehicle image |
 | **Card Settings → Appearance** | Image style, view, background, zoom, spacing and on-screen messages |
 | **Card Settings → Controls** | Climate controls, temperature selector and action confirmations |
 | **Card Settings → Charging** | Charging text, visual effects and Energy-tile behaviour |
 | **Card Settings → Colours** | Tile icon presets/custom colour, airflow colours and battery/fuel thresholds |
 | **Card Settings → Diagnostics & tyres** | Warning indicators, tyre units and pressure limits |
-| **Card Settings → Advanced** | Vehicle type, paint, wheels, capacities, custom photos, sensor mapping, custom diagnostics and configuration backup/reset |
+| **Card Settings → Advanced** | Show “Deepal Card” in the sidebar, vehicle type, paint, wheels, capacities, custom photos, sensor mapping, custom diagnostics and configuration backup/reset |
 | **Notifications** | Devices, alerts, timing, messages, quiet hours, Live notifications, tests and recent activity |
 | **Sessions** | Charging history, costs, curves, filters, sorting, charts and data options |
 | **Charging Profiles** | Charging locations, tariffs, free charging, energy sources and charger sensors |

@@ -84,6 +84,20 @@ class RuntimePerformanceTests(unittest.IsolatedAsyncioTestCase):
             result = await runtime.charging_dashboard(start, start+3*7200)
         self.assertEqual(result['total'],100)
         self.assertAlmostEqual(sum(day['pricing']['energy'] for day in result['chart_rows']),4*9.2/.9)
+        self.assertEqual(result['period']['sessions'],4)
+        self.assertAlmostEqual(result['period']['energy'],4*9.2/.9)
+
+    async def test_period_totals_separate_free_paid_and_unpriced(self):
+        runtime = self.runtime(0)
+        async def sessions():
+            base = {"s": 1700000000000, "live": False, "kwh": 5}
+            return [{**base, "pricing": {"energy": 10, "cost": 0}}, {**base, "pricing": {"energy": 8, "cost": 4}}, {**base, "pricing": {"energy": None, "cost": None}}]
+        runtime.priced_sessions = sessions
+        module = importlib.import_module("companion_lifecycle.runtime")
+        with patch.object(module.dt_util, "as_local", lambda value: value, create=True), patch.object(module.time, "time", return_value=1700000010):
+            period = (await runtime.charging_dashboard())["period"]
+        self.assertEqual((period["sessions"], period["free_sessions"], period["paid_sessions"], period["unpriced"]), (3, 1, 1, 1))
+        self.assertEqual((period["energy"], period["free_energy"], period["paid_energy"], period["cost"]), (23, 10, 8, 4))
 
     def runtime(self, count):
         self.calls = []

@@ -60,7 +60,7 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 2. Check the master switch and the individual alert switch.
 3. Save changes and send a test.
 4. Confirm the phone allows Home Assistant notifications.
-5. Check quiet hours, severity, away/parked conditions and old-data filtering. If every phone has a condition that is not met, the alert waits; choose **Why isn’t it sending?** on the alert to see which condition holds it.
+5. Check quiet hours, severity, away/parked conditions and old-data filtering. If every phone has a condition that is not met, the alert waits; choose **Why isn’t it sending?** on the alert to see which condition holds it, with the current values and a **?** explanation for each. If the car was left switched on, check **Car on, not moving for** (default 30 minutes): the car does not switch itself off, so it counts as parked only after the odometer stops changing.
 6. If the phone was replaced, recheck its Mobile App registration and recipient selection.
 7. For Live notifications, follow the separate [requirements and test steps](NOTIFICATIONS.md#live-notifications-on-the-lock-screen).
 
@@ -71,6 +71,24 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 3. **Locked after 21:14** means the car was driven since the last lock change, and it was locked some time after that moment. The odometer and the engine state are used to detect a drive.
 4. The lock and engine times come from the recorded history, so restarting Home Assistant or reloading the integration does not reset them. If the recorder has no history, the card falls back to the time Home Assistant last saw a change.
 5. Check the age badge on the refresh button. An old reading (yellow after 2 hours, red after 4) means the car has not reported recently; use the refresh button.
+
+## The Deepal Card entry is missing from the sidebar
+
+1. It is hidden by default. An administrator can turn on **Card Settings → Advanced → Sidebar → Show “Deepal Card” in the sidebar**.
+2. Reload the browser after changing it.
+3. The page itself still opens at `/deepal-companion-card`, and notifications can open it.
+
+## The card shows “Connection lost” on the phone
+
+1. Home Assistant shows this message itself when the app was in the background for a long time.
+2. The card and the Companion pages check the connection when you return and reconnect by themselves. Wait a few seconds; the data reloads without a manual refresh.
+3. If the message stays, close the Home Assistant app completely, open it again and check your network.
+
+
+## The connection badge shows Offline or No data
+
+1. **Offline** means Deepal Alternative reports the vehicle cloud connection as off or unavailable. Check that integration and its sign-in.
+2. **No data** means the connection sensor has no state yet or was not found. Check the entity prefix under **Card Settings → Advanced**.
 
 ## The Settings gear is missing
 

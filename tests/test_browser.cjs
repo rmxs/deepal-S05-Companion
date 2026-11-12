@@ -61,6 +61,8 @@ const server=http.createServer((req,res)=>{
      if(m.op==="notifications_get"&&window.notificationUnavailable)throw Error("Unknown Companion operation");
      if(!window.activityRows)window.activityRows=Array.from({length:12},(_,i)=>({id:i.toString(16).padStart(32,'0'),time:Date.now()/1000-i*3600,rule_id:'charge_done',name:'Charging complete',title:'Deepal S05 · Charging complete',message:'Battery 67%, range 81 km.',icon:'mdi:battery-check-outline',status:'test',deliveries:[{device:'notify.replacement_phone',status:'accepted'}]}));
      const activityPage=(limit=5,before=null)=>{const start=before?window.activityRows.findIndex(row=>row.id===before)+1:0,rows=structuredClone(window.activityRows.slice(start,start+limit)),has_more=start+rows.length<window.activityRows.length;return {rows,total:window.activityRows.length,has_more,next_before:has_more?rows.at(-1)?.id:null};};
+     if(m.op==='notifications_unread'){(window.unreadCalls??=[]).push(m.data||{});if(m.data?.mark)window.unread=0;return {unread:window.unread??2};}
+     if(m.op==='notifications_explain'){(window.explainCalls??=[]).push(m.data);return {rule_id:m.data.rule_id,name:'Unlocked vehicle',verdict:'waiting',summary:'Not sent yet: a condition is not true.',retry_in:null,checked:1,steps:[{id:'check0',status:'pass',title:'Doors are unlocked',detail:'Now: unlocked (changed 3 min ago)',help:'Help for the doors line.'},{id:'check1',status:'block',title:'Power status is off',detail:'Now: on (changed 12 min ago)',help:'Help for the power line.'},{id:'delay',status:'wait',title:'Delay',detail:'2 min left'}]};}
      if(m.op==="notifications_get"){const activity=activityPage();return {live_supported:true,value:structuredClone(window.localNotifications||{enabled:false,rules:[]}),history:activity.rows,activity,recipients:[{svc:'notify.replacement_phone',name:'Current iPhone',tracker:'device_tracker.current_phone',legacy_service:'mobile_app_phone'},{svc:'notify.another_users_android',name:'Another user’s Android',tracker:'',legacy_service:'mobile_app_android'}]};}
      if(m.op==='notifications_history'){window.activityRequests=(window.activityRequests||0)+1;return activityPage(m.data.limit,m.data.before);}
      if(m.op==='notifications_history_delete'){window.activityRows=m.data.all?[]:window.activityRows.filter(row=>row.id!==m.data.id);return activityPage();}
@@ -218,6 +220,10 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelectorAll("deepal-companion-card").length),1);
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").settings.shadowRoot.querySelectorAll("[data-tab]").length),7);
   const p=page.locator("deepal-companion-panel");
+  /* 0.1.6: the Profile box starts closed; the checks below use its fields, so open it the way a user does (the arrow beside the badge) */
+  assert.equal(await page.evaluate(()=>!!document.querySelector("deepal-companion-panel").shadowRoot.querySelector(".profile-setup.ps-closed")),true,"The Profile box starts closed");
+  await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelector("[data-profile-toggle]").click());
+  await page.waitForFunction(()=>!document.querySelector("deepal-companion-panel").shadowRoot.querySelector(".profile-setup.ps-closed"));
   if(process.env.NOTIFY_MOBILE_ONLY){await require('./test_notification_mobile.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_PERSISTENCE_ONLY){await require('./test_notification_persistence.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGING_BLOCKS_ONLY){await require('./test_charging_blocks.cjs')(page);await require('./test_charge_reminder.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
@@ -229,6 +235,7 @@ const server=http.createServer((req,res)=>{
   if(process.env.FEATURE_ONLY){await require('./test_feature_updates.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.QA_ONLY){await require("./test_field_choices.cjs")(page);await require("./test_end_user_qa.cjs")(page);return;}
   if(process.env.NAV_ONLY){await require("./test_boot_loading.cjs")(page);await require("./test_preview_controls.cjs")(page);await require("./test_tab_navigation.cjs")(page);await require("./test_local_notifications.cjs")(page);await require("./layout_validation.cjs")(page);return;}
+  if(process.env.NOTIFY_FEATURES_ONLY){await require('./test_notification_features.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_ONLY){await require("./test_local_notifications.cjs")(page);return;}
   if(process.env.CHART_ONLY){await require("./test_charging_dashboard.cjs")(page);return;}
   if(process.env.FILTER_ONLY){await require("./test_session_filters.cjs")(page);return;}

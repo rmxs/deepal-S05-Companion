@@ -40,9 +40,32 @@ class CompanionChoice extends HTMLElement {
   close(focus){if(this.menu.matches(':popover-open'))this.menu.hidePopover();window.removeEventListener('resize',this.reposition);this.unwatchScroll();this.button.setAttribute('aria-expanded','false');if(focus&&this.isConnected)this.button.focus();}
 }
 if(!customElements.get('deepal-companion-choice'))customElements.define('deepal-companion-choice',CompanionChoice);
+/* Phone back from the background: checks the Home Assistant connection, reconnects when it is dead and then lets the page reload its data. Returns a function that removes every listener. */
+function watchConnection(getHass, onResume) {
+  let hiddenAt = document.hidden ? Date.now() : 0, timer = null, busy = false, conn = null;
+  const settle = async (force) => {
+    if (busy || document.hidden) return; busy = true;
+    try {
+      const c = getHass()?.connection; if (!c) return;
+      let alive = true;
+      try { await Promise.race([c.ping(), new Promise((_, no) => setTimeout(() => no(new Error("ping")), 5000))]); } catch (_) { alive = false; }
+      if (!alive) { try { c.reconnect(true); } catch (_) {} }
+      if (!alive || force) onResume();
+    } finally { busy = false; }
+  };
+  const later = (force) => { clearTimeout(timer); timer = setTimeout(() => settle(force), 400); };
+  const onVisible = () => { if (document.hidden) { hiddenAt = Date.now(); return; } const away = hiddenAt ? Date.now() - hiddenAt : 0; hiddenAt = 0; later(away > 20000); };
+  const onReady = () => { if (!document.hidden) onResume(); };
+  const onOnline = () => later(true), onShow = (e) => { if (e.persisted) later(true); };
+  document.addEventListener("visibilitychange", onVisible); window.addEventListener("online", onOnline); window.addEventListener("pageshow", onShow);
+  const attach = () => { const c = getHass()?.connection; if (c && c !== conn) { conn?.removeEventListener?.("ready", onReady); conn = c; conn.addEventListener?.("ready", onReady); } };
+  attach(); const poll = setInterval(attach, 30000);
+  return () => { clearTimeout(timer); clearInterval(poll); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("online", onOnline); window.removeEventListener("pageshow", onShow); conn?.removeEventListener?.("ready", onReady); conn = null; };
+}
 /* The application mounts the complete existing settings UI directly, without a card/modal. */
 window.__DEEPAL_COMPANION_UI = {
   readableError,
+  watchConnection,
   /* Pages outside the card (dashboard, notifications) use the same translation dictionary as the card. */
   watchLanguage(root) { I18N.watch(root); },
   settingsTag: SETTINGS_TAG,

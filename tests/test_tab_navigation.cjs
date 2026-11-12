@@ -13,7 +13,7 @@ module.exports=async page=>{
   assert.equal(await panel.locator('header .app-credit').textContent(),`v${version} · Made with ♥ in Greece · L.K.`);
   const layout=await panel.evaluate(root=>{const r=selector=>root.shadowRoot.querySelector(selector).getBoundingClientRect();return {profile:{x:r('.profile-setup').x,bottom:r('.profile-setup').bottom},preview:{x:r('.live-preview').x,top:r('.live-preview').top},settings:{x:r('.stage').x}};});
   assert(layout.profile.x>layout.settings.x&&Math.abs(layout.profile.x-layout.preview.x)<1&&layout.profile.bottom<=layout.preview.top,'Profile belongs above the right preview');
-  assert.equal(await panel.locator('.profile-setup h2 ha-icon,.preview-heading h2 ha-icon').count(),2);
+  assert.equal(await panel.locator('.profile-setup > .ps-head .ps-icon ha-icon,.preview-heading h2 ha-icon').count(),2);
   const palette=await page.evaluate(()=>{const node=document.createElement('div');window.__DEEPAL_COMPANION_UI.applyPalette(node,{lvl_green:'#11aa22',lvl_yellow:'#ddcc33',lvl_red:'#bb4422'});return ['ok','warn','bad'].map(key=>node.style.getPropertyValue('--companion-'+key));});assert.deepEqual(palette,['17,170,34','221,204,51','187,68,34']);
   await panel.locator('[data-mode=notifications]').click();await panel.locator('.local-notifications').waitFor();assert.equal(new URL(page.url()).hash,'#notifications');
   assert.equal(await panel.locator('header .app-credit').textContent(),`v${version} · Made with ♥ in Greece · L.K.`);

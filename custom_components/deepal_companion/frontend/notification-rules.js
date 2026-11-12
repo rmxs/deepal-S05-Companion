@@ -149,11 +149,12 @@ function norm(raw) {
     const s = EV[id], d = s.d, e = obj(ev[id]);
     const x = {
       on: bool(e.on, d.on), delay: int(e.delay, d.delay, 0, 720), repeat: int(e.repeat, d.repeat, 0, 1440), max: int(e.max, d.max, 1, 20),
-      sev: SEV.some((p) => p[0] === e.sev) ? e.sev : d.sev, away: bool(e.away, d.away), parked: bool(e.parked, d.parked), park: int(e.park, 5, 0, 120),
+      sev: SEV.some((p) => p[0] === e.sev) ? e.sev : d.sev, away: bool(e.away, d.away), parked: bool(e.parked, d.parked), park: int(e.park, 5, 0, 120), wait: int(e.wait, 30, 1, 720),
       actions: Array.isArray(e.actions) ? s.acts.filter((a) => e.actions.includes(a)) : d.actions.slice(), /* always in the order of s.acts */
       title: typeof e.title === "string" ? e.title.slice(0, 80) : "", text: typeof e.text === "string" ? e.text.slice(0, 300) : "",
       icon: typeof e.icon === "string" && /^mdi:[a-z0-9-]{1,80}$/.test(e.icon) ? e.icon : s.icon,
     };
+    if (s.ctl.includes("parked")) x.adv = normAdv(e.adv);
     if (s.thr) x.thr = int(e.thr, d.thr, s.thr.min, s.thr.max);
     if (s.diag) x.items = Array.isArray(e.items) ? e.items.filter((k, i, a) => typeof k === "string" && /^binary_sensor\.[a-z0-9_]{1,80}$/.test(k) && a.indexOf(k) === i) : null; /* which indicators trigger a notification; null = all */
     if (!s.ctl.includes("repeat")) { x.repeat = d.repeat; x.max = d.max; }
@@ -197,6 +198,97 @@ const COMFORT = [
   ["number.front_left_seat_ventilation_level", "Driver seat ventilation", "num"], ["number.front_right_seat_ventilation_level", "Passenger seat ventilation", "num"],
   ["binary_sensor.steering_wheel_heater", "Steering wheel heating", "bin"],
 ];
+/* Advanced conditions: the user picks a sensor, a state and for how long it must hold. Several rows are combined with "all" or "any". */
+const OO = [["on", "On"], ["off", "Off"]];
+const ADV = [
+  { k: "power", help: "The car's power status. It turns on when you unlock or start the car and usually stays on after you leave. It often turns off a few minutes after the doors are locked, but can stay on a long time when the car is left unlocked. So 'on' alone does not mean the car is in use.", label: "Power status", e: (E) => [E.power], st: OO },
+  { k: "engine", help: "Whether the car is switched on (ready or driving). Like the power status, it turns on when you start the car and can stay on after you leave.", label: "Engine", e: (E) => [E.eng], st: OO },
+  { k: "odo", help: "The odometer changes only while the car moves. If it has not changed for the time you set, the car is not moving. The car reports about every 5 minutes (about every 2 while driving), so this always waits at least 2 minutes.", label: "Odometer", e: (E) => [E.odo], st: [["still", "Not changing"], ["moving", "Changing"]] },
+  { k: "lock", help: "Whether the doors are locked. The car reports it about every 5 minutes, so locking or unlocking can take up to 5 minutes to show.", label: "Doors", e: (E) => [E.lock], st: [["unlocked", "Unlocked"], ["locked", "Locked"]] },
+  { k: "lights", help: "The low and high beams. 'On' means at least one is on, 'Off' means both are off.", label: "Lights", e: (E) => [E.low, E.high], st: OO },
+  { k: "door", help: "Whether any of the four doors is open. The car reports it about every 5 minutes.", label: "Any door", e: (E) => [E.door], st: [["on", "Open"], ["off", "Closed"]] },
+  { k: "win", help: "The windows. 'Open' means at least one window is open, 'Closed' means all are closed.", label: "Windows", e: (E) => [E.win], st: [["open", "Open"], ["closed", "Closed"]] },
+  { k: "plug", help: "Whether the charging cable is plugged into the car.", label: "Charging cable", e: (E) => [E.plug], st: [["on", "Plugged in"], ["off", "Unplugged"]] },
+  { k: "chg", help: "Whether the car is charging right now.", label: "Charging", e: (E) => [E.chg], st: OO },
+  { k: "climon", help: "Whether the cabin climate is running.", label: "Climate", e: (E) => [E.climon], st: OO },
+];
+const ADV_MAX = 8;
+function normAdv(a) {
+  a = obj(a);
+  const rows = (Array.isArray(a.rows) ? a.rows : []).slice(0, ADV_MAX).map((r) => {
+    r = obj(r);
+    const d = ADV.find((v) => v.k === r.s);
+    return d && d.st.some((p) => p[0] === r.v) ? { s: d.k, v: r.v, t: int(r.t, 0, 0, 720) } : null;
+  }).filter(Boolean);
+  return { on: a.on === true, mode: a.mode === "all" ? "all" : "any", rows };
+}
+/* One row as a template expression (null when the vehicle has no such sensor) */
+function advRow(x, r) {
+  const d = ADV.find((v) => v.k === r.s), list = d ? d.e(x.E).filter((e) => e && x.has(e)) : [];
+  if (!d || !list.length) return null;
+  const age = (e) => `(now() - states.${e}.last_changed).total_seconds()`, sec = r.t * 60;
+  if (d.k === "odo") return r.v === "moving" ? `${age(list[0])} < 360` : `${age(list[0])} >= ${Math.max(120, sec)}`; /* the car reports about every 5 minutes: "still" needs at least 2 minutes */
+  const one = (e) => `(is_state('${e}', '${r.v}')${sec ? ` and ${age(e)} >= ${sec}` : ""})`;
+  return `(${list.map(one).join(r.v === "on" ? " or " : " and ")})`; /* lights: any of them on, or all of them off */
+}
+/* The "is the car parked" part of an alert: the user's own advanced rows, or the default (car off, or on and not moving). Returns null when it does not apply. */
+function gate(x, e, s) {
+  const { E } = x;
+  if (!s.ctl.includes("parked")) return null;
+  const rows = e.adv && e.adv.on ? e.adv.rows.map((r) => ({ r, expr: advRow(x, r) })).filter((v) => v.expr) : [];
+  if (rows.length) return { kind: "adv", rows, expr: `(${rows.map((v) => v.expr).join(e.adv.mode === "all" ? " and " : " or ")})` }; /* the user's own conditions replace "only when the car is parked" */
+  if (!e.parked) return null;
+  /* parked: off, or on and not moving. The car never switches itself off, so a car left on is only "parked" when the odometer stops changing.
+     on and not moving: the alert comes after e.wait minutes (never less than 10: while driving the odometer updates every few minutes). The "before first alert" time is part of that wait, so the gate opens (wait - delay) minutes after the car stopped and after it was switched on. */
+  const sec = Math.max(120, (Math.max(e.wait, 10) - e.delay) * 60), still = x.has(E.odo) ? `(now() - states.${E.odo}.last_changed).total_seconds() >= ${sec}` : "";
+  if (x.has(E.power) && x.has(E.odo)) return { kind: "default", sec, expr: `(is_state('${E.power}', 'off') or (is_state('${E.power}', 'on') and (now() - states.${E.power}.last_changed).total_seconds() >= ${sec} and ${still}))` };
+  if (x.has(E.odo)) return { kind: "odo", sec: 120, expr: `((now() - states.${E.odo}.last_changed).total_seconds() >= 120)` };
+  if (x.has(E.power)) return { kind: "power", sec: 0, expr: `is_state('${E.power}', 'off')` };
+  return null;
+}
+/* The same conditions, one by one, with the values right now: "Why isn't it sending?" lists them so the user sees which one is not true.
+   Every line has a short explanation (the "?" in the panel): what the sensor is, when it changes and why it is used. */
+const BASE_LABEL = { unlocked: "Doors are unlocked", open: "Something is open", lights: "Lights are on", climate: "Climate is running", comfort: "A comfort function is on" };
+const BASE_HELP = {
+  unlocked: "This is what the alert is about: it is true while the doors are unlocked. The car reports the lock state about every 5 minutes, so a change can take up to 5 minutes to show here after you lock or unlock.",
+  open: "This is what the alert is about: it is true while a door, window, bonnet or trunk is open. A window counts as open when its opening is above 0%. The car reports about every 5 minutes, so a change can take up to 5 minutes to show.",
+  lights: "This is what the alert is about: it is true while the low or high beam is on.",
+  climate: "This is what the alert is about: it is true while the cabin climate is running.",
+  comfort: "This is what the alert is about: it is true while seat heating, seat ventilation or the steering-wheel heating is on and the car is locked.",
+};
+const LATER = "Home Assistant counts the time from the sensor's last change. After a Home Assistant restart the count starts again.";
+function ruleChecks(x, evId) {
+  const { E, n } = x, e = n.events[evId], s = EV[evId], lg = logic(x, evId, e), out = [];
+  const wrap = (expr, pre) => `${pre ? pre + "\n" : ""}{{ ${expr} }}`;
+  const mins = (en) => `{{ ((now() - states.${en}.last_changed).total_seconds() / 60) | round(0) | int }}`;
+  const now = (en) => `{{ states('${en}') }} (${T("changed {0} min ago", mins(en))})`;
+  const odo = (en) => T("odometer last changed {0} min ago", mins(en));
+  out.push({ label: T(BASE_LABEL[evId] || s.label), help: T(BASE_HELP[evId] || s.sub || ""), test: wrap(lg.expr, lg.pre), show: lg.items ? `${lg.pre}\n${lg.items}` : (evId === "unlocked" && x.has(E.lock) ? now(E.lock) : "") });
+  const g = gate(x, e, s);
+  if (!g) return out;
+  const power = ADV.find((v) => v.k === "power"), odoDef = ADV.find((v) => v.k === "odo");
+  if (g.kind === "adv") {
+    const all = e.adv.mode === "all";
+    out.push({ label: T(all ? "All of your conditions are true" : "Any of your conditions is true"), test: wrap(g.expr), show: "",
+      help: T(all ? "You chose that every condition below must be true at the same time." : "You chose that one true condition below is enough.") + " " + T("These conditions replace 'Only when the car is parked'. When they are true, the 'Before first alert' time is added.") });
+    for (const { r, expr } of g.rows) {
+      const d = ADV.find((v) => v.k === r.s), list = d.e(E).filter((en) => en && x.has(en)), st = d.st.find((p) => p[0] === r.v);
+      out.push({ label: `${T(d.label)}: ${T(st[1])}${r.t ? ` ${T("for at least")} ${r.t} min` : ""}`, test: wrap(expr),
+        help: T(d.help) + (d.k === "odo" ? "" : " " + T(r.t ? "The sensor must stay in this state for the time you set." : "No wait: it counts as soon as the sensor is in this state.") + " " + T(LATER)),
+        show: d.k === "odo" ? odo(list[0]) : list.map((en) => now(en)).join(" / ") });
+    }
+    return out;
+  }
+  out.push({ label: T("The car is parked (off, or on and not moving)"), test: wrap(g.expr), show: "",
+    help: T("This tells a car you left from a car in use. The car does not switch itself off, so it counts as parked when the power status is off, or when it is on but the odometer has not changed for the wait time. While you drive the odometer keeps changing, so nothing is sent.") });
+  if (g.kind === "default") {
+    out.push({ label: T("Power status is off"), test: wrap(`is_state('${E.power}', 'off')`), help: T(power.help) + " " + T(LATER), show: now(E.power) });
+    out.push({ label: `${T("Car on and not moving for at least")} ${Math.round(g.sec / 60)} min`, test: wrap(`is_state('${E.power}', 'on') and (now() - states.${E.power}.last_changed).total_seconds() >= ${g.sec} and (now() - states.${E.odo}.last_changed).total_seconds() >= ${g.sec}`),
+      help: T("The car is on, and both the power status and the odometer have stayed the same for this long. The time is 'Car on, not moving for' minus 'Before first alert' (that time is added afterwards), and never less than 2 minutes. The odometer changes only while the car moves.") + " " + T(LATER),
+      show: `${T("power status")} ${now(E.power)}; ${odo(E.odo)}` });
+  } else if (g.kind === "odo") out.push({ label: `${T("Odometer not changing for at least")} 2 min`, test: wrap(g.expr), help: T(odoDef.help), show: odo(E.odo) });
+  return out;
+}
 function context(hass, cfg) {
   const n = norm(cfg.notify), id = (k) => eid(K.resolveId(hass, cfg, k)), st = (hass && hass.states) || {};
   const E = {
@@ -204,6 +296,7 @@ function context(hass, cfg) {
     chg: id("binary_sensor.charging"), plug: id("binary_sensor.charger_plugged"), status: id("sensor.charge_status"), cloud: id("binary_sensor.cloud_connection"),
     low: id("binary_sensor.low_beam"), high: id("binary_sensor.high_beam"), clim: id("climate.cabin_climate"), climon: id("binary_sensor.climate_on"), odo: id("sensor.total_odometer"),
     tpw: id("binary_sensor.tire_pressure_warning"), power: id("sensor.power_status"), lockbin: id("binary_sensor.doors_lock_state"), upd: id("sensor.last_updated"), key: id("binary_sensor.key_fob_battery_low"),
+    eng: id("binary_sensor.engine"), door: id("binary_sensor.any_door_open"), win: id("cover.windows"),
     left: id("sensor.remaining_charge_time_h_mm"), ac: id("sensor.ac_charge_current"), dc: id("sensor.dc_charge_current"),
   };
   const devs = devices(hass), tracker = (svc) => { const d = devs.find((v) => v.svc === svc); return d && d.tracker ? eid(d.tracker) : ""; };
@@ -301,13 +394,11 @@ function devices(hass){return Array.isArray(hass?.__companionNotifyDevices)?hass
 function ruleCondition(x, evId) {
   const { E, n, px } = x, e = n.events[evId], s = EV[evId], q = n.quiet;
   const lg = logic(x, evId, e);
-  /* "parked": the vehicle is off (sensor.power_status = off) for e.park minutes (0 = as soon as it turns off); without that sensor, the odometer has not changed for that long */
+  /* "parked": the car is off, or it is on but has not moved. The car never switches itself off, so a car left on is only "parked" when the odometer stops changing.
+     off: counts after "before first alert". on and not moving: the alert comes after e.wait minutes (never less than 10: while driving the odometer updates every few minutes). The "before first alert" time is part of that wait, so the gate opens (wait - delay) minutes after the car stopped and after it was switched on. */
   const parts = [`(${lg.expr})`];
-  if (e.parked && s.ctl.includes("parked")) {
-    const sec = e.park * 60;
-    if (x.has(E.power)) parts.push(`(is_state('${E.power}', 'off')${sec ? ` and (now() - states.${E.power}.last_changed).total_seconds() >= ${sec}` : ""})`);
-    else if (x.has(E.odo) && sec) parts.push(`((now() - states.${E.odo}.last_changed).total_seconds() >= ${sec})`);
-  }
+  const g = gate(x, e, s);
+  if (g) parts.push(g.expr);
   /* "away from home": sent only to the phones that are not at home (each phone's location); phones with no known location are always notified */
   const awayOn = e.away && s.ctl.includes("away") ? n.devices.map((svc) => [svc, x.tracker(svc)]) : [];
   const trk = new Map(awayOn.filter(([, t]) => t));
@@ -318,6 +409,14 @@ function ruleCondition(x, evId) {
   const active = `${lg.pre ? lg.pre + "\n" : ""}{{ ${full} }}`;
   return active;
 }
+NF.advSensors = (hass, cfg) => { const x = context(hass, cfg); return ADV.filter((d) => d.e(x.E).some((e) => e && x.has(e))).map((d) => ({ k: d.k, label: d.label, states: d.st })); };
+/* The rows that behave exactly like the default: off for the first alert time, or not moving for the wait with the car on */
+NF.advDefault = (hass, cfg, delay, wait) => {
+  const have = NF.advSensors(hass, cfg).map((d) => d.k), rows = [];
+  if (have.includes("power")) rows.push({ s: "power", v: "off", t: 0 });
+  if (have.includes("odo")) rows.push({ s: "odo", v: "still", t: Math.max(2, Math.max(wait, 10) - delay) });
+  return rows.length ? rows : [{ s: have[0] || "power", v: "on", t: 0 }];
+};
 NF.localRules = (hass, cfg) => {
   const x=context(hass,cfg);
   return EV_IDS.filter(id=>available(hass,cfg,id)).map(id=>{
@@ -325,7 +424,7 @@ NF.localRules = (hass, cfg) => {
     const variables={};
     const number=en=>`{{ states('${en}') | float(none) }}`;
     Object.assign(variables,{name:x.name,battery:number(x.E.batt),range:number(x.E.range),fuel_range:number(x.E.fuelr),minutes:`{{ ${event.delay} + (repeat.index - 1) * ${event.repeat} }}`,items:lg.items?`${lg.pre}\n${lg.items}`:'',left:lg.left?`${lg.pre}\n${lg.left}`:''});
-    return {id,name:spec.label,enabled:false,preset:id,preset_options:{...event},threshold:spec.thr||null,controls:spec.ctl,fresh:x.n.fresh,devices:[...x.n.devices],condition:ruleCondition(x,id),
+    return {id,name:spec.label,enabled:false,preset:id,preset_options:{...event},threshold:spec.thr||null,controls:spec.ctl,fresh:x.n.fresh,devices:[...x.n.devices],condition:ruleCondition(x,id),checks:ruleChecks(x,id),
       title:event.title||spec.title,message:event.text||spec.text,variables,
       delay:event.delay*60,repeat:event.repeat*60,max_sends:cnt(event),cooldown:id==='charge_done'||id==='charge_started'?1800:0,
       severity:event.sev,quiet:{enabled:x.n.quiet.on,from:x.n.quiet.from,to:x.n.quiet.to,mode:x.n.quiet.mode==='skip'?'skip':'silent'},

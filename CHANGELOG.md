@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.1.6 — New Sessions page and safer saving
+
+### Updating to 0.1.6
+- Restart Home Assistant after updating (backend files changed), then hard-refresh the browser (Ctrl+F5) so the new card and panel load.
+- Parked alerts are updated automatically at start-up. Open and save an alert once to see the new “Why isn’t it sending?” explanations.
+
+### Changes
+- **Card only page**: a second page, **Deepal Card** (`/deepal-companion-card`), shows just the card, with no Companion controls and no profile list. It uses the profile you last chose in Card Settings in that browser, or the first profile. It is hidden from the sidebar by default and keeps working from its address and from notifications. The card fills the full height of the device like an app, edge to edge on a phone; if more blocks appear and the content is taller than the screen, the card grows and the page scrolls normally.
+- **Car View background by time of day**: the morning and afternoon backgrounds are a deeper blue sky that suits the dark theme (with a warm horizon in the morning), and the evening is a dusk gradient. The sun and moon sit further inside the picture so they are not cut off on narrow screens. The night background stays dark with the moon and stars.
+- Every confirmation window (lock, unlock, windows, trunk, climate, lights, horn, locate, refresh) now looks like the Doors window you get by tapping the lock on the car image: the current state, Cancel and Confirm side by side, and the question underneath.
+- **Show “Deepal Card” in the sidebar**: a switch under **Card Settings → Advanced → Sidebar** (off by default). An administrator turns it on, then reloads the browser to see the entry.
+- **When you tap a notification**: a **Card only page** button opens that page when a notification is tapped. New installations use this page by default; existing choices, including an empty one, are kept.
+- **Profile box redesign**: **Card Settings → Profile** starts closed; the arrow next to the badge opens it. It has a header with a connection badge, an equal three-button row (Duplicate, New profile, Delete) and a **Card design** row with **Design style** and **Max width** (px).
+- **Connection badge**: next to **Profile**, **Active** (green) shows that Deepal Alternative is connected to the vehicle cloud, **Offline** (red) that the connection is lost, and **No data** (grey) that its status is not available yet. Hover it for details.
+- **Action buttons** (scroll layout): buttons are sized so the next one always shows half, instead of a blank edge.
+- **Info tiles**: when the row is wider than the card, the cut edge fades, the same as the action buttons row.
+- **Corner radius**: the large and small tiles, the charging box and the charging-costs button share one radius, which follows the card corner in the "no padding" layout.
+- **Charging box**: the profile dropdown and Assign button have the same height; helper text and buttons are 12 px.
+- **Tile spacing**: the gap between the Temperature and Energy tiles matches the other gaps in the "no padding" layout.
+- **Settings button on the vehicle image** has a larger touch area (about 44 px) without changing its look.
+- **Action buttons** (Rows layout): a shorter last row is centred instead of left-aligned.
+- **Equal spacing**: the space above and below the action buttons now matches the space between the other blocks.
+- **Data age badge** on the refresh button sits at the top-right corner of the button.
+
+### New
+- **Ultra minimal card design.** A one-line strip with the vehicle name, lock status, total range, battery and fuel, plus two Info tiles on wider cards; it shows the remaining charging time while charging. Minimal now has larger battery and fuel rings and a small range bar beside the kilometres.
+- **Two new card designs: Minimal and Modern Cockpit.** Choose them under Profile → Card design → Design style. Minimal is a compact status card (name, lock, last update, total range, battery and fuel) with no image or buttons; below the range it shows the Info tiles you choose in Layout → Info (tap for details, hold for your own actions), in two to four rows on a phone. Modern Cockpit shows the vehicle image, a large total range, battery and fuel rings, climate status, and the usual buttons below. On the Energy and Modern Cockpit designs the vehicle image now spans the full card width with the car centred. Both adapt to the width of the card, keep your saved Sections order and visibility (unused sections are greyed out in the list), and show the charging curve while charging.
+- **Sessions page redesign**: key figures for the selected period (energy from charger, cost, paid price per kWh, free share), compact session cards with a battery bar that shows the real start and end level and the charge duration, an icon-only edit button and a highlighted charging-curve button, a denser table with right-aligned numbers, and a short summary instead of a nearly empty cost chart.
+- **Energy delivered chart** (7 days by default): daily bars split into free, paid and not-priced charging, with a tooltip for each day. The battery and petrol history also opens on the weekly view.
+- **Correct or delete a charge** (administrators). The charging curve popup has tools to change a charge between AC and DC, remove charging-current readings in a dragged time range, and delete the charge. A bin icon next to each session deletes it too. Deleted charges stay under **Data options → Deleted charges** for 30 days, where they can be restored; after that they are removed with their receipt. A deleted charge is not brought back by the Recorder import.
+- Greek and Spanish cover the new charge tools, the Deleted charges list and their confirmations.
+- **Archive status** diagnostic sensor shows whether the charging archive is OK, degraded or stopped, so a recording problem is visible in Home Assistant without opening the Companion page.
+
+- **Car colour and wheels** are now the same in every display profile of a vehicle. Until you save them for the vehicle, each profile uses the value already chosen in your oldest profile that had one; nothing is overwritten.
+
+### Notifications
+- **Alerts now arrive when you leave the car on and unlocked.** The car does not switch itself off, so alerts that wait for a parked car (Unlocked vehicle, Open window/door/trunk, Lights on, Climate left on, Comfort functions left on) could stay silent for hours. A car now counts as parked when its power status is off, **or** when it is on and the odometer has not changed for a while. While you drive, nothing is sent.
+- **One time for “Before first alert”.** The old separate “Parked for” setting is gone. The time you set in **Before first alert** is the one that counts, so changing it from 15 minutes to 1 hour changes everything together.
+- **New “Car on, not moving for” time** (default 30 minutes). Use it to decide how long you can sit in the car, switched on, before it counts as left behind.
+- **Existing alerts update by themselves** when Home Assistant starts. You do not need to open or save them again, and your own times are kept.
+- **Advanced conditions** for the five parked alerts (Unlocked vehicle, Open window/door/trunk, Lights on, Climate left on, Comfort functions left on). Switch them on to build your own rule: pick a sensor, a state and how long it must hold (for example “Power status On for 20 min” or “Odometer not changing for 30 min”). Choose per alert whether **all** or **any** of the rows must be true. They replace the default parked check; the default stays when they are off.
+- **“Why isn’t it sending?” is clearer.** It now lists each condition with ✓ or ✕, the current value and when the sensor last changed (for example “on (changed 12 min ago)”). A **?** next to every line opens a short explanation of the sensor, when it changes and why it is used. Re-save an alert once after updating to see the new lines.
+- **Left open or unlocked** (live notification): it now waits **5 minutes** by default (it was 1), because the car reports about every 5 minutes. The switch is renamed **Only when the car is parked**: it stays quiet while you drive and appears after the car has stopped. Existing waits below 5 minutes are raised to 5.
+- **Left open or unlocked** now tells that you are driving from the odometer, so it does not appear and disappear while you drive.
+- **Greek and Spanish** cover the new alert settings, Advanced conditions, the “Why isn’t it sending?” lines and the **?** explanations.
+- **Unread badge on the notifications button.** The card shows a red number for alerts you have not opened yet. It is saved per Home Assistant user, so it follows you across devices, and it clears when you open the list. A new user starts at zero.
+
+### Fixes
+- **Charging efficiency on free profiles**: the field is now always shown. It still drives the estimated energy of free charges, which used a hidden 90% before.
+- **Back from the background on a phone**: when you return to the dashboard after some time away, the card and the Companion pages check the connection to Home Assistant, reconnect if it was lost and reload their data on their own, so you no longer need to refresh the page by hand.
+- **Saving readings**: a temporary database error is retried a few times before a reading is given up, and a slow database can no longer make the waiting list grow without limit.
+- **Sensors**: a sensor that was reporting a value and then becomes unavailable (for example after a restart, until the car wakes up) keeps its last good value; other states are used as they are.
+- **Importing charges**: sessions longer than 7 days, implausible energy for the session length, and out-of-order curve readings are rejected.
+- **False DC charge after AC charging**: some cars report a DC current (for example 400 A) for a few minutes when an AC charge ends. That reading is now ignored, so the charge stays AC, the charging curve keeps its real shape and the session does not run longer. A DC charge that really starts is still recorded.
+- **Interrupted saves**: if Home Assistant stops while the charging archive is still writing, the next start records a warning and keeps the last complete checkpoint.
+- **Sensors after entity changes**: renaming or recreating a Companion sensor or the battery entity refreshes only the affected sensors, once.
+- **Failed setup**: if setup fails, the integration is fully released, so it can be loaded again without restarting Home Assistant.
+- **Large exports**: an export above 25 MB is refused with a message to use Database backup, which saves a complete file.
+- **Tariff values**: values that are not finite numbers are rejected instead of being used in price calculations.
+
 ## 0.1.5 — Live notification fixes and translations
 
 ### Fixes

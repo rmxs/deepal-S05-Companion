@@ -16,7 +16,7 @@ class Entity:
 
 
 module("homeassistant.components.sensor", SensorEntity=Entity,
-       SensorDeviceClass=types.SimpleNamespace(ENERGY="energy", MONETARY="monetary"),
+       SensorDeviceClass=types.SimpleNamespace(ENERGY="energy", MONETARY="monetary", ENUM="enum"),
        SensorStateClass=types.SimpleNamespace(TOTAL="total"))
 import sys
 sys.modules["homeassistant.helpers.device_registry"].DeviceInfo = lambda **kwargs: kwargs
