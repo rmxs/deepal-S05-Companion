@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.7 — Spanish translation fixes
+
+### Updating to 0.1.7
+- Restart Home Assistant after updating, then hard-refresh the browser (Ctrl+F5). In the Home Assistant app on a phone, use **Settings → Companion app → Debugging → Reset frontend cache** if the pages still look old.
+- Your settings, profiles, charging sessions and notification choices are kept.
+
+### Changes
+- **Spanish texts reviewed for car terms and everyday wording.** Key is now “Llave”, Odometer is “Cuentakilómetros”, Parked is “Aparcado” everywhere, “Locked after” reads “Bloqueado tras”, and “hero” is replaced by “imagen principal”.
+- **Charging wording:** “Manual charge” is now “Carga manual”, and the Notification Control Center is “Centro de notificaciones”.
+- **Battery and fuel colour labels:** the Spanish names for the red, orange and yellow levels now show as Rojo, Naranja and Amarillo.
+- **Other wording:** “Schedule” is “Programación”, “Rolling” is “Carrusel”, and “Database backup” is “Copia de seguridad de la base de datos”.
+
 ## 0.1.6 — New Sessions page, light and dark themes and safer saving
 
 ### Updating to 0.1.6
