@@ -8,6 +8,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+import sys
+import types
+for _name in ("homeassistant", "homeassistant.util"):
+    sys.modules.setdefault(_name, types.ModuleType(_name))
+_dt = sys.modules.setdefault("homeassistant.util.dt", types.ModuleType("homeassistant.util.dt"))
+_dt.as_local = getattr(_dt, "as_local", lambda value: value)
+sys.modules["homeassistant.util"].dt = _dt
 spec = importlib.util.spec_from_file_location("live_charging_test", Path(__file__).resolve().parents[1] / "custom_components/deepal_companion/live_charging.py")
 live = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(live)

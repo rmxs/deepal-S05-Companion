@@ -39,7 +39,7 @@ module("homeassistant.helpers.device_registry", DeviceInfo=lambda **kwargs: kwar
     hass, "device_registry", types.SimpleNamespace(async_get=lambda ident: None)))
 module("homeassistant.helpers.event", async_track_state_change_event=lambda *args: lambda: None,
        async_track_time_interval=lambda *args: lambda: None)
-module("homeassistant.util.dt", utcnow=lambda: clock[0], parse_datetime=lambda s: datetime.fromisoformat(s.replace("Z", "+00:00")))
+module("homeassistant.util.dt", utcnow=lambda: clock[0], as_local=lambda value: value, parse_datetime=lambda s: datetime.fromisoformat(s.replace("Z", "+00:00")))
 sys.modules["homeassistant.util"].dt = sys.modules["homeassistant.util.dt"]
 def connect(hass, signal, fn):
     listeners.append(fn)

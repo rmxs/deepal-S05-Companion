@@ -9,6 +9,14 @@ from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+import sys
+import types
+for _name in ("homeassistant", "homeassistant.util"):
+    sys.modules.setdefault(_name, types.ModuleType(_name))
+_dt = sys.modules.setdefault("homeassistant.util.dt", types.ModuleType("homeassistant.util.dt"))
+_dt.as_local = getattr(_dt, "as_local", lambda value: value)
+sys.modules["homeassistant.util"].dt = _dt
+
 package = ModuleType("dcpkg")
 package.__path__ = [str(Path(__file__).resolve().parents[1] / "custom_components/deepal_companion")]
 sys.modules["dcpkg"] = package
@@ -139,7 +147,7 @@ class Climate(Base):
         await self.live.tick()
         payload = self.calls[0][1]
         self.assertEqual(payload["title"], "Inside 18.5°")
-        self.assertEqual(payload["message"], "Outside 9° · Reported 03:46 UTC")
+        self.assertEqual(payload["message"], "Outside 9° · Reported 03:46")
         self.assertNotIn("actions", payload["data"])
         self.assertNotIn("progress", payload["data"])
         self.assertFalse(payload["data"]["chronometer"])
