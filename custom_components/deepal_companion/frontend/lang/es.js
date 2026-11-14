@@ -428,7 +428,7 @@
     "sent": "enviado",
     "Temperature selector": "Selector de temperatura",
     "Wheel": "Rueda",
-    "Bar": "Barra",
+    "Bar": "Bar",
     "How you set the temperature on the Climate page: a scrolling wheel or a draggable bar.": "Cómo ajusta la temperatura en la página Climatización: una rueda con scroll o una barra que arrastras.",
     "Confirm temperature change while the climate is off": "Confirmar el cambio de temperatura con la climatización apagada",
     "Changing the temperature turns the car's climate on; this keeps it from turning on by accident.": "Cambiar la temperatura enciende la climatización del vehículo; así no se enciende por error.",
