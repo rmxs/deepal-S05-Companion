@@ -39,7 +39,7 @@
     "step": {
       "init": {
         "title": "Deepal Companion",
-        "description": "Configure appearance, controls and charging profiles in [Deepal Companion]({panel_url}).",
+        "description": "Configurar apariencia, controles y perfiles de carga en [Deepal Companion]({panel_url}).",
         "data": {
           "name": "Nombre del vehículo"
         }
