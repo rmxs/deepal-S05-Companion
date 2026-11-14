@@ -1,4 +1,4 @@
-import {costHtml,costCss} from './cost-design.js?v=0.1.7';
+import {costHtml,costCss} from './cost-design.js?v=0.1.8';
 let templates;
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const iconNames={'bolt-lightning':'mdi:lightning-bolt',bolt:'mdi:lightning-bolt','charging-station':'mdi:ev-station',coins:'mdi:cash-multiple','grip-vertical':'mdi:view-grid-outline',list:'mdi:format-list-bulleted','chevron-down':'mdi:chevron-down',pen:'mdi:pencil-outline','location-dot':'mdi:map-marker-outline'};
@@ -146,7 +146,7 @@ export function updateCostHeader(panel){
  const root=panel.shadowRoot.querySelector('.supplied-costs');if(!root)return;const data=panel.dashboardSummary||{},f=panel.sessionFormat();root.querySelector('[data-energy-total]').textContent=Number.isFinite(data.energy)?f.number.format(data.energy)+' kWh':'—';root.querySelector('[data-cost-total]').textContent=data.priced||!data.total?f.money.format(data.cost||0):'—';root.querySelector('[data-cost-total]').title=(data.priced||0)+' of '+(data.total||0)+' completed charges priced';
  if(!root.querySelector('.cost-kpis'))return;const p=periodTotals(data),days=panel.costChartPeriod?.period||7,set=(key,value,note)=>{root.querySelector('[data-kpi='+key+']').textContent=value;root.querySelector('[data-kpi-note='+key+']').textContent=note;};
  const known=p.paid_energy!=null,eligible=known?p.paid_energy+p.free_energy:0,plural=(count,word)=>count+' '+word+(count===1?'':'s');
- set('energy',f.number.format(p.energy||0)+' kWh',(p.sessions==null?'':plural(p.sessions,'session')+' · ')+days+' days');
+ set('energy',(p.battery_estimated>0?'≈ ':'')+f.number.format(p.energy||0)+' kWh',(p.sessions==null?'':plural(p.sessions,'session')+' · ')+days+' days');
  set('cost',known&&!p.paid_sessions&&!p.free_sessions&&p.unpriced?'—':f.money.format(p.cost||0),[known?p.paid_sessions+' paid':'',p.unpriced?p.unpriced+' not priced':''].filter(Boolean).join(' · '));
  set('rate',known&&p.paid_energy>0?f.money.format(p.cost/p.paid_energy)+' /kWh':'—',known?(p.paid_energy>0?'From '+f.number.format(p.paid_energy)+' kWh paid':'No paid charging'):'');
  set('free',known&&eligible>0?Math.round(p.free_energy/eligible*100)+'%':'—',known&&eligible>0?f.number.format(p.free_energy)+' kWh free':'');

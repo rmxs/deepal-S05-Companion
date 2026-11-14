@@ -9,7 +9,7 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "0.1.7"; // the build overwrites this with the package version
+const CARD_VERSION = "0.1.8"; // the build overwrites this with the package version
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-s05-card";
 const SETTINGS_TAG = "deepal-s05-settings";
@@ -465,12 +465,11 @@ const LOADER_CSS = `.ldr { display:flex; flex-direction:column; align-items:cent
 const loaderHtml = (icon) => `<div class="ldr" role="status"><span class="ring" style="width:56px;height:56px"><svg class="arc" width="56" height="56" viewBox="0 0 62 62" aria-hidden="true"><circle cx="31" cy="31" r="27" fill="none" stroke="var(--ds-line)" stroke-width="3"/><circle cx="31" cy="31" r="27" fill="none" stroke="rgb(var(--ds-ok))" stroke-width="3" stroke-linecap="round" stroke-dasharray="46 124"/></svg>${ico(icon)}</span><span>${esc(T("Loading…"))}</span></div>`;
 /* English source keys; secondary translations load from lang/<code>.js. */
 const LANGS = (window.__DEEPAL_S05_LANGS = window.__DEEPAL_S05_LANGS || {});
-const GL = "A-Za-zÀ-ɏͰ-Ͽἀ-῿";
+const GL = "A-Za-z\u00C0-\u024F\u0370-\u03FF\u1F00-\u1FFF";
 const I18N = {
   lang: "en", wanted: null, ready: true, dict: null, re: null, subs: new Set(), roots: new Map(), extras: {},
   rec: new WeakMap(), arec: new WeakMap(), memo: new Map(), attrs: ["title", "aria-label", "placeholder", "alt"],
   norm(c) { return String(c || "en").toLowerCase().replace("_", "-"); },
-  available() { const o = { el: "Ελληνικά", en: "English", es: "Español" }; for (const [k, v] of Object.entries(LANGS)) o[k] = v.name || k; return Object.entries(o); },
   numLocale() { return this.lang === "el" ? "el-GR" : this.lang; },
   _load(code) {
     return new Promise((res) => {
@@ -532,14 +531,14 @@ const I18N = {
     if(n.parentElement?.closest("[data-ha-name]"))return;
     if (!this.re && !this.rec.has(n)) return;
     const cur = n.nodeValue, r = this.rec.get(n), src = r && r.out === cur ? r.src : cur;
-    if (!r && !GREEK.test(cur)) return;
+    if (!r && !LETTER.test(cur)) return;
     const out = this.tr(src); this.rec.set(n, { src, out }); if (out !== cur) n.nodeValue = out;
   },
   attr(el, name) {
     if (!this.re && !this.arec.has(el)) return;
     const cur = el.getAttribute(name); if (cur == null) return;
     const m = this.arec.get(el) || {}, r = m[name], src = r && r.out === cur ? r.src : cur;
-    if (!r && !GREEK.test(cur)) return;
+    if (!r && !LETTER.test(cur)) return;
     const out = this.tr(src); m[name] = { src, out }; this.arec.set(el, m); if (out !== cur) el.setAttribute(name, out);
   },
   node(n) {
@@ -565,7 +564,7 @@ const I18N = {
     this.node(root);
   },
 };
-const GREEK = new RegExp(`[${GL}]`);
+const LETTER = new RegExp(`[${GL}]`);
 const T = (s, ...a) => I18N.t(s, a);
 
 /* English source language metadata. {0}, {1} are values the card inserts. */
@@ -737,9 +736,10 @@ ha-icon.i { --mdc-icon-size: var(--is, 20px); width: var(--is, 20px); height: va
 .on > .sw, .sw.on { background: rgb(var(--ds-info)); } .on > .sw::after, .sw.on::after { transform: translateX(14px); }
 `;
 const VARS = `
-  --ds-r: 22px; --ds-tr: 22px; --ds-ok: 52,211,153; --ds-warn: 251,191,36; --ds-bad: 248,113,113; --ds-info: 56,189,248; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
+  --ds-r: 22px; --ds-tr: 22px; --ds-ok: 52,211,153; --ds-warn: 251,191,36; --ds-bad: 248,113,113; --ds-info: 121,173,255; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
   --ds-fg: var(--primary-text-color, #fff); --ds-fg2: rgba(255,255,255,.72); --ds-fg2: color-mix(in srgb, var(--primary-text-color, #fff) 72%, transparent);
   --ds-line: rgba(var(--rgb-primary-text-color, 255,255,255), .12); --ds-soft: rgba(var(--rgb-primary-text-color, 255,255,255), .06);
+  --ds-card: var(--ha-card-background, var(--card-background-color, #202226));
 `;
 
 const CSS = `
@@ -2058,7 +2058,7 @@ class DeepalS05Card extends HTMLElement {
       const [mod, page] = await Promise.all([import(`${SCRIPT_BASE}notification-activity.js?v=${CARD_VERSION}`), request("notifications_history", { limit: 5 })]);
       if (gone()) return;
       d.innerHTML = ""; const host = document.createElement("div"); d.appendChild(host);
-      this._nfAct = mod.mountActivity(host, request, { loaderHtml }, (m, err) => this._toast(m, err ? "error" : undefined));
+      this._nfAct = mod.mountActivity(host, request, { loaderHtml, t: T }, (m, err) => this._toast(m, err ? "error" : undefined));
       this._nfAct.set(page);
     } catch (e) { fail(/Unknown.*operation/i.test((e && e.message) || "") ? "Restart Home Assistant to load notifications, then try again." : "Could not load notifications."); }
   }

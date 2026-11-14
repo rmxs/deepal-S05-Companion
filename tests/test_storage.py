@@ -137,7 +137,7 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(self.db.history('car', ['sensor.current'], self.start, self.start)['sensor.current'][0]['s'], '8')
 
     def test_unknown_states_and_unicode_roundtrip_without_loss(self):
-        for i, value in enumerate(['unknown', 'unavailable', '', '0', '12.000', 'Στάση', 'é', '😀']):
+        for i, value in enumerate(['unknown', 'unavailable', '', '0', '12.000', '\u03a3\u03c4\u03ac\u03c3\u03b7', 'é', '😀']):
             self.db.sample('car', 'sensor.current', self.start+i, value, '°C')
         expected = self.db.history('car', ['sensor.current'], self.start-1, self.start+10)
         self.db.maintain_storage('car', now=self.now)

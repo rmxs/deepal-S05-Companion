@@ -73,6 +73,11 @@ The view button changes the view on the device you are using. The default view s
 
 The image’s charging details remain visible when the separate Charging section is hidden. The charging-curve switch is in **Layout → Sections**.
 
+**“Energy” sheet on the tile** (on by default for new setups):
+
+- **On:** a tap on the Energy or Battery tile opens the Energy sheet with battery, charging and driving history. A long press opens the battery sensor’s more-info window.
+- **Off:** a tap opens the battery sensor’s more-info window instead. The Energy sheet is not available from the tile.
+
 ## Card Settings → Colours
 
 | Setting | Available choices |

@@ -9,7 +9,7 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "0.1.7"; // the build overwrites this with the package version
+const CARD_VERSION = "0.1.8"; // the build overwrites this with the package version
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-companion-card";
 const SETTINGS_TAG = "deepal-companion-settings";
@@ -456,12 +456,11 @@ const LOADER_CSS = `.ldr { display:flex; flex-direction:column; align-items:cent
 const loaderHtml = (icon) => `<div class="ldr" role="status"><span class="ring" style="width:56px;height:56px"><svg class="arc" width="56" height="56" viewBox="0 0 62 62" aria-hidden="true"><circle cx="31" cy="31" r="27" fill="none" stroke="var(--ds-line)" stroke-width="3"/><circle cx="31" cy="31" r="27" fill="none" stroke="rgb(var(--ds-ok))" stroke-width="3" stroke-linecap="round" stroke-dasharray="46 124"/></svg>${ico(icon)}</span><span>${esc(T("Loading…"))}</span></div>`;
 /* English source keys; secondary translations load from lang/<code>.js. */
 const LANGS = (window.__DEEPAL_COMPANION_LANGS = window.__DEEPAL_COMPANION_LANGS || {});
-const GL = "A-Za-zÀ-ɏͰ-Ͽἀ-῿";
+const GL = "A-Za-z\u00C0-\u024F\u0370-\u03FF\u1F00-\u1FFF";
 const I18N = {
   lang: "en", wanted: null, ready: true, dict: null, re: null, subs: new Set(), roots: new Map(), extras: {},
   rec: new WeakMap(), arec: new WeakMap(), memo: new Map(), attrs: ["title", "aria-label", "placeholder", "alt"],
   norm(c) { return String(c || "en").toLowerCase().replace("_", "-"); },
-  available() { const o = { el: "Ελληνικά", en: "English", es: "Español" }; for (const [k, v] of Object.entries(LANGS)) o[k] = v.name || k; return Object.entries(o); },
   numLocale() { return this.lang === "el" ? "el-GR" : this.lang; },
   _load(code) {
     return new Promise((res) => {
@@ -523,14 +522,14 @@ const I18N = {
     if(n.parentElement?.closest("[data-ha-name]"))return;
     if (!this.re && !this.rec.has(n)) return;
     const cur = n.nodeValue, r = this.rec.get(n), src = r && r.out === cur ? r.src : cur;
-    if (!r && !GREEK.test(cur)) return;
+    if (!r && !LETTER.test(cur)) return;
     const out = this.tr(src); this.rec.set(n, { src, out }); if (out !== cur) n.nodeValue = out;
   },
   attr(el, name) {
     if (!this.re && !this.arec.has(el)) return;
     const cur = el.getAttribute(name); if (cur == null) return;
     const m = this.arec.get(el) || {}, r = m[name], src = r && r.out === cur ? r.src : cur;
-    if (!r && !GREEK.test(cur)) return;
+    if (!r && !LETTER.test(cur)) return;
     const out = this.tr(src); m[name] = { src, out }; this.arec.set(el, m); if (out !== cur) el.setAttribute(name, out);
   },
   node(n) {
@@ -556,7 +555,7 @@ const I18N = {
     this.node(root);
   },
 };
-const GREEK = new RegExp(`[${GL}]`);
+const LETTER = new RegExp(`[${GL}]`);
 const T = (s, ...a) => I18N.t(s, a);
 
 /* English source language metadata. {0}, {1} are values the card inserts. */
@@ -728,9 +727,10 @@ ha-icon.i { --mdc-icon-size: var(--is, 20px); width: var(--is, 20px); height: va
 .on > .sw, .sw.on { background: rgb(var(--ds-info)); } .on > .sw::after, .sw.on::after { transform: translateX(14px); }
 `;
 const VARS = `
-  --ds-r: 22px; --ds-tr: 22px; --ds-ok: 52,211,153; --ds-warn: 251,191,36; --ds-bad: 248,113,113; --ds-info: 56,189,248; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
+  --ds-r: 22px; --ds-tr: 22px; --ds-ok: 52,211,153; --ds-warn: 251,191,36; --ds-bad: 248,113,113; --ds-info: 121,173,255; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
   --ds-fg: var(--primary-text-color, #fff); --ds-fg2: rgba(255,255,255,.72); --ds-fg2: color-mix(in srgb, var(--primary-text-color, #fff) 72%, transparent);
   --ds-line: rgba(var(--rgb-primary-text-color, 255,255,255), .12); --ds-soft: rgba(var(--rgb-primary-text-color, 255,255,255), .06);
+  --ds-card: var(--ha-card-background, var(--card-background-color, #202226));
 `;
 
 const CSS = `
@@ -2049,7 +2049,7 @@ class DeepalS05Card extends HTMLElement {
       const [mod, page] = await Promise.all([import(`${SCRIPT_BASE}notification-activity.js?v=${CARD_VERSION}`), request("notifications_history", { limit: 5 })]);
       if (gone()) return;
       d.innerHTML = ""; const host = document.createElement("div"); d.appendChild(host);
-      this._nfAct = mod.mountActivity(host, request, { loaderHtml }, (m, err) => this._toast(m, err ? "error" : undefined));
+      this._nfAct = mod.mountActivity(host, request, { loaderHtml, t: T }, (m, err) => this._toast(m, err ? "error" : undefined));
       this._nfAct.set(page);
     } catch (e) { fail(/Unknown.*operation/i.test((e && e.message) || "") ? "Restart Home Assistant to load notifications, then try again." : "Could not load notifications."); }
   }
@@ -3874,10 +3874,10 @@ DeepalS05CardEditor.prototype._draw = function() {
     });
   }
   const lang=this._hass?.locale?.language||this._hass?.language||"en";
-  const text=(en,el,es=en)=>lang.startsWith("el")?el:lang.startsWith("es")?es:en;
+  
   const cars=this._editorVehicles||[],car=cars.find(v=>v.id===this._editorOwner?.vehicle_id)||cars[0];
-  this._editorPicker.innerHTML='<style>.companion-card-picker{margin-bottom:18px;padding:14px;border:1px solid var(--divider-color);border-radius:14px}.companion-card-picker label{display:block;font-size:12px;color:var(--secondary-text-color)}.companion-card-picker select{width:100%;box-sizing:border-box;margin:6px 0 12px;padding:10px;border:1px solid var(--divider-color);border-radius:9px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit}.companion-card-picker .profiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}.companion-card-picker button{cursor:pointer;padding:12px 8px;background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color);border-radius:11px;font:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:8px}.companion-card-picker button[aria-pressed=true]{border-color:var(--primary-color);background:rgba(45,205,157,.10)}.companion-card-picker p{font-size:12px;line-height:1.5;color:var(--secondary-text-color);margin:10px 0 0}.companion-card-picker .error{color:var(--error-color)}.companion-design-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.companion-design-fields input{width:100%;box-sizing:border-box;margin-top:6px;padding:10px;border:1px solid var(--divider-color);border-radius:9px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit}.companion-card-picker button small{font-size:10px;color:var(--secondary-text-color)}</style><label>'+esc(text("Vehicle","Αυτοκίνητο","Vehículo"))+'<select name="companion_vehicle" aria-label="'+esc(text("Vehicle","Αυτοκίνητο","Vehículo"))+'">'+cars.map(v=>'<option value="'+esc(v.id)+'"'+(v.id===car?.id?' selected':'')+'>'+esc(v.name)+'</option>').join("")+'</select></label><label>'+esc(text("Choose a card profile","Επίλεξε προφίλ κάρτας","Elige un perfil de tarjeta"))+'</label><div class="profiles">'+(car?.views||[]).map((v,i)=>'<button type="button" data-companion-view="'+esc(v.id)+'" aria-pressed="'+String(v.id===this._editorOwner?.view_id)+'"><ha-icon icon="'+(["mdi:cellphone","mdi:tablet-dashboard","mdi:chart-line"][i]||"mdi:card-outline")+'"></ha-icon><span>'+esc(v.name)+'</span><small>'+esc(/tablet/i.test(v.name)?'Wide · 960 px':/energy/i.test(v.name)?'Energy first · 720 px':'Compact · 480 px')+'</small></button>').join("")+'</div><p>'+esc(text("The Home Assistant preview updates as you select a profile. All settings remain available below.","Η προεπισκόπηση του Home Assistant ενημερώνεται με την επιλογή προφίλ. Όλες οι ρυθμίσεις παραμένουν διαθέσιμες παρακάτω.","La vista previa de Home Assistant se actualiza al elegir un perfil. Todos los ajustes siguen disponibles debajo."))+'</p>'+(this._editorError?'<p class="error">'+esc(this._editorError)+'</p>':'');
-  if(this._editorLoaded){const design=companionDesign(this._config,this._editorViewName);this._editorPicker.insertAdjacentHTML("beforeend",'<div class="companion-design-fields"><label>'+esc(text("Design","Σχεδίαση"))+'<select name="companion_design">'+["mobile","tablet","energy","minimal","cockpit","ultra"].map(kind=>'<option value="'+kind+'"'+(design.kind===kind?' selected':'')+'>'+({mobile:"Mobile · compact · 480 px",tablet:"Tablet · landscape · 960 px",energy:"Energy · energy first · 720 px",minimal:"Minimal · compact status · 720 px",cockpit:"Modern Cockpit · image and gauges · 760 px",ultra:"Ultra minimal · one-line strip · 560 px"}[kind])+'</option>').join("")+'</select></label><label>'+esc(text("Maximum width (px)","Μέγιστο πλάτος (px)"))+'<input name="companion_width" type="number" min="280" max="1600" placeholder="'+design.width+'" value="'+(this._config.companion_width||"")+'"></label></div>');}
+  this._editorPicker.innerHTML='<style>.companion-card-picker{margin-bottom:18px;padding:14px;border:1px solid var(--divider-color);border-radius:14px}.companion-card-picker label{display:block;font-size:12px;color:var(--secondary-text-color)}.companion-card-picker select{width:100%;box-sizing:border-box;margin:6px 0 12px;padding:10px;border:1px solid var(--divider-color);border-radius:9px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit}.companion-card-picker .profiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}.companion-card-picker button{cursor:pointer;padding:12px 8px;background:var(--card-background-color);color:var(--primary-text-color);border:1px solid var(--divider-color);border-radius:11px;font:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:8px}.companion-card-picker button[aria-pressed=true]{border-color:var(--primary-color);background:rgba(45,205,157,.10)}.companion-card-picker p{font-size:12px;line-height:1.5;color:var(--secondary-text-color);margin:10px 0 0}.companion-card-picker .error{color:var(--error-color)}.companion-design-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.companion-design-fields input{width:100%;box-sizing:border-box;margin-top:6px;padding:10px;border:1px solid var(--divider-color);border-radius:9px;background:var(--card-background-color);color:var(--primary-text-color);font:inherit}.companion-card-picker button small{font-size:10px;color:var(--secondary-text-color)}</style><label>'+esc(T("Vehicle"))+'<select name="companion_vehicle" aria-label="'+esc(T("Vehicle"))+'">'+cars.map(v=>'<option value="'+esc(v.id)+'"'+(v.id===car?.id?' selected':'')+'>'+esc(v.name)+'</option>').join("")+'</select></label><label>'+esc(T("Choose a card profile"))+'</label><div class="profiles">'+(car?.views||[]).map((v,i)=>'<button type="button" data-companion-view="'+esc(v.id)+'" aria-pressed="'+String(v.id===this._editorOwner?.view_id)+'"><ha-icon icon="'+(["mdi:cellphone","mdi:tablet-dashboard","mdi:chart-line"][i]||"mdi:card-outline")+'"></ha-icon><span>'+esc(v.name)+'</span><small>'+esc(/tablet/i.test(v.name)?'Wide · 960 px':/energy/i.test(v.name)?'Energy first · 720 px':'Compact · 480 px')+'</small></button>').join("")+'</div><p>'+esc(T("The Home Assistant preview updates as you select a profile. All settings remain available below."))+'</p>'+(this._editorError?'<p class="error">'+esc(this._editorError)+'</p>':'');
+  if(this._editorLoaded){const design=companionDesign(this._config,this._editorViewName);this._editorPicker.insertAdjacentHTML("beforeend",'<div class="companion-design-fields"><label>'+esc(T("Design"))+'<select name="companion_design">'+["mobile","tablet","energy","minimal","cockpit","ultra"].map(kind=>'<option value="'+kind+'"'+(design.kind===kind?' selected':'')+'>'+({mobile:"Mobile · compact · 480 px",tablet:"Tablet · landscape · 960 px",energy:"Energy · energy first · 720 px",minimal:"Minimal · compact status · 720 px",cockpit:"Modern Cockpit · image and gauges · 760 px",ultra:"Ultra minimal · one-line strip · 560 px"}[kind])+'</option>').join("")+'</select></label><label>'+esc(T("Maximum width (px)"))+'<input name="companion_width" type="number" min="280" max="1600" placeholder="'+design.width+'" value="'+(this._config.companion_width||"")+'"></label></div>');}
   if(this._s)this._s.style.pointerEvents=this._editorLoaded?"":"none";
 };
 
@@ -3899,8 +3899,8 @@ const settingsBind=DeepalS05Settings.prototype._bind;
 const settingsLayout=DeepalS05Settings.prototype._tabLayout;
 DeepalS05Settings.prototype._tabLayout=function(config){
   if(this.mode==="app")return settingsLayout.call(this,config);
-  const lang=this._hass?.locale?.language||"en",tr=(en,el,es=en)=>lang.startsWith("el")?el:lang.startsWith("es")?es:en;
-  return '<h4>'+ico('sliders')+esc(tr("Card design","Σχεδίαση κάρτας","Diseño de la tarjeta"))+'</h4>'+this._opt(tr("Design","Σχεδίαση","Diseño"),this._sel("companion_design",config.companion_design||"",[["",tr("Profile default","Προεπιλογή προφίλ","Predeterminado del perfil")],["mobile","Mobile"],["tablet","Tablet"],["energy","Energy"],["minimal",tr("Minimal","Ελάχιστη","Mínima")],["cockpit",tr("Modern Cockpit","Modern Cockpit","Cockpit moderno")],["ultra",tr("Ultra minimal","Εξαιρετικά ελάχιστη","Ultra mínima")]]))+this._opt(tr("Maximum width (px)","Μέγιστο πλάτος (px)","Ancho máximo (px)"),this._num("companion_width",config.companion_width||0,"1"),tr("0 = automatic; otherwise 280–1600 px.","0 = αυτόματα· διαφορετικά 280–1600 px.","0 = automático; si no, 280–1600 px."))+settingsLayout.call(this,config);
+  const lang=this._hass?.locale?.language||"en";
+  return '<h4>'+ico('sliders')+esc(T("Card design"))+'</h4>'+this._opt(T("Design"),this._sel("companion_design",config.companion_design||"",[["",T("Profile default")],["mobile","Mobile"],["tablet","Tablet"],["energy","Energy"],["minimal",T("Minimal")],["cockpit",T("Modern Cockpit")],["ultra",T("Ultra minimal")]]))+this._opt(T("Maximum width (px)"),this._num("companion_width",config.companion_width||0,"1"),T("0 = automatic; otherwise 280–1600 px."))+settingsLayout.call(this,config);
 };
 DeepalS05Settings.prototype._bind=function(){
   settingsBind.call(this);
@@ -3928,7 +3928,7 @@ class CompanionChoice extends HTMLElement {
   static resizeStyles(){for(const picker of CompanionChoice.live)picker.syncAppearance?.();}
   constructor(){
     super();this.attachShadow({mode:'open'});I18N.watch(this.shadowRoot);this.options=[];this._value='';this._disabled=false;
-    this.shadowRoot.innerHTML='<style>:host{display:block;min-width:0;width:100%}*{box-sizing:border-box}button{font:inherit;color:inherit;cursor:pointer}.field{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:var(--choice-padding,10px 12px);border:var(--choice-border,1px solid #444);border-radius:var(--choice-radius,11px);background:var(--choice-background,#262626);color:var(--choice-color,#eee);font:var(--choice-font,inherit);text-align:start}.field:focus-visible{outline:2px solid var(--primary-color,#63cba3);outline-offset:2px}.field:disabled{opacity:.5;cursor:default}.field span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chevron{flex:none;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 0;opacity:.65}.menu{position:fixed;inset:auto;margin:0;padding:5px;border:1px solid var(--divider-color,#454545);border-radius:12px;background:var(--card-background-color,#252525);color:var(--primary-text-color,#eee);box-shadow:0 12px 32px #0005;overflow:auto;overscroll-behavior:contain;z-index:10000}.menu:not(:popover-open){display:none}.option{display:block;width:100%;min-height:42px;border:0;border-radius:8px;padding:10px 12px;background:none;color:inherit;font:inherit;text-align:start;white-space:normal;overflow-wrap:anywhere}.option[aria-selected=true]{background:color-mix(in srgb,var(--primary-color,#63cba3) 18%,transparent);color:var(--primary-color,#63cba3)}.option:hover,.option:focus{outline:0;background:color-mix(in srgb,var(--primary-color,#63cba3) 12%,transparent)}</style><button class="field" type="button" aria-haspopup="listbox" aria-expanded="false"><span></span><i class="chevron" aria-hidden="true"></i></button><div class="menu" role="listbox" popover="auto"></div>';
+    this.shadowRoot.innerHTML='<style>:host{display:block;min-width:0;width:100%}*{box-sizing:border-box}button{font:inherit;color:inherit;cursor:pointer}.field{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:var(--choice-padding,10px 12px);border:var(--choice-border,1px solid var(--ds-line,rgba(127,127,127,.35)));border-radius:var(--choice-radius,11px);background:var(--choice-background,var(--ds-soft,var(--secondary-background-color,#262626)));color:var(--choice-color,var(--ds-fg,var(--primary-text-color,#eee)));font:var(--choice-font,inherit);text-align:start}.field:focus-visible{outline:2px solid var(--primary-color,#63cba3);outline-offset:2px}.field:disabled{opacity:.5;cursor:default}.field span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chevron{flex:none;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 0;opacity:.65}.menu{position:fixed;inset:auto;margin:0;padding:5px;border:1px solid var(--divider-color,#454545);border-radius:12px;background:var(--card-background-color,#252525);color:var(--primary-text-color,#eee);box-shadow:0 12px 32px #0005;overflow:auto;overscroll-behavior:contain;z-index:10000}.menu:not(:popover-open){display:none}.option{display:block;width:100%;min-height:42px;border:0;border-radius:8px;padding:10px 12px;background:none;color:inherit;font:inherit;text-align:start;white-space:normal;overflow-wrap:anywhere}.option[aria-selected=true]{background:color-mix(in srgb,var(--primary-color,#63cba3) 18%,transparent);color:var(--primary-color,#63cba3)}.option:hover,.option:focus{outline:0;background:color-mix(in srgb,var(--primary-color,#63cba3) 12%,transparent)}</style><button class="field" type="button" aria-haspopup="listbox" aria-expanded="false"><span></span><i class="chevron" aria-hidden="true"></i></button><div class="menu" role="listbox" popover="auto"></div>';
     this.button=this.shadowRoot.querySelector('.field');this.menu=this.shadowRoot.querySelector('.menu');
     this.button.addEventListener('click',()=>this.open());
     this.button.addEventListener('keydown',event=>{if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();this.open(event.key);}});
@@ -3992,6 +3992,7 @@ window.__DEEPAL_COMPANION_UI = {
   watchConnection,
   /* Pages outside the card (dashboard, notifications) use the same translation dictionary as the card. */
   watchLanguage(root) { I18N.watch(root); },
+  t: (s, ...a) => I18N.t(s, a),
   settingsTag: SETTINGS_TAG,
   version: CARD_VERSION,
   credit: CARD_CREDIT,
@@ -4448,7 +4449,7 @@ DeepalS05Card.prototype._render=function(...args){
   if(this._chargingCurve){this._chargingCurve.update();return result;}
   if(!this._curveLoad){
     const token={};this._curveLoad=token;
-    import('/deepal_companion/frontend/charging-curve.js?v=0.1.7').then(module=>{
+    import('/deepal_companion/frontend/charging-curve.js?v=0.1.8').then(module=>{
       if(this._curveLoad!==token||!this.isConnected)return;
       this._curveLoad=null;this._chargingCurve=module.mountCurve(this);this._chargingCurve.update();
     }).catch(()=>{if(this._curveLoad===token){this._curveLoad=null;this._toast('Charging curve could not be loaded.','error');}});

@@ -19,15 +19,15 @@ const styles=`
 `;
 const ICON={ok:'mdi:check-circle-outline',warning:'mdi:alert-outline',error:'mdi:alert-circle-outline'};
 const TITLES={
-  sensor_batt:['Battery level','Επίπεδο μπαταρίας','Nivel de batería'],sensor_ac:['AC charge current','Ρεύμα φόρτισης AC','Corriente de carga CA'],
-  sensor_dc:['DC charge current','Ρεύμα φόρτισης DC','Corriente de carga CC'],sensor_odo:['Odometer','Οδόμετρο','Cuentakilómetros'],
-  sensor_pow:['Power status','Κατάσταση ισχύος','Estado de energía'],sensor_fuel:['Fuel level','Στάθμη καυσίμου','Nivel de combustible'],
-  sensor_charging:['Charging','Φόρτιση','Carga'],sensor_plug:['Charger plugged','Φορτιστής συνδεδεμένος','Cargador conectado'],
-  sensor_tank:['Fuel tank capacity','Χωρητικότητα ντεπόζιτου','Capacidad del depósito'],sensor_cloud:['Cloud connection','Σύνδεση cloud','Conexión a la nube'],
-  archive:['Charging recorder','Καταγραφή φόρτισης','Registro de carga'],schema:['Database','Βάση δεδομένων','Base de datos'],
-  wal:['Database journal','Ημερολόγιο βάσης','Registro de la base de datos'],notifications:['Notifications','Ειδοποιήσεις','Notificaciones'],
-  recipients:['Notification devices','Συσκευές ειδοποιήσεων','Dispositivos de notificación'],delivery:['Last notification','Τελευταία ειδοποίηση','Última notificación'],
-  pricing:['Charging prices','Τιμές φόρτισης','Precios de carga']
+  sensor_batt:'Battery level',sensor_ac:'AC charge current',
+  sensor_dc:'DC charge current',sensor_odo:'Odometer',
+  sensor_pow:'Power status',sensor_fuel:'Fuel level',
+  sensor_charging:'Charging',sensor_plug:'Charger plugged',
+  sensor_tank:'Fuel tank capacity',sensor_cloud:'Cloud connection',
+  archive:'Charging recorder',schema:'Database',
+  wal:'Database journal',notifications:'Notifications',
+  recipients:'Notification devices',delivery:'Last notification',
+  pricing:'Charging prices'
 };
 export async function mountHealth(panel,stage){
   const t=(...args)=>panel.t(...args);
@@ -36,19 +36,19 @@ export async function mountHealth(panel,stage){
   stage.append(host);
   const q=selector=>host.querySelector(selector);
   let dead=false,busy=false,timer=null,owner={...panel.selected};
-  q('h2').textContent=t('Health & Diagnostics','Υγεία & Διαγνωστικά','Estado y diagnóstico');
-  q('.health-refresh').textContent=t('Check again','Έλεγχος ξανά','Comprobar de nuevo');
+  q('h2').textContent=t('Health & Diagnostics');
+  q('.health-refresh').textContent=t('Check again');
   function draw(result){
-    const word={ok:t('All good','Όλα καλά','Todo bien'),warning:t('Needs attention','Θέλει προσοχή','Requiere atención'),error:t('Problem found','Βρέθηκε πρόβλημα','Problema detectado')};
+    const word={ok:t('All good'),warning:t('Needs attention'),error:t('Problem found')};
     const chip=q('.health-chip');chip.className='health-chip health-'+result.status;chip.innerHTML='<ha-icon icon="'+ICON[result.status]+'" aria-hidden="true"></ha-icon>'+escape(word[result.status]);
     const c=result.counts||{};
-    q('.health-meta').textContent=t('Checked ','Έλεγχος ','Comprobado ')+new Date(result.checked*1000).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})+' · '+(c.error||0)+' '+t('problems','προβλήματα','problemas')+', '+(c.warning||0)+' '+t('warnings','προειδοποιήσεις','avisos')+' · v'+escape(result.version);
+    q('.health-meta').textContent=t('Checked ')+new Date(result.checked*1000).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})+' · '+(c.error||0)+' '+t('problems')+', '+(c.warning||0)+' '+t('warnings')+' · v'+escape(result.version);
     const list=q('.health-list');list.replaceChildren();
     for(const check of [...result.checks].sort((a,b)=>({error:0,warning:1,ok:2}[a.status]-{error:0,warning:1,ok:2}[b.status]))){
       const row=document.createElement('article');row.className='health-row health-'+check.status;
       const icon=document.createElement('ha-icon');icon.setAttribute('icon',ICON[check.status]||ICON.warning);icon.setAttribute('aria-hidden','true');
       const body=document.createElement('div'),title=document.createElement('strong');
-      const names=TITLES[check.id];title.textContent=names?t(...names):check.title;body.append(title);
+      const names=TITLES[check.id];title.textContent=names?t(names):check.title;body.append(title);
       if(check.detail){const p=document.createElement('p');p.textContent=check.detail;body.append(p);}
       if(check.fix&&check.status!=='ok'){const p=document.createElement('p');p.className='health-fix';p.textContent=check.fix;body.append(p);}
       row.append(icon,body);list.append(row);
@@ -59,7 +59,7 @@ export async function mountHealth(panel,stage){
     try{
       const result=await panel.request('health_get',{},owner);
       if(!dead)draw(result);
-    }catch(error){if(!dead)q('.health-meta').textContent=/Unknown Companion operation/i.test(error.message||'')?t('Restart Home Assistant to load the updated Companion backend.','Επανεκκίνησε το Home Assistant για να φορτώσει το νέο backend.','Reinicia Home Assistant para cargar el backend actualizado.'):(error.message||String(error));}
+    }catch(error){if(!dead)q('.health-meta').textContent=/Unknown Companion operation/i.test(error.message||'')?t('Restart Home Assistant to load the updated Companion backend.'):(error.message||String(error));}
     finally{busy=false;if(!dead)q('.health-refresh').disabled=false;}
   }
   q('.health-refresh').onclick=load;

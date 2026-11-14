@@ -1,0 +1,105 @@
+{
+  "title": "Deepal Companion",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Fahrzeug auswählen",
+        "description": "Wählen Sie das Fahrzeug aus, das von Deepal Alternative bereitgestellt wird. Seine Sensoren werden automatisch erkannt.",
+        "data": {
+          "vehicle": "Fahrzeug"
+        }
+      },
+      "confirm": {
+        "title": "Fahrzeug bestätigen",
+        "description": "**{vehicle}** gefunden. Prüfen Sie den erkannten Fahrzeugtyp und bestätigen Sie ihn unten. Wählen Sie einmal Lackfarbe und Räder; sie lassen sich später unter Erweitert → Fahrzeug ändern. Die Sensoren werden automatisch konfiguriert.",
+        "data": {
+          "name": "Fahrzeugname",
+          "powertrain": "Fahrzeugtyp",
+          "car_color": "Lackfarbe",
+          "iso_wheels": "Räder"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "Der Sensor wurde nicht gefunden.",
+      "battery_percent": "Wählen Sie einen Batteriesensor mit der Einheit %.",
+      "invalid_prefix": "Verwenden Sie Kleinbuchstaben, Ziffern und Unterstriche.",
+      "name_required": "Geben Sie einen Fahrzeugnamen ein.",
+      "not_deepal_battery": "Wählen Sie den Fahrzeug-Batteriesensor, der von Deepal Alternative bereitgestellt wird.",
+      "vehicle_missing": "Wählen Sie ein verfügbares Fahrzeug.",
+      "invalid_selection": "Wählen Sie eine der verfügbaren Optionen."
+    },
+    "abort": {
+      "already_configured": "Dieses Fahrzeug ist bereits eingerichtet.",
+      "no_deepal_vehicle": "Kein unterstütztes Deepal-Fahrzeug gefunden. Richten Sie zuerst Deepal Alternative ein und stellen Sie sicher, dass das Fahrzeug aktiviert ist.",
+      "vehicle_unavailable": "Dieses Fahrzeug ist nicht mehr verfügbar. Prüfen Sie Deepal Alternative und versuchen Sie es erneut."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Deepal Companion",
+        "description": "Darstellung, Bedienelemente und Ladeprofile werden in [Deepal Companion]({panel_url}) konfiguriert.",
+        "data": {
+          "name": "Fahrzeugname"
+        }
+      }
+    },
+    "error": {
+      "entity_missing": "Der Sensor wurde nicht gefunden.",
+      "battery_percent": "Wählen Sie einen Batteriesensor mit der Einheit %.",
+      "invalid_prefix": "Verwenden Sie Kleinbuchstaben, Ziffern und Unterstriche.",
+      "name_required": "Geben Sie einen Fahrzeugnamen ein.",
+      "not_deepal_battery": "Wählen Sie den Fahrzeug-Batteriesensor, der von Deepal Alternative bereitgestellt wird."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "sessions": {
+        "name": "Abgeschlossene Ladevorgänge"
+      },
+      "battery_kwh": {
+        "name": "Dem Akku zugeführte Energie"
+      },
+      "cost": {
+        "name": "Erfasste Ladekosten"
+      },
+      "unpriced": {
+        "name": "Ladevorgänge ohne Preis"
+      },
+      "archive_status": {
+        "name": "Archivstatus",
+        "state": {
+          "ok": "OK",
+          "degraded": "Eingeschränkt",
+          "stopped": "Gestoppt"
+        }
+      }
+    }
+  },
+  "selector": {
+    "powertrain": {
+      "options": {
+        "auto": "Automatisch (Sensoren prüfen)",
+        "phev": "Plug-in-Hybrid",
+        "ev": "Elektrisch"
+      }
+    },
+    "car_color": {
+      "options": {
+        "black": "Schwarz",
+        "blue": "Blau",
+        "grey": "Grau",
+        "silver": "Silber",
+        "white": "Weiß"
+      }
+    },
+    "iso_wheels": {
+      "options": {
+        "cover": "20″ mit Radabdeckung",
+        "open": "20″ ohne Radabdeckung",
+        "pro": "18″ Pro"
+      }
+    }
+  }
+}

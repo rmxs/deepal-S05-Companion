@@ -54,6 +54,12 @@ def stamp(state):
     return value.timestamp() if isinstance(value, datetime) else 0
 
 
+def local_time(timestamp, fmt):
+    """Format a UTC timestamp in the Home Assistant time zone."""
+    from homeassistant.util import dt as dt_util
+    return dt_util.as_local(datetime.fromtimestamp(timestamp, timezone.utc)).strftime(fmt)
+
+
 def number(state):
     try:
         value = float(state.state)
@@ -140,7 +146,7 @@ class LiveCharging:
         return "dc_test_" + key if test else "dc_charge_" + key + "_" + uuid.uuid4().hex[:16]
 
     def payload(self, snapshot, options, tag, test=False):
-        updated = datetime.fromtimestamp(snapshot["updated"], timezone.utc).strftime("%d %b %H:%M UTC")
+        updated = local_time(snapshot["updated"], "%d %b %H:%M")
         status = "Charging" if snapshot["charging"] else "Not charging"
         parts = [("Test · " if test else "") + status, str(snapshot["battery"]) + "%"]
         if snapshot["charging"] and snapshot["current"] is not None:

@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timezone
 import hashlib
 import re
 import time
 
-from .live_charging import number, stamp, supported
+from .live_charging import local_time, number, stamp, supported
 
 OPEN_ITEMS = {
     "front_left_door": ("binary_sensor.front_left_door", "Front left door"),
@@ -268,7 +267,7 @@ class LiveStatus:
         if options["show_timer"] and since:
             data.update(chronometer=True, when=round(since), when_relative=False)
         if options["show_updated"] and snap.get("updated"):
-            parts.append("Reported " + datetime.fromtimestamp(snap["updated"], timezone.utc).strftime("%H:%M UTC"))
+            parts.append("Reported " + local_time(snap["updated"], "%H:%M"))
         if test:
             parts.append("Test")
         # The title is the information itself; the message carries the details.

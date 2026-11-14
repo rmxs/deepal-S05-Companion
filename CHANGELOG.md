@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.1.8 — German and Italian, light themes and local times
+
+### Updating
+- Restart Home Assistant after updating (translation and backend files changed), then hard-refresh the browser (Ctrl+F5). In the Home Assistant app on a phone, use **Settings → Companion app → Debugging → Reset frontend cache** if the pages still look old.
+- Your settings, profiles, charging sessions and notification choices are kept.
+
+### New features
+- **German** and **Italian** translations for the card, the Companion panel, charging costs, energy history, health and notifications. German uses the formal “Sie”; Italian uses “tu”.
+- The card follows the language set in Home Assistant. There is no separate language picker on the card.
+- Live charging and status notifications show times in your Home Assistant time zone instead of UTC.
+
+### Improvements
+- **Greek and Spanish** now cover the same texts as the other languages, including the charging, energy, cost and notification screens.
+- The activity panel, menu button, loading labels and empty-activity message are translated.
+- **Cost dashboard:** the energy total shows “≈” when a charge in the period uses the battery-level estimate instead of a measured reading.
+- **Energy sheet switch:** the manual explains the “Energy” sheet on the tile switch under Card Settings → Charging. It is on by default for new setups. When it is on, a tap opens the Energy sheet and a long press opens the battery sensor; when it is off, a tap opens the battery sensor.
+- **Database backup:** the manual explains where the backup file is saved (`.storage/deepal_companion.backup.sqlite`) and that each backup replaces the previous one.
+
+### Bug fixes
+- **Light themes:** the Energy sheet input fields and standard dropdowns no longer appear dark on light Home Assistant themes.
+- **Info colour:** the card's default info colour now matches the palette's info colour.
+
 ## 0.1.7 — Spanish translation fixes
 
 ### Updating to 0.1.7

@@ -94,7 +94,7 @@ class ArchiveTests(unittest.TestCase):
         self.db.initialize()
         self.source = {"prefix": "s05", "battery_entity": "sensor.s05_battery_level",
                        "entities": {"sensor.battery_level": "sensor.s05_battery_level"}}
-        self.db.ensure_vehicle("one", "Το αυτοκίνητό μου", self.source)
+        self.db.ensure_vehicle("one", "\u03a4\u03bf \u03b1\u03c5\u03c4\u03bf\u03ba\u03af\u03bd\u03b7\u03c4\u03cc \u03bc\u03bf\u03c5", self.source)
         self.views = self.db.list_vehicles()[0]["views"]
 
     def tearDown(self):
@@ -167,7 +167,7 @@ class ArchiveTests(unittest.TestCase):
     def test_clone_rename_and_delete(self):
         view = self.views[0]["id"]
         self.db.patch_config("one", view, {"car_color": "silver", "hero_style": "carview"})
-        clone = self.db.view("one", "create", name="Δεύτερη κάρτα", source=view)["view_id"]
+        clone = self.db.view("one", "create", name="\u0394\u03b5\u03cd\u03c4\u03b5\u03c1\u03b7 \u03ba\u03ac\u03c1\u03c4\u03b1", source=view)["view_id"]
         self.assertEqual(self.db.config("one", clone)["config"]["car_color"], "silver")
         self.db.view("one", "rename", clone, "Renamed")
         self.assertEqual(self.db.config("one", clone)["view_name"], "Renamed")
@@ -204,10 +204,10 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(reopened.get("one", "costs")["sessions"]["100"]["profile"]["price"], .2)
 
     def test_sqlite_backup_is_complete(self):
-        self.db.put("one", "example", {"unicode": "Δοκιμή", "color": "#22cc99"})
+        self.db.put("one", "example", {"unicode": "\u0394\u03bf\u03ba\u03b9\u03bc\u03ae", "color": "#22cc99"})
         target = str(Path(self.tmp.name) / "copy.sqlite")
         self.db.backup(target)
-        self.assertEqual(Database(target).get("one", "example")["unicode"], "Δοκιμή")
+        self.assertEqual(Database(target).get("one", "example")["unicode"], "\u0394\u03bf\u03ba\u03b9\u03bc\u03ae")
 
     def test_unknown_future_schema_rejected(self):
         with closing(sqlite3.connect(self.path)) as sql:

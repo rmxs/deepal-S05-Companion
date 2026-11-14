@@ -478,7 +478,7 @@ class VehicleRuntime:
         priced = [row for row in rows if row["pricing"].get("cost") is not None]
         from datetime import datetime, timezone
         buckets = {}
-        period = {"sessions": 0, "energy": 0, "cost": 0, "unpriced": 0, "paid_sessions": 0, "paid_energy": 0, "free_sessions": 0, "free_energy": 0}
+        period = {"sessions": 0, "energy": 0, "cost": 0, "unpriced": 0, "paid_sessions": 0, "paid_energy": 0, "free_sessions": 0, "free_energy": 0, "battery_estimated": 0}
         for row in rows:
             day = dt_util.as_local(datetime.fromtimestamp(row["s"] / 1000, timezone.utc)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000
             if (start is not None and row['s'] < start*1000) or (end is not None and row['s'] > end*1000) or (start is None and time.time()*1000-day > 31*86400000):
@@ -492,6 +492,8 @@ class VehicleRuntime:
             amount = energy if energy is not None else row.get("kwh") or 0
             cost = row["pricing"].get("cost")
             period["sessions"] += 1
+            if row["pricing"].get("source") in ("battery", "fallback") and energy is not None:
+                period["battery_estimated"] += 1
             period["energy"] += amount
             if cost is None:
                 period["unpriced"] += 1

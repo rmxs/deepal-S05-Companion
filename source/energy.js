@@ -182,7 +182,7 @@ const PCSS = `
 .enpanel .cc-check input {accent-color:rgb(var(--ds-ok));width:17px;height:17px}
 .enpanel .cc-profile {border:1px solid var(--ds-line);border-radius:12px;margin:12px 0;padding:8px 12px}
 .enpanel .cc-profile legend {font-size:12px;color:var(--ds-fg)}
-.enpanel .cc-info{padding:10px 12px;border:1px solid rgba(121,173,255,.3);border-radius:10px;background:rgba(121,173,255,.08);font-size:11px;line-height:1.5}.enpanel .cc-info[hidden]{display:none}
+.enpanel .cc-info{padding:10px 12px;border:1px solid rgba(var(--ds-info),.3);border-radius:10px;background:rgba(var(--ds-info),.08);font-size:11px;line-height:1.5}.enpanel .cc-info[hidden]{display:none}
 .enpanel .cc-hint {font-size:11px;line-height:1.5;color:var(--ds-fg2);margin:9px 0}
 .enpanel .cc-session-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin:6px 0 18px}.enpanel .cc-session-row .cc-session{margin:0}.enpanel .cc-curve{display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px;color:rgb(var(--ds-ok))}.enpanel .cc-curve svg{width:18px;height:18px}@media(max-width:380px){.enpanel .cc-curve{flex-direction:column;font-size:10px}}
 .enpanel .cc-session {box-sizing:border-box;width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--ds-line);border-radius:12px;background:rgba(121,173,255,.035);padding:12px 14px;color:var(--ds-fg);text-align:left;font:inherit;font-size:12px;cursor:pointer;margin:6px 0 18px}
@@ -213,7 +213,7 @@ const PCSS = `
 .enpanel svg.en-ch { cursor:crosshair; touch-action:pan-y; user-select:none; -webkit-user-select:none;} .enpanel svg.en-ch { display:block; width:100%; height:auto; overflow:visible; } .enpanel svg text { font-size:11px; fill: var(--ds-fg2); }
 .enpanel .en-tb { display:grid; grid-template-columns: 1.1fr .7fr 1fr 1fr; gap:6px; font-size:13px; padding:8px 2px; border-top:1px solid var(--ds-line); font-variant-numeric: tabular-nums; }
 .enpanel .en-tb.f4 { grid-template-columns: 1fr .65fr 1fr 1fr .85fr; } .enpanel .en-tb .fu { color: #f3bd62; }
-.enpanel .en-tb .bu { color:#79adff; } .enpanel .en-tb > span { min-width:0; overflow-wrap:anywhere; }
+.enpanel .en-tb .bu { color:rgb(var(--ds-info)); } .enpanel .en-tb > span { min-width:0; overflow-wrap:anywhere; }
 .enpanel .en-info { display:flex; align-items:flex-start; gap:8px; padding:10px 12px; border:1px solid var(--ds-line); border-radius:12px; background:rgba(128,128,128,.05); color:var(--ds-fg2); font-size:11px; line-height:1.45; } .enpanel .en-info p { margin:0; font:inherit; } .enpanel .en-info p + p { margin-top:3px; } .enpanel .en-info-icon { flex:none; font-size:14px; line-height:1.3; }
 .enpanel .en-tb.h { border-top:0; padding:0 2px 4px; font-size:11.5px; color: var(--ds-fg2); } .enpanel .en-tb > :not(:first-child) { text-align:right; } .enpanel .en-tb .z { color: var(--ds-fg2); } .enpanel .en-tb .ok { color: rgb(var(--ds-ok)); }
 .enpanel .en-li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 2px; border-top:1px solid var(--ds-line); font-size:13.5px; }
@@ -248,9 +248,8 @@ function ramped(ser, t0, now) {
 }
 
 /* Charging costs: per-account profiles and explicit per-session attribution. */
-const CT = (en, el = en, es = en) => K?.I18N?.lang === "el" ? el : K?.I18N?.lang === "es" ? es : en;
 const cn = v => v === "" || v == null || !Number.isFinite(Number(v)) || Number(v) < 0 ? null : Number(v);
-const profileName = p => p.name || ({home:CT("Home","Σπίτι","Casa"),work:CT("Work","Εργασία","Trabajo"),public:CT("Public","Δημόσιος","Público"),free:CT("Free","Δωρεάν","Gratis"),ionity:"Ionity",manual:CT("Manual charge","Χειροκίνητη χρέωση","Cargo manual")}[p.id] || p.id);
+const profileName = p => p.name || ({home:T("Home"),work:T("Work"),public:T("Public"),free:T("Free"),ionity:"Ionity",manual:T("Manual charge")}[p.id] || p.id);
 const defaultProfiles = () => ["home","work","free","ionity","public"].map(id=>({id,name:"",price:null,free:id==="work"||id==="free",source:"battery",entity:"",efficiency:90}));
 function chargingEnergy(g, r, series = [], unit = "") {
   if (!r) return {energy:null,source:"unassigned",estimated:true};
@@ -296,7 +295,7 @@ class ChargingCosts {
       if(e.target.matches("[name=free]")&&e.target.closest(".cc-profile")){e.target.closest(".cc-profile").querySelector(".cc-paid").hidden=e.target.checked;}
       if(e.target.matches("[name=profile]"))this.selectLocation(e.target.closest("form"));
       const group=e.target.closest('.cc-profile'),summary=group?.parentElement.querySelector('summary');
-      if(summary){group.parentElement.classList.toggle('is-free',group.querySelector('[name=free]').checked);summary.querySelector('span').textContent=group.querySelector('[name=name]').value;summary.querySelector('small').textContent=group.querySelector('[name=free]').checked?CT('Free charging','Δωρεάν φόρτιση',"Carga gratuita"):group.querySelector('[name=price]').value?group.querySelector('[name=price]').value+' €/kWh':CT('Set price','Ορισμός τιμής',"Fijar precio");}
+      if(summary){group.parentElement.classList.toggle('is-free',group.querySelector('[name=free]').checked);summary.querySelector('span').textContent=group.querySelector('[name=name]').value;summary.querySelector('small').textContent=group.querySelector('[name=free]').checked?T("Free charging"):group.querySelector('[name=price]').value?group.querySelector('[name=price]').value+' €/kWh':T("Set price");}
       if(e.target.closest("[data-cc-form]"))this.updateDirty();
       if(e.target.closest('[data-cc-form="profiles"]'))this.scheduleProfileSave();
     });
@@ -314,7 +313,7 @@ class ChargingCosts {
     if(JSON.stringify(profiles)===JSON.stringify(this.data.profiles)&&JSON.stringify(this.data)===this.savedData)return;
     this.data.profiles=profiles;this.saving=true;const before=this.formState(),ui=this.captureUi();
     try{await this.save();this.formBaseline=before;this.updateDirty();
-      if(this.formState()===before){await this.history(this.model);this.decorate(this.model,this.ctx);this.restoreUi(ui);const note=this.editorNode?.querySelector('[role="status"]');if(note){note.hidden=false;note.textContent=CT("Saved automatically.","Αποθηκεύτηκε αυτόματα.","Guardado automáticamente.");}this.message=CT("Saved automatically.","Αποθηκεύτηκε αυτόματα.","Guardado automáticamente.");}
+      if(this.formState()===before){await this.history(this.model);this.decorate(this.model,this.ctx);this.restoreUi(ui);const note=this.editorNode?.querySelector('[role="status"]');if(note){note.hidden=false;note.textContent=T("Saved automatically.");}this.message=T("Saved automatically.");}
       else this.scheduleProfileSave();}
     catch(error){show(error.message);}
     finally{this.saving=false;}
@@ -324,7 +323,7 @@ class ChargingCosts {
   async load() {
     try{const local=JSON.parse(localStorage.getItem(this.cacheKey)||"null");if(Array.isArray(local?.profiles)&&local.sessions)this.data=local;}catch(_){}
     try{const r=await this.card._hass.callWS({type:"frontend/get_user_data",key:this.key});if(Array.isArray(r?.value?.profiles)&&r.value.sessions)this.data=r.value;this.cloudLoaded=true;}
-    catch(_){this.message=CT("Account unavailable; local copy loaded.","Μη διαθέσιμος λογαριασμός· φορτώθηκε το τοπικό αντίγραφο.","Cuenta no disponible; se cargó la copia local.");}
+    catch(_){this.message=T("Account unavailable; local copy loaded.");}
     this.savedData=JSON.stringify(this.data);
   }
   async save() {
@@ -336,8 +335,8 @@ class ChargingCosts {
       }
       return this.card._hass.callWS({type:"frontend/set_user_data",key:this.key,value:snapshot});
     });this.queue=send;
-    try{await send;this.savedData=JSON.stringify(snapshot);this.onSaved?.();this.message=CT("Saved to your HA account.","Αποθηκεύτηκε στον λογαριασμό HA.","Guardado en tu cuenta de HA.");return true;}
-    catch(error){throw Error(CT("Saved on this device only. Account save failed.","Αποθηκεύτηκε μόνο τοπικά. Η αποθήκευση απέτυχε.","Guardado solo en este dispositivo. Falló el guardado en la cuenta.")+" "+(error.message||String(error)));}
+    try{await send;this.savedData=JSON.stringify(snapshot);this.onSaved?.();this.message=T("Saved to your HA account.");return true;}
+    catch(error){throw Error(T("Saved on this device only. Account save failed.")+" "+(error.message||String(error)));}
   }
   record(g){return g?this.data.sessions[String(Math.round(g.s/1000))]:undefined;}
   profileRemoved(profile){return !!profile?.id&&profile.id!=='manual'&&!this.data.profiles.some(p=>p.id===profile.id);}
@@ -350,7 +349,7 @@ class ChargingCosts {
   result(g){const r=this.record(g),id=r?.profile?.entity;return chargingCost(g,r,this.sensorHistory?.[id]||[],this.card._hass.states?.[id]?.attributes?.unit_of_measurement||"");}
   money(v){return new Intl.NumberFormat(this.card._hass?.locale?.language||"en",{style:"currency",currency:"EUR"}).format(v);}
   number(v){return new Intl.NumberFormat(this.card._hass?.locale?.language||"en",{maximumFractionDigits:2}).format(v);}
-  label(r){return {unassigned:CT("Choose location","Διάλεξε τοποθεσία","Elige ubicación"),receipt:CT("Entered energy","Καταχωρημένη ενέργεια","Energía introducida"),meter:CT("Measured energy","Μετρημένη ενέργεια","Energía medida"),power:CT("Estimated from power","Εκτίμηση από ισχύ","Estimada a partir de la potencia"),battery:CT("Estimated from battery","Εκτίμηση από μπαταρία","Estimada a partir de la batería"),fallback:CT("Sensor unavailable: battery estimate","Μη διαθέσιμος αισθητήρας: εκτίμηση μπαταρίας","Sensor no disponible: estimación de la batería")}[r.source];}
+  label(r){return {unassigned:T("Choose location"),receipt:T("Entered energy"),meter:T("Measured energy"),power:T("Estimated from power"),battery:T("Estimated from battery"),fallback:T("Sensor unavailable: battery estimate")}[r.source];}
   decorate(m,ctx) {
     this.model=m;this.ctx=ctx;const b=this.host.querySelector(".en-body");if(!b)return;
     const graph=b.querySelector(".cc-charts");if(graph&&EN.renderChargingChart)graph.outerHTML=EN.renderChargingChart(m.chg,this.card._hass.locale?.language||"en",m.now);
@@ -358,22 +357,22 @@ class ChargingCosts {
     const completed=m.chg.filter(g=>!g.live),results=completed.map(g=>this.result(g)),known=results.filter(r=>r.cost!==null),total=known.reduce((n,r)=>n+r.cost,0);
     const canEdit=this.card._hass?.user?.is_admin!==false;/* the backend only lets administrators save costs */
     const top=document.createElement("div");top.className="cc-added cc-summary";
-    top.innerHTML='<div><small>'+esc(CT("Charging cost","Κόστος φόρτισης","Coste de carga"))+'</small><b>'+(known.length?esc(this.money(total)):"—")+'</b><small>'+known.length+"/"+completed.length+" "+esc(CT("sessions priced","φορτίσεις με κόστος","cargas con precio"))+(known.some(r=>r.costEstimated)?" · ≈":"")+'</small></div>'+(canEdit?'<button class="cc-button" data-cc="profiles">'+esc(CT("Charging profiles","Προφίλ φόρτισης","Perfiles de carga"))+' ⚙</button>':'');
+    top.innerHTML='<div><small>'+esc(T("Charging cost"))+'</small><b>'+(known.length?esc(this.money(total)):"—")+'</b><small>'+known.length+"/"+completed.length+" "+esc(T("sessions priced"))+(known.some(r=>r.costEstimated)?" · ≈":"")+'</small></div>'+(canEdit?'<button class="cc-button" data-cc="profiles">'+esc(T("Charging profiles"))+' ⚙</button>':'');
     const totals=b.querySelector(".en-tot");if(totals)totals.after(top);else b.prepend(top);
     const days=m.days.filter(d=>d.t<=m.now).slice().reverse();
     [...b.querySelectorAll(".en-tb:not(.h)")].forEach((row,i)=>{
       const day=days[i];if(!day)return;const values=m.chg.filter(g=>dayKey(g.s)===day.key).map(g=>this.result(g));if(!values.length)return;
       const priced=values.filter(r=>r.cost!==null),sum=priced.reduce((n,r)=>n+r.cost,0),note=document.createElement("small");note.className="cc-added cc-day-cost";
-      note.textContent=priced.length?(priced.some(r=>r.costEstimated)?"≈ ":"")+this.money(sum)+(priced.length<values.length?" *":""):CT("Price not set","Χωρίς τιμή","Sin precio");
-      note.title=CT("Charging cost. * = some sessions have no price.","Κόστος φόρτισης. * = λείπουν τιμές.","Coste de carga. * = algunas sesiones no tienen precio.");row.children[2]?.append(note);
+      note.textContent=priced.length?(priced.some(r=>r.costEstimated)?"≈ ":"")+this.money(sum)+(priced.length<values.length?" *":""):T("Price not set");
+      note.title=T("Charging cost. * = some sessions have no price.");row.children[2]?.append(note);
     });
     const list=m.chg.slice().reverse();
     [...b.querySelectorAll(".en-li")].forEach((row,i)=>{
       const g=list[i];if(!g)return;const r=this.record(g),result=this.result(g),n=document.createElement("button");
       n.className="cc-added cc-session";if(canEdit)n.dataset.cc="session";else n.setAttribute("aria-disabled","true");n.dataset.start=String(g.s);
       n.dataset.costState=result.cost===null?'unpriced':result.cost===0?'free':'paid';
-      n.innerHTML='<span><span class="cc-location-name">'+esc(r?profileName(r.profile):CT("Choose location","Διάλεξε τοποθεσία","Elige ubicación"))+'</span><small>'+esc(this.label(result))+(result.energy!==null?" · "+esc(this.number(result.energy))+" kWh":"")+'</small></span><span class="cc-price-badge"><span><small>'+esc(result.cost===0?CT('Free charging','Δωρεάν φόρτιση',"Carga gratuita"):result.cost!==null?CT('Cost','Κόστος',"Coste"):CT('Not priced','Χωρίς τιμή',"Sin precio"))+'</small><b>'+(result.cost!==null?(result.estimated&&cn(r?.total)===null&&!r?.profile.free?"≈ ":"")+esc(this.money(result.cost)):esc(CT("Set price","Όρισε τιμή","Añadir precio")))+'</b></span><i aria-hidden="true">›</i></span>';if(!canEdit)n.querySelector('.cc-price-badge i')?.remove();const group=document.createElement('div');group.className='cc-added cc-session-row';n.classList.remove('cc-added');group.append(n);
-      if(this.profileRemoved(r?.profile)){const warning=document.createElement('span');warning.className='cc-removed-profile';warning.innerHTML='<ha-icon icon="mdi:map-marker-alert-outline"></ha-icon> '+esc(CT('Profile removed · assign another','Το προφίλ αφαιρέθηκε · επίλεξε άλλο','Perfil eliminado · asigna otro'));n.querySelector('.cc-location-name').append(warning);}
+      n.innerHTML='<span><span class="cc-location-name">'+esc(r?profileName(r.profile):T("Choose location"))+'</span><small>'+esc(this.label(result))+(result.energy!==null?" · "+esc(this.number(result.energy))+" kWh":"")+'</small></span><span class="cc-price-badge"><span><small>'+esc(result.cost===0?T("Free charging"):result.cost!==null?T("Cost"):T("Not priced"))+'</small><b>'+(result.cost!==null?(result.estimated&&cn(r?.total)===null&&!r?.profile.free?"≈ ":"")+esc(this.money(result.cost)):esc(T("Set price")))+'</b></span><i aria-hidden="true">›</i></span>';if(!canEdit)n.querySelector('.cc-price-badge i')?.remove();const group=document.createElement('div');group.className='cc-added cc-session-row';n.classList.remove('cc-added');group.append(n);
+      if(this.profileRemoved(r?.profile)){const warning=document.createElement('span');warning.className='cc-removed-profile';warning.innerHTML='<ha-icon icon="mdi:map-marker-alert-outline"></ha-icon> '+esc(T("Profile removed · assign another"));n.querySelector('.cc-location-name').append(warning);}
       const curve=document.createElement('button');curve.className='cc-button cc-curve';curve.dataset.cc='curve';curve.dataset.start=String(g.s);curve.innerHTML=ico('pulse')+'<span>Curve</span>';curve.setAttribute('aria-label','View charging curve');group.append(curve);row.after(group);
     });
     const editor=document.createElement("div");editor.className="cc-added cc-editor";const anchor=this.editor&&this.editor!=="profiles"?[...b.querySelectorAll(".cc-session")].find(n=>n.dataset.start===String(this.editor)):null;(anchor?.closest('.cc-session-row')||anchor||top).after(editor);this.editorNode=editor;this.renderEditor();EN.bindChargingChart?.(b);
@@ -389,12 +388,12 @@ class ChargingCosts {
     const update=value=>{hidden.value=value;note.textContent=value?(friendly(value)+' · '+value):'';this.updateDirty();this.scheduleProfileSave();};
     note.textContent=hidden.value?(friendly(hidden.value)+' · '+hidden.value):'';
     if(customElements.get('ha-selector')){
-      const picker=document.createElement('ha-selector');picker.dataset.chargerEntity='';picker.hass=hass;picker.label=CT('Charger sensor','Αισθητήρας φορτιστή',"Sensor del cargador");picker.required=false;
+      const picker=document.createElement('ha-selector');picker.dataset.chargerEntity='';picker.hass=hass;picker.label=T("Charger sensor");picker.required=false;
       picker.selector={entity:{domain:'sensor',include_entities:ids}};picker.value=hidden.value||undefined;
       picker.addEventListener('value-changed',event=>{event.stopPropagation();update(typeof event.detail?.value==='string'?event.detail.value:'');});holder.append(picker);
     }else{
       const picker=document.createElement('select');picker.setAttribute('aria-label','Charger sensor');
-      picker.innerHTML='<option value="">'+esc(CT('Choose a sensor','Επίλεξε αισθητήρα',"Elige un sensor"))+'</option>'+ids.map(id=>'<option value="'+esc(id)+'">'+esc(friendly(id)+' · '+id)+'</option>').join('');
+      picker.innerHTML='<option value="">'+esc(T("Choose a sensor"))+'</option>'+ids.map(id=>'<option value="'+esc(id)+'">'+esc(friendly(id)+' · '+id)+'</option>').join('');
       if(hidden.value&&!ids.includes(hidden.value))picker.add(new Option(friendly(hidden.value)+' · '+hidden.value,hidden.value));
       picker.value=hidden.value;picker.addEventListener('change',()=>update(picker.value));holder.append(picker);
     }
@@ -406,24 +405,24 @@ class ChargingCosts {
     if(this.editor==='profiles')this.renderEditor();else{this.editor=null;this.editorNode.replaceChildren();}
     this.onDirtyChange?.(false);this.onCanceled?.();
   }
-  options(value){return [["battery",CT("Battery estimate","Εκτίμηση μπαταρίας","Estimación de la batería")],["total",CT("Total energy meter","Συνολικός μετρητής ενέργειας","Contador de energía total")],["session",CT("Session energy meter","Μετρητής ενέργειας συνεδρίας","Contador de energía de la sesión")],["power",CT("Charger power","Ισχύς φορτιστή","Potencia del cargador")]].map(([v,l])=>'<option value="'+v+'"'+(v===value?" selected":"")+">"+esc(l)+"</option>").join("");}
+  options(value){return [["battery",T("Battery estimate")],["total",T("Total energy meter")],["session",T("Session energy meter")],["power",T("Charger power")]].map(([v,l])=>'<option value="'+v+'"'+(v===value?" selected":"")+">"+esc(l)+"</option>").join("");}
   renderEditor() {
     if(!this.editorNode)return;if(!this.editor){this.editorNode.innerHTML="";return;}
-    const close='<button class="cc-button" data-cc="close">'+esc(CT("Close","Κλείσιμο","Cerrar"))+' ×</button>',message=this.message?'<p class="cc-info" role="status">ⓘ '+esc(this.message)+"</p>":'<p class="cc-info" role="status" hidden></p>';
+    const close='<button class="cc-button" data-cc="close">'+esc(T("Close"))+' ×</button>',message=this.message?'<p class="cc-info" role="status">ⓘ '+esc(this.message)+"</p>":'<p class="cc-info" role="status" hidden></p>';
     if(this.editor==="profiles"){
       const sensorOptions=Object.entries(this.card._hass.states||{}).filter(([id,s])=>id.startsWith("sensor.")&&["Wh","kWh","W","kW"].includes(s.attributes?.unit_of_measurement)).map(([id,s])=>'<option value="'+esc(id)+'">'+esc(s.attributes?.friendly_name||id)+"</option>").join("");
-      const profiles=this.data.profiles.map((p,i)=>'<details class="cc-location-details'+(p.free?' is-free':'')+'"><summary><span>'+esc(profileName(p))+'</span><small>'+esc(p.free?CT("Free charging","Δωρεάν φόρτιση","Carga gratuita"):p.price!=null?p.price+' €/kWh':CT("Set price","Ορισμός τιμής","Fijar precio"))+'</small><span aria-hidden="true">›</span></summary><fieldset class="cc-profile" data-index="'+i+'"><legend>'+esc(profileName(p))+'</legend><div class="cc-profile-head">'+this.field(CT("Name","Όνομα","Nombre"),"name",p.name||profileName(p))+'<label class="cc-check"><input name="free" type="checkbox"'+(p.free?' checked':'')+'>'+esc(CT("Free charging","Δωρεάν φόρτιση","Carga gratuita"))+'</label></div><div class="cc-paid"'+(p.free?' hidden':'')+'><div class="cc-grid">'+this.field("€/kWh","price",p.price,"number")+'<label class="cc-field">'+esc(CT("Energy source","Πηγή ενέργειας","Fuente de energía"))+'<select name="source" data-cc-source>'+this.options(p.source)+'</select></label><div data-cc-entity-field'+(p.source==="battery"?' hidden':'')+'>'+'<input type="hidden" name="entity" value="'+esc(p.entity||'')+'"><div class="cc-entity-picker"></div><small class="cc-entity-name"></small>'+'</div></div></div><div class="cc-grid">'+this.field(CT("Charging efficiency (%)","Απόδοση φόρτισης (%)","Eficiencia de carga (%)"),"efficiency",p.efficiency,"number",'min="1" max="100"')+'</div><button type="button" class="cc-button danger" data-cc="remove-profile">'+esc(CT('Delete profile','Διαγραφή προφίλ','Eliminar perfil'))+'</button></fieldset></details>').join("");
-      this.editorNode.innerHTML='<form data-cc-form="profiles"><div class="cc-editor-head"><b>'+esc(CT("Charging profiles","Προφίλ φόρτισης","Perfiles de carga"))+'</b>'+close+'</div><p class="cc-hint">'+esc(CT("Each location keeps its tariff and optional charger sensor. Saved sessions keep their price.","Κάθε τοποθεσία κρατά την τιμή και τον προαιρετικό αισθητήρα της. Οι φορτίσεις κρατούν την αποθηκευμένη τιμή τους.","Cada ubicación conserva su tarifa y, opcionalmente, su sensor de cargador. Las sesiones guardadas mantienen su precio."))+'</p><datalist id="cc-sensors">'+sensorOptions+'</datalist><div class="cc-profiles">'+profiles+'</div><div class="cc-actions"><button class="cc-button" data-cc="add">'+esc(CT("Add location","Προσθήκη τοποθεσίας","Añadir ubicación"))+'</button></div>'+message+'</form>';
+      const profiles=this.data.profiles.map((p,i)=>'<details class="cc-location-details'+(p.free?' is-free':'')+'"><summary><span>'+esc(profileName(p))+'</span><small>'+esc(p.free?T("Free charging"):p.price!=null?p.price+' €/kWh':T("Set price"))+'</small><span aria-hidden="true">›</span></summary><fieldset class="cc-profile" data-index="'+i+'"><legend>'+esc(profileName(p))+'</legend><div class="cc-profile-head">'+this.field(T("Name"),"name",p.name||profileName(p))+'<label class="cc-check"><input name="free" type="checkbox"'+(p.free?' checked':'')+'>'+esc(T("Free charging"))+'</label></div><div class="cc-paid"'+(p.free?' hidden':'')+'><div class="cc-grid">'+this.field("€/kWh","price",p.price,"number")+'<label class="cc-field">'+esc(T("Energy source"))+'<select name="source" data-cc-source>'+this.options(p.source)+'</select></label><div data-cc-entity-field'+(p.source==="battery"?' hidden':'')+'>'+'<input type="hidden" name="entity" value="'+esc(p.entity||'')+'"><div class="cc-entity-picker"></div><small class="cc-entity-name"></small>'+'</div></div></div><div class="cc-grid">'+this.field(T("Charging efficiency (%)"),"efficiency",p.efficiency,"number",'min="1" max="100"')+'</div><button type="button" class="cc-button danger" data-cc="remove-profile">'+esc(T("Delete profile"))+'</button></fieldset></details>').join("");
+      this.editorNode.innerHTML='<form data-cc-form="profiles"><div class="cc-editor-head"><b>'+esc(T("Charging profiles"))+'</b>'+close+'</div><p class="cc-hint">'+esc(T("Each location keeps its tariff and optional charger sensor. Saved sessions keep their price."))+'</p><datalist id="cc-sensors">'+sensorOptions+'</datalist><div class="cc-profiles">'+profiles+'</div><div class="cc-actions"><button class="cc-button" data-cc="add">'+esc(T("Add location"))+'</button></div>'+message+'</form>';
     } else {
       const g=this.model.chg.find(g=>String(g.s)===String(this.editor));if(!g){this.editor=null;return;}const r=this.record(g),p=r?.profile,result=this.result(g);
       const locations=this.data.profiles.map(x=>{
-        const rate=x.free?CT("Free","Δωρεάν","Gratis"):cn(x.price)!==null?this.number(x.price)+" €/kWh":CT("Price not set","Χωρίς τιμή","Sin precio");
+        const rate=x.free?T("Free"):cn(x.price)!==null?this.number(x.price)+" €/kWh":T("Price not set");
         return '<option value="'+esc(x.id)+'"'+(x.id===p?.id?" selected":"")+">"+esc(profileName(x)+" · "+rate)+"</option>";
-      }).join("")+'<option value="__manual__"'+(p?.id==="manual"?" selected":"")+'>'+esc(CT("Manual charge (no profile)","Χειροκίνητη χρέωση (χωρίς προφίλ)","Cargo manual (sin perfil)"))+"</option>";
-      const advanced=this.field("€/kWh","price",p?.price,"number")+'<label class="cc-check"><input name="free" type="checkbox"'+(p?.free?" checked":"")+">"+esc(CT("Free charging","Δωρεάν φόρτιση","Carga gratuita"))+"</label>"+this.field(CT("Receipt energy (kWh), optional","kWh από απόδειξη, προαιρετικά","Energía del recibo (kWh), opcional"),"energy",r?.energy,"number")+this.field(CT("Total paid (€), optional","Συνολικό ποσό (€), προαιρετικά","Total pagado (€), opcional"),"total",r?.total,"number");
-      this.editorNode.innerHTML='<form data-cc-form="session"><div class="cc-editor-head"><b>'+esc(CT("Charging location","Τοποθεσία φόρτισης","Lugar de carga"))+" · "+esc(this.ctx.fmt.hm(g.s))+"</b>"+close+'</div><label class="cc-field cc-location">'+esc(CT("Location","Τοποθεσία","Ubicación"))+'<select name="profile"><option value="">'+esc(CT("Choose location","Διάλεξε τοποθεσία","Elige una ubicación"))+"</option>"+locations+'</select></label><p class="cc-hint">'+esc(CT("The saved location profile supplies the price or free charging.","Η τοποθεσία συμπληρώνει αυτόματα την τιμή ή τη δωρεάν φόρτιση.","La ubicación aporta su tarifa o carga gratuita."))+'</p><details class="cc-advanced"'+(p?.id==="manual"?" open":"")+'><summary>'+esc(CT("Receipt or manual correction","Απόδειξη ή χειροκίνητη διόρθωση","Recibo o corrección manual"))+'</summary><div class="cc-grid">'+advanced+'</div><p class="cc-hint">'+esc(CT("Enter €/kWh and charged kWh, or just the total paid. An entered total takes precedence.","Βάλε €/kWh και τις kWh που φορτίστηκαν ή μόνο το συνολικό ποσό. Το συνολικό ποσό υπερισχύει.","Introduce €/kWh y los kWh cargados, o solo el total pagado. El total introducido tiene prioridad."))+'</p></details><div class="cc-actions"><button class="cc-button" data-cc="cancel">'+esc(CT("Cancel changes","Ακύρωση αλλαγών","Cancelar cambios"))+'</button><button class="cc-button primary" data-cc="save-session">'+esc(CT("Save location","Αποθήκευση τοποθεσίας","Guardar ubicación"))+"</button></div>"+message+"</form>";
+      }).join("")+'<option value="__manual__"'+(p?.id==="manual"?" selected":"")+'>'+esc(T("Manual charge (no profile)"))+"</option>";
+      const advanced=this.field("€/kWh","price",p?.price,"number")+'<label class="cc-check"><input name="free" type="checkbox"'+(p?.free?" checked":"")+">"+esc(T("Free charging"))+"</label>"+this.field(T("Receipt energy (kWh), optional"),"energy",r?.energy,"number")+this.field(T("Total paid (€), optional"),"total",r?.total,"number");
+      this.editorNode.innerHTML='<form data-cc-form="session"><div class="cc-editor-head"><b>'+esc(T("Charging location"))+" · "+esc(this.ctx.fmt.hm(g.s))+"</b>"+close+'</div><label class="cc-field cc-location">'+esc(T("Location"))+'<select name="profile"><option value="">'+esc(T("Choose location"))+"</option>"+locations+'</select></label><p class="cc-hint">'+esc(T("The saved location profile supplies the price or free charging."))+'</p><details class="cc-advanced"'+(p?.id==="manual"?" open":"")+'><summary>'+esc(T("Receipt or manual correction"))+'</summary><div class="cc-grid">'+advanced+'</div><p class="cc-hint">'+esc(T("Enter €/kWh and charged kWh, or just the total paid. An entered total takes precedence."))+'</p></details><div class="cc-actions"><button class="cc-button" data-cc="cancel">'+esc(T("Cancel changes"))+'</button><button class="cc-button primary" data-cc="save-session">'+esc(T("Save location"))+"</button></div>"+message+"</form>";
     }
-    if(this.editor!=='profiles'&&this.profileRemoved(this.record(this.model.chg.find(g=>String(g.s)===String(this.editor)))?.profile)){const notice=document.createElement('p');notice.className='cc-info cc-removed-profile';notice.setAttribute('role','note');notice.textContent=CT('This profile was removed. Saved location and cost are kept. Choose another profile to reassign.','Το προφίλ αφαιρέθηκε. Η τοποθεσία και το κόστος διατηρούνται. Επίλεξε άλλο προφίλ για αλλαγή.','Este perfil se eliminó. Se conservan la ubicación y el coste. Elige otro perfil para reasignar.');this.editorNode.querySelector('.cc-location').after(notice);}
+    if(this.editor!=='profiles'&&this.profileRemoved(this.record(this.model.chg.find(g=>String(g.s)===String(this.editor)))?.profile)){const notice=document.createElement('p');notice.className='cc-info cc-removed-profile';notice.setAttribute('role','note');notice.textContent=T("This profile was removed. Saved location and cost are kept. Choose another profile to reassign.");this.editorNode.querySelector('.cc-location').after(notice);}
     this.editorNode.querySelectorAll('.cc-location-details').forEach(details=>details.addEventListener('toggle',()=>{
       if(details.open)this.editorNode.querySelectorAll('.cc-location-details').forEach(other=>{if(other!==details)other.open=false;});
     }));
@@ -440,7 +439,7 @@ class ChargingCosts {
     form.querySelector('.cc-advanced').open=true;
   }
   bindProfileNames(){
-    const names=[['IONITY','Europe'],['Tesla Supercharger','Europe'],['Atlante','Spain · Italy'],['Zunder','Spain'],['Iberdrola | bp pulse','Spain'],['Repsol','Spain'],['Wenea','Spain'],['Plenitude On the Road','Italy','Be Charge'],['Ewiva','Italy'],['Free To X','Italy'],['A2A E-moving','Italy'],['PPC blue','Greece','DEI blue ΔΕΗ'],['incharge','Greece','nrg'],['EKO Charge & Go','Greece','ElpeFuture'],['Blink Charging','Greece'],['EV Loader','Greece'],['Electrip','Greece']];
+    const names=[['IONITY','Europe'],['Tesla Supercharger','Europe'],['Atlante','Spain · Italy'],['Zunder','Spain'],['Iberdrola | bp pulse','Spain'],['Repsol','Spain'],['Wenea','Spain'],['Plenitude On the Road','Italy','Be Charge'],['Ewiva','Italy'],['Free To X','Italy'],['A2A E-moving','Italy'],['PPC blue','Greece',T("PPC blue (Greek name)")],['incharge','Greece','nrg'],['EKO Charge & Go','Greece','ElpeFuture'],['Blink Charging','Greece'],['EV Loader','Greece'],['Electrip','Greece']];
     for(const input of this.editorNode.querySelectorAll('.cc-profile input[name=name]')){
       const field=input.closest('label');field.classList.add('cc-name-field');input.autocomplete='off';input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-expanded','false');
       const list=document.createElement('div');list.className='cc-name-options';list.hidden=true;list.setAttribute('role','listbox');list.id='cc-network-'+input.closest('.cc-profile').dataset.index;input.setAttribute('aria-controls',list.id);field.append(list);let active=-1;
@@ -465,8 +464,8 @@ class ChargingCosts {
   collectProfiles(validate=true) {
     return [...this.editorNode.querySelectorAll(".cc-profile")].map(group=>{
       const old=this.data.profiles[Number(group.dataset.index)],get=n=>group.querySelector('[name="'+n+'"]'),source=get("source").value,entity=get("entity").value.trim(),efficiency=cn(get("efficiency").value)??90;
-      if(validate&&!(efficiency>=1&&efficiency<=100))throw Error(CT("Efficiency must be between 1 and 100%.","Η απόδοση πρέπει να είναι 1–100%.","La eficiencia debe estar entre 1 y 100 %."));
-      if(validate&&!get("free").checked&&source!=="battery"){const unit=this.card._hass.states?.[entity]?.attributes?.unit_of_measurement;if(!(source==="power"?["W","kW"]:["Wh","kWh"]).includes(unit))throw Error(CT("Select W/kW for power or Wh/kWh for energy.","Διάλεξε W/kW για ισχύ ή Wh/kWh για ενέργεια.","Elige W/kW para potencia o Wh/kWh para energía."));}
+      if(validate&&!(efficiency>=1&&efficiency<=100))throw Error(T("Efficiency must be between 1 and 100%."));
+      if(validate&&!get("free").checked&&source!=="battery"){const unit=this.card._hass.states?.[entity]?.attributes?.unit_of_measurement;if(!(source==="power"?["W","kW"]:["Wh","kWh"]).includes(unit))throw Error(T("Select W/kW for power or Wh/kWh for energy."));}
       return {...old,name:get("name").value.trim().slice(0,60),price:cn(get("price").value),free:get("free").checked,source,entity,efficiency};
     });
   }
@@ -476,12 +475,12 @@ class ChargingCosts {
     if(action==='remove-profile'){
       const group=button.closest('.cc-profile');if(group.querySelector('.cc-delete-confirm'))return;
       const notice=document.createElement('div');notice.className='cc-delete-confirm';notice.setAttribute('role','group');notice.setAttribute('aria-label','Confirm profile deletion');
-      notice.innerHTML='<p>'+esc(CT('Delete this profile? Existing charging sessions and saved costs will be kept.','Διαγραφή προφίλ; Οι υπάρχουσες φορτίσεις και τα αποθηκευμένα κόστη διατηρούνται.','¿Eliminar este perfil? Se conservarán las cargas y sus costes guardados.'))+'</p><button type="button" class="cc-button" data-cc="remove-cancel">'+esc(CT('Cancel','Ακύρωση','Cancelar'))+'</button> <button type="button" class="cc-button danger" data-cc="remove-confirm">'+esc(CT('Delete profile','Διαγραφή προφίλ','Eliminar perfil'))+'</button>';group.append(notice);notice.querySelector('button').focus();return;
+      notice.innerHTML='<p>'+esc(T("Delete this profile? Existing charging sessions and saved costs will be kept."))+'</p><button type="button" class="cc-button" data-cc="remove-cancel">'+esc(T("Cancel"))+'</button> <button type="button" class="cc-button danger" data-cc="remove-confirm">'+esc(T("Delete profile"))+'</button>';group.append(notice);notice.querySelector('button').focus();return;
     }
     if(action==='remove-cancel'){button.closest('.cc-delete-confirm').remove();return;}
     if(action==='remove-confirm'){
       const index=Number(button.closest('.cc-profile').dataset.index);this.data.profiles=this.collectProfiles(false);this.data.profiles.splice(index,1);
-      this.message=CT('Profile removed. Existing charges and saved costs are kept.','Το προφίλ αφαιρέθηκε. Οι φορτίσεις και τα κόστη διατηρούνται.','Perfil eliminado. Se conservan las cargas y sus costes.');this.renderEditor();this.autoSaveProfiles();return;
+      this.message=T("Profile removed. Existing charges and saved costs are kept.");this.renderEditor();this.autoSaveProfiles();return;
     }
     if(action==='curve'){
 
@@ -505,15 +504,15 @@ class ChargingCosts {
     button.disabled=true;
     try {
       if((action==="save-profiles"||action==="save-session")&&!this.editorNode.querySelector("form").reportValidity())return;
-      if(action==="add"){this.data.profiles=this.collectProfiles();if(this.data.profiles.length>=12)throw Error("Maximum 12 locations.");this.data.profiles.push({id:"place_"+Date.now(),name:CT("New location","Νέα τοποθεσία","Nueva ubicación"),price:null,free:false,source:"battery",entity:"",efficiency:90});this.dirty=true;this.renderEditor();this.scheduleProfileSave();return;}
+      if(action==="add"){this.data.profiles=this.collectProfiles();if(this.data.profiles.length>=12)throw Error("Maximum 12 locations.");this.data.profiles.push({id:"place_"+Date.now(),name:T("New location"),price:null,free:false,source:"battery",entity:"",efficiency:90});this.dirty=true;this.renderEditor();this.scheduleProfileSave();return;}
       if(action==="save-profiles")this.data.profiles=this.collectProfiles();
       if(action==="save-session"){
         this.manualTotal(this.editorNode.querySelector("form"));
         const form=this.editorNode.querySelector("form"),g=this.model.chg.find(g=>String(g.s)===String(this.editor)),id=form.elements.profile.value,p=id==="__manual__"?{id:"manual",name:"",price:null,free:false,source:"battery",entity:"",efficiency:90}:this.data.profiles.find(p=>p.id===id);
-        if(!p||!g)throw Error(CT("Choose a location first.","Διάλεξε πρώτα τοποθεσία.","Elige primero una ubicación."));
-        if(id==="__manual__"&&!form.elements.free.checked&&cn(form.elements.price.value)===null&&cn(form.elements.total.value)===null)throw Error(CT("Enter a price per kWh or a total paid.","Συμπλήρωσε τιμή ανά kWh ή συνολικό ποσό.","Introduce un precio por kWh o un total pagado."));
+        if(!p||!g)throw Error(T("Choose a location first."));
+        if(id==="__manual__"&&!form.elements.free.checked&&cn(form.elements.price.value)===null&&cn(form.elements.total.value)===null)throw Error(T("Enter a price per kWh or a total paid."));
         const previous=this.record(g),snapshot=previous?.profile?.id===id?previous.profile:p;
-        if(form.elements.free.checked&&cn(form.elements.total.value)>0)throw Error(CT("Clear Total paid for a free session.","Άδειασε το Συνολικό ποσό για δωρεάν φόρτιση.","Borra el Total pagado para una sesión gratuita."));
+        if(form.elements.free.checked&&cn(form.elements.total.value)>0)throw Error(T("Clear Total paid for a free session."));
         this.data.sessions[String(Math.round(g.s/1000))]={start:g.s,capacity:previous?.capacity||this.ctx.cap,profile:{...snapshot,price:cn(form.elements.price.value),free:form.elements.free.checked},energy:cn(form.elements.energy.value),total:cn(form.elements.total.value)};
       }
       this.saving=true;this.editorNode.querySelectorAll("[data-cc]").forEach(node=>node.disabled=true);
@@ -692,7 +691,7 @@ EN.panel = (d, card, options = {}) => {
   d.addEventListener("click", (e) => {
     if (e.target.closest("[data-cc]")) return;
     const p = e.target.closest("[data-period]");
-    if (costs.dirty && e.target.closest("[data-period],[data-wk]")) { const status = d.querySelector(".cc-editor [role=status]"); if (status) status.textContent = CT("Save or close the editor before changing dates.", "Αποθήκευσε ή κλείσε τον επεξεργαστή πριν αλλάξεις ημερομηνία.","Guarda o cierra el editor antes de cambiar las fechas."); return; }
+    if (costs.dirty && e.target.closest("[data-period],[data-wk]")) { const status = d.querySelector(".cc-editor [role=status]"); if (status) status.textContent = T("Save or close the editor before changing dates."); return; }
     if (p && Number(p.dataset.period) !== period) { period = Number(p.dataset.period); off = 0; selT = null; startPeriodLoading();run(true, true); return; }
     const w = e.target.closest("[data-wk]");
     if (w && !w.disabled) { off = Math.min(0, off + Number(w.dataset.wk)); selT = null; startPeriodLoading();run(true, true); return; }

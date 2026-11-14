@@ -16,8 +16,8 @@ const settingsBind=DeepalS05Settings.prototype._bind;
 const settingsLayout=DeepalS05Settings.prototype._tabLayout;
 DeepalS05Settings.prototype._tabLayout=function(config){
   if(this.mode==="app")return settingsLayout.call(this,config);
-  const lang=this._hass?.locale?.language||"en",tr=(en,el,es=en)=>lang.startsWith("el")?el:lang.startsWith("es")?es:en;
-  return '<h4>'+ico('sliders')+esc(tr("Card design","Σχεδίαση κάρτας","Diseño de la tarjeta"))+'</h4>'+this._opt(tr("Design","Σχεδίαση","Diseño"),this._sel("companion_design",config.companion_design||"",[["",tr("Profile default","Προεπιλογή προφίλ","Predeterminado del perfil")],["mobile","Mobile"],["tablet","Tablet"],["energy","Energy"],["minimal",tr("Minimal","Ελάχιστη","Mínima")],["cockpit",tr("Modern Cockpit","Modern Cockpit","Cockpit moderno")],["ultra",tr("Ultra minimal","Εξαιρετικά ελάχιστη","Ultra mínima")]]))+this._opt(tr("Maximum width (px)","Μέγιστο πλάτος (px)","Ancho máximo (px)"),this._num("companion_width",config.companion_width||0,"1"),tr("0 = automatic; otherwise 280–1600 px.","0 = αυτόματα· διαφορετικά 280–1600 px.","0 = automático; si no, 280–1600 px."))+settingsLayout.call(this,config);
+  const lang=this._hass?.locale?.language||"en";
+  return '<h4>'+ico('sliders')+esc(T("Card design"))+'</h4>'+this._opt(T("Design"),this._sel("companion_design",config.companion_design||"",[["",T("Profile default")],["mobile","Mobile"],["tablet","Tablet"],["energy","Energy"],["minimal",T("Minimal")],["cockpit",T("Modern Cockpit")],["ultra",T("Ultra minimal")]]))+this._opt(T("Maximum width (px)"),this._num("companion_width",config.companion_width||0,"1"),T("0 = automatic; otherwise 280–1600 px."))+settingsLayout.call(this,config);
 };
 DeepalS05Settings.prototype._bind=function(){
   settingsBind.call(this);

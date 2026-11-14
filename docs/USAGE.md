@@ -156,7 +156,7 @@ Filtering and sorting apply to the saved archive, including sessions that have n
 
 The card’s **Energy** view also includes weekly/monthly history, daily distance and estimated consumption, charges and cost assignments. Enable **Card Settings → Charging → “Energy” sheet on the tile**, then tap the Energy tile to open it.
 
-In the costs dashboard, the energy total is labelled **Energy from charger**. It includes charging losses, so it is higher than the *Energy added to battery* sensor. A charge that loses its car connection for a while stays one session. If the car never reports again, the charge closes after 6 hours at its last known reading.
+In the costs dashboard, the energy total is labelled **Energy from charger**. It includes charging losses, so it is higher than the *Energy added to battery* sensor. When any charge in the period has its energy estimated from the battery level rather than measured, the total is shown with **≈** in front. A charge that loses its car connection for a while stays one session. If the car never reports again, the charge closes after 6 hours at its last known reading.
 
 ## 10. Open a charging curve
 
@@ -199,6 +199,7 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 - Retained history still uses disk space over time. Integration diagnostics include archive size and stored-reading counts.
 - On an existing database, freed space can be reused by future records even if the file does not immediately become smaller.
 - Download a database backup before replacing or downgrading the integration. Keep Home Assistant backups too.
+- **Database backup** saves a copy to `.storage/deepal_companion.backup.sqlite` in the Home Assistant config folder. Each new backup replaces the previous file, so copy it elsewhere if you need to keep it.
 
 ## 12. Set up notifications
 

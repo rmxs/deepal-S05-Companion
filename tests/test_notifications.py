@@ -258,7 +258,7 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(mod.notification_tag("a"*32,"x"*80),mod.notification_tag("a"*32,"x"*80))
         self.assertNotEqual(mod.notification_tag("a"*32,"x"*80),mod.notification_tag("b"*32,"x"*80))
         self.assertNotEqual(mod.notification_tag("a"*32,"x"*80),mod.notification_tag("a"*32,"y"*80))
-        self.assertLessEqual(len(mod.notification_tag("α"*32,"x"*80).encode("utf-8")),64)
+        self.assertLessEqual(len(mod.notification_tag("\u03b1"*32,"x"*80).encode("utf-8")),64)
 
     def install_mobile_registry(self, old_disabled=True):
         """Two same-name registrations; no real HA transport or push credentials."""
