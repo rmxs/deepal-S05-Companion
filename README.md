@@ -6,6 +6,9 @@ Your Deepal S05 in Home Assistant: vehicle controls, a customisable dashboard, c
 
 Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/ha-deepal-alternative) (`deepal`) for electric and plug-in hybrid vehicles. Install it as an **integration through Home Assistant Marketplace** (HACS on earlier Home Assistant versions). The Companion dashboard and Lovelace card are included in the same package.
 
+[![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rmxs&repository=deepal-S05-Companion&category=integration)
+
+
 [Installation](docs/INSTALLATION.md) · [User guide](docs/USAGE.md) · [All settings](docs/SETTINGS.md) · [Notifications and Live notifications](docs/NOTIFICATIONS.md) · [Changelog](CHANGELOG.md)
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
@@ -87,6 +90,10 @@ As I used it, the project grew. A card became a companion for everyday things: c
 This release is the next step in that journey. More features and improvements will come as the project develops. Ideas, feedback and real-world experiences from other owners are welcome through [GitHub Issues](https://github.com/rmxs/deepal-S05-Companion/issues).
 
 Made for my car, shared for yours.
+
+
+[![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rmxs&repository=deepal-S05-Companion&category=integration)
+
 
 ## Features
 
@@ -227,6 +234,8 @@ Use **Sessions → Data options** to import available Recorder charges, export J
 If you enjoy using Deepal Companion, you can [buy me a coffee](https://buymeacoffee.com/leftk) to support the time I spend on the project. Support is optional, and every feature is available to everyone.
 
 <a href="https://buymeacoffee.com/leftk"><img src="custom_components/deepal_companion/frontend/support/buy-me-a-coffee.png" alt="Buy me a coffee" width="157" height="44"></a>
+
+
 
 ## Credits and licence
 
