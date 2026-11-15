@@ -19,6 +19,25 @@ def encode(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
 
 
+class _Snapshot:
+    """Read queries that share one connection and one SQLite read transaction (one WAL snapshot)."""
+
+    def __init__(self, archive, db):
+        self._archive, self._db = archive, db
+
+    def sessions(self, vehicle, start=None, end=None, include_curve=False):
+        return self._archive.sessions(vehicle, start, end, include_curve, db=self._db)
+
+    def get(self, vehicle, key, default=None):
+        return self._archive.get(vehicle, key, default, db=self._db)
+
+    def pricing_inputs(self, vehicle, requests):
+        return self._archive.pricing_inputs(vehicle, requests, db=self._db)
+
+    def session_page(self, vehicle, before=None, limit=5, location="", sort="newest"):
+        return self._archive.session_page(vehicle, before, limit, location, sort, db=self._db)
+
+
 class Database(HistoryStorage):
     """Connections are short-lived; the caller serializes operations with an async lock."""
 
@@ -34,6 +53,31 @@ class Database(HistoryStorage):
             with db:
                 yield db
         finally:
+            db.close()
+
+    @contextmanager
+    def _use(self, db=None):
+        """Run on the caller's connection when one is given, so queries can share a snapshot."""
+        if db is not None:
+            yield db
+        else:
+            with self.connect() as own:
+                yield own
+
+    def read_snapshot(self, load):
+        """Run load(snapshot) inside one read transaction on one connection.
+
+        In WAL mode the reads see one committed state, and they neither wait for writers nor block them.
+        The transaction always ends here, so the connection cannot stay open."""
+        db = sqlite3.connect(self.path, timeout=30)
+        db.row_factory = sqlite3.Row
+        try:
+            db.execute("PRAGMA query_only=ON")
+            db.execute("BEGIN")
+            return load(_Snapshot(self, db))
+        finally:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
             db.close()
 
     def initialize(self):
@@ -212,8 +256,8 @@ class Database(HistoryStorage):
                 raise ValueError("Unknown profile action")
         return {"view_id": view}
 
-    def get(self, vehicle, key, default=None):
-        with self.connect() as db:
+    def get(self, vehicle, key, default=None, db=None):
+        with self._use(db) as db:
             row = db.execute("SELECT value FROM kv WHERE vehicle=? AND key=?", (vehicle, key)).fetchone()
             return json.loads(row["value"]) if row else default
 
@@ -313,10 +357,10 @@ class Database(HistoryStorage):
             db.execute("INSERT INTO kv VALUES(?,?,?) ON CONFLICT(vehicle,key) DO UPDATE SET value=excluded.value",
                        (vehicle, "costs", encode(current)))
 
-    def pricing_inputs(self, vehicle, requests):
+    def pricing_inputs(self, vehicle, requests, db=None):
         """Batch historical meter reads in one executor job/connection."""
         result = {}
-        with self.connect() as db:
+        with self._use(db) as db:
             for key, entity, start, end in requests:
                 rows = self._history_rows(db, vehicle, entity, start, end)
                 unit = self._prior_reading(db, vehicle, entity, end, unit_only=True)
@@ -464,8 +508,8 @@ class Database(HistoryStorage):
             row = self._prior_reading(db, vehicle, entity, end if end is not None else time.time(), unit_only=True)
             return row["unit"] if row else ""
 
-    def sessions(self, vehicle, start=None, end=None, include_curve=False):
-        with self.connect() as db:
+    def sessions(self, vehicle, start=None, end=None, include_curve=False, db=None):
+        with self._use(db) as db:
             rows = db.execute("SELECT data FROM sessions WHERE vehicle=? AND deleted IS NULL AND end>=? AND start<=? ORDER BY start",
                               (vehicle, start if start is not None else 0, end if end is not None else time.time() + 86400))
             result = [json.loads(r["data"]) for r in rows]
@@ -479,8 +523,8 @@ class Database(HistoryStorage):
             db.execute("DELETE FROM session_costs WHERE vehicle=?", (vehicle,))
             db.executemany("INSERT INTO session_costs VALUES(?,?,?)", [(vehicle, row["id"], row["pricing"].get("cost")) for row in rows])
 
-    def session_page(self, vehicle, before=None, limit=5, location="", sort="newest"):
-        with self.connect() as db:
+    def session_page(self, vehicle, before=None, limit=5, location="", sort="newest", db=None):
+        with self._use(db) as db:
             record = db.execute("SELECT value FROM kv WHERE vehicle=? AND key='costs'", (vehicle,)).fetchone()
             settings = json.loads(record["value"]) if record else {}
             locations = {p["id"]: p.get("name") or p["id"] for p in settings.get("profiles", [])}

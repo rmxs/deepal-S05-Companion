@@ -15,13 +15,24 @@ for _name in ("homeassistant", "homeassistant.util"):
 _dt = sys.modules.setdefault("homeassistant.util.dt", types.ModuleType("homeassistant.util.dt"))
 _dt.as_local = getattr(_dt, "as_local", lambda value: value)
 sys.modules["homeassistant.util"].dt = _dt
-spec = importlib.util.spec_from_file_location("live_charging_test", Path(__file__).resolve().parents[1] / "custom_components/deepal_companion/live_charging.py")
-live = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(live)
+package = types.ModuleType("dcpkg_charge")
+package.__path__ = [str(Path(__file__).resolve().parents[1] / "custom_components/deepal_companion")]
+sys.modules["dcpkg_charge"] = package
+live = importlib.import_module("dcpkg_charge.live_charging")
+
+
+def ensure_local_time():
+    """Another test module may have replaced the Home Assistant time stub; keep as_local available."""
+    util = sys.modules.setdefault("homeassistant.util", types.ModuleType("homeassistant.util"))
+    stub = getattr(util, "dt", None) or sys.modules.setdefault("homeassistant.util.dt", types.ModuleType("homeassistant.util.dt"))
+    if not hasattr(stub, "as_local"):
+        stub.as_local = lambda value: value
+    util.dt = sys.modules["homeassistant.util.dt"] = stub
 
 
 class LiveCharging(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        ensure_local_time()
         self.now = 100000
         self.calls, self.history, self.store, self.states = [], [], {}, {}
         self.fail = False

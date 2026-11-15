@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from datetime import datetime
 import hashlib
 import re
 import time
 
 from .live_charging import local_time, number, stamp, supported
+from .phone_text import tr
 
 OPEN_ITEMS = {
     "front_left_door": ("binary_sensor.front_left_door", "Front left door"),
@@ -36,10 +38,11 @@ KINDS = {
     },
     "open": {
         "key": "live_open", "name": "Live left open or unlocked", "icon": "mdi:car-door-lock-open", "title": "Left open",
-        "default": {"enabled": False, "devices": [], "min_interval": 30, "max_age": 3600, "start_delay": 300, "end_delay": 10,
+        "default": {"enabled": False, "devices": [], "min_interval": 30, "max_age": 3600, "start_delay": 300, "end_delay": 10, "parked_after": 360,
                     "items": list(OPEN_ITEMS), "include_unlocked": True, "only_parked": True, "lock_button": True, "max_shown": 4, "show_count": True,
                     "show_timer": True, "show_updated": False, "title": "", "icon": "", "color": "", "url": ""},
-        "ranges": {"min_interval": (15, 3600), "max_age": (300, 86400), "start_delay": (0, 3600), "end_delay": (0, 600), "max_shown": (1, 10)},
+        "ranges": {"min_interval": (15, 3600), "max_age": (300, 86400), "start_delay": (0, 3600), "end_delay": (0, 600), "max_shown": (1, 10),
+                   "parked_after": (60, 3600)},
         "bools": ("enabled", "include_unlocked", "only_parked", "lock_button", "show_count", "show_timer", "show_updated"),
     },
 }
@@ -101,6 +104,9 @@ class LiveStatus:
 
     async def start(self):
         self.state = await self.owner.db("get", self.runtime.vehicle, "live_status_state", {})
+        pending = self.state.get("open", {})
+        if not pending.get("active"):
+            pending.pop("since", None)  # Downtime cannot prove a continuous pending condition.
 
     async def persist(self):
         await self.owner.db("put", self.runtime.vehicle, "live_status_state", self.state)
@@ -155,19 +161,23 @@ class LiveStatus:
 
     @staticmethod
     def wait(kind, options):
-        """Seconds the alert must stay true before it shows. For "left open" while parked, the vehicle reports about every 5 minutes
-        and the odometer must also be still for 2 minutes first, so a shorter wait could show it on a car that is still driving
-        (it would flicker on and off). The wait is therefore at least 5 minutes, counted from the moment the car stopped."""
-        if kind == "open" and options["only_parked"]:
-            return max(options["start_delay"], 300) - 120
+        """The user-selected full delay, without a hidden minimum or subtraction."""
         return options["start_delay"]
 
-    def running(self):
+    @staticmethod
+    def moved_at(odo):
+        """When the odometer value last changed. A report with the same value does not count as movement."""
+        changed = getattr(odo, "last_changed", None)
+        return changed.timestamp() if isinstance(changed, datetime) else stamp(odo)
+
+    def running(self, options=None):
         """True while the car is moving. The car never switches itself off, so "on" does not mean in use: it counts as moving
-        only while the odometer changed in the last 2 minutes. Without an odometer, the engine and power status decide."""
+        until the odometer value has stayed the same for "Parked after" (set with the notification, to suit how often the
+        car reports). Without an odometer, the engine and power status decide."""
+        window = (options or {}).get("parked_after", KINDS["open"]["default"]["parked_after"])
         odo = self.get("sensor.total_odometer")
         if odo is not None and str(odo.state).lower() not in {"unknown", "unavailable", "none", ""}:
-            return time.time() - stamp(odo) < 120
+            return time.time() - self.moved_at(odo) < window
         engine, power = self.get("binary_sensor.engine"), self.get("sensor.power_status")
         if engine is not None and str(engine.state).lower() == "on":
             return True
@@ -176,7 +186,10 @@ class LiveStatus:
     def open_snapshot(self, now, options):
         if not self.connected(now, options):
             return None
-        if options["only_parked"] and self.running():
+        odo = self.get("sensor.total_odometer")
+        if options["only_parked"] and odo is not None and not self.fresh(odo, now, options):
+            return None  # Missing movement evidence is not proof of parking.
+        if options["only_parked"] and self.running(options):
             # Open windows while driving are normal: nothing to report, and a running notification ends.
             lock = self.get("lock.doors")
             return {"active": False, "items": [], "unlocked": False, "updated": stamp(lock) if lock else 0}
@@ -184,28 +197,55 @@ class LiveStatus:
         for key in options["items"]:
             logical, label = OPEN_ITEMS[key]
             state = self.get(logical)
-            if state is None or str(state.state).lower() in {"unknown", "unavailable", "none", ""}:
+            if not self.fresh(state, now, options):
                 continue
             known = True
             if state.state != "on":
                 continue
             if key.endswith("_window"):
                 opening = self.get("sensor." + logical.split(".", 1)[1].removesuffix("_open") + "_opening")
+                if opening is not None and not self.fresh(opening, now, options):
+                    continue
                 value = number(opening) if opening is not None else None
                 if value is not None and value <= 0:
                     continue
             items.append(label)
         unlocked, lock = False, self.get("lock.doors")
-        if options["include_unlocked"] and lock is not None and str(lock.state).lower() not in {"unknown", "unavailable", "none", ""}:
+        if options["include_unlocked"] and self.fresh(lock, now, options):
             known = True
             unlocked = lock.state == "unlocked"
             sensor = self.get("binary_sensor.doors_lock_state")
-            if unlocked and sensor is not None and sensor.state in {"on", "off"}:
-                unlocked = sensor.state == "on"
+            if unlocked and sensor is not None:
+                if self.fresh(sensor, now, options) and sensor.state in {"on", "off"}:
+                    unlocked = sensor.state == "on"  # a missing or stale second sensor does not hide an unlocked car
         if not known:
             return None
         stamps = [stamp(self.get(OPEN_ITEMS[key][0])) for key in options["items"] if self.get(OPEN_ITEMS[key][0]) is not None]
         return {"active": bool(items or unlocked), "items": items, "unlocked": unlocked, "updated": max(stamps + [stamp(lock) if lock else 0])}
+
+    def end_reason(self, kind, options):
+        """The plain reason a live notification ended because its condition stopped."""
+        if kind == "climate":
+            return "Climate turned off"
+        if options["only_parked"] and self.running(options):
+            return "Vehicle moving"
+        return "Everything closed and locked"
+
+    def trigger_details(self, kind, now, options, snap, since=None):
+        """Capture the decision when it happens, rather than consulting later sensor values."""
+        details = {"condition_since": since, "configured_wait_seconds": options["start_delay"],
+                   "effective_wait_seconds": self.wait(kind, options), "snapshot": deepcopy(snap), "sensors": []}
+        logicals = (["sensor.total_odometer", "sensor.power_status", "binary_sensor.engine", "lock.doors", "binary_sensor.doors_lock_state"]
+                    + [OPEN_ITEMS[key][0] for key in options["items"]]) if kind == "open" else ["binary_sensor.climate_on", "climate.cabin_climate", "sensor.inside_temperature"]
+        for logical in logicals:
+            sensor = self.get(logical)
+            if sensor is not None:
+                details["sensors"].append({"entity": self.entity(logical), "value": str(sensor.state), "reported": stamp(sensor)})
+        if kind == "open":
+            details.update(items=list((snap or {}).get("items", [])), unlocked=bool((snap or {}).get("unlocked")),
+                           only_parked=options["only_parked"], moving=self.running(options),
+                           parking_basis=f"Odometer unchanged for {options['parked_after']} seconds means parked; otherwise moving. Without odometer, engine/power status is used.")
+        return details
 
     def snapshot(self, kind, now, options):
         return self.climate_snapshot(now, options) if kind == "climate" else self.open_snapshot(now, options)
@@ -231,16 +271,16 @@ class LiveStatus:
             cur, tar = snap["current"], snap["target"]
             ready = cur is not None and tar is not None and abs(tar - cur) <= options["ready_margin"]
             if cur is not None:
-                text = f"Inside {cur:.1f}{degree}"
+                text = f"{tr(self.hass, 'Inside')} {cur:.1f}{degree}"
                 if options["show_target"] and tar is not None:
                     text += f" → {tar:g}{degree}"
                 parts.append(text)
             else:
-                parts.append("Climate on")
+                parts.append(tr(self.hass, "Climate on"))
             if ready:
-                parts.append("Ready")
+                parts.append(tr(self.hass, "Ready"))
             if options["show_outside"] and snap.get("outside") is not None:
-                parts.append(f"Outside {snap['outside']:.0f}{degree}")
+                parts.append(f"{tr(self.hass, 'Outside')} {snap['outside']:.0f}{degree}")
             if cur is not None:
                 data["critical_text"] = f"{cur:.1f}{degree}"
             start = snap.get("start_temp")
@@ -249,29 +289,29 @@ class LiveStatus:
             if ready and options["show_progress"]:
                 data.update(progress=100, progress_max=100)
             if options["turn_off_button"] and not test:
-                data["actions"] = [{"action": "DEEPAL_COMPANION_LIVE_CLIMATE_OFF", "title": "Turn off"}]
+                data["actions"] = [{"action": "DEEPAL_COMPANION_LIVE_CLIMATE_OFF", "title": tr(self.hass, "Turn off")}]
         else:
-            shown = snap["items"][:options["max_shown"]]
+            shown = [tr(self.hass, item) for item in snap["items"][:options["max_shown"]]]
             extra = len(snap["items"]) - len(shown)
             if shown:
-                parts.append(", ".join(shown) + (f" +{extra} more" if extra > 0 else ""))
+                parts.append(", ".join(shown) + (f" +{extra} {tr(self.hass, 'more')}" if extra > 0 else ""))
             if snap["unlocked"]:
-                parts.append("Unlocked")
+                parts.append(tr(self.hass, "Unlocked"))
             count = len(snap["items"]) + (1 if snap["unlocked"] else 0)
             if options["show_count"]:
                 data["critical_text"] = str(count)
             if options["lock_button"] and not test:
-                data["actions"] = [{"action": "DEEPAL_COMPANION_LIVE_OPEN_LOCK", "title": "Lock vehicle"}]
+                data["actions"] = [{"action": "DEEPAL_COMPANION_LIVE_OPEN_LOCK", "title": tr(self.hass, "Lock vehicle")}]
         if options["url"]:
             data.update(url=options["url"], clickAction=options["url"])
         if options["show_timer"] and since:
             data.update(chronometer=True, when=round(since), when_relative=False)
         if options["show_updated"] and snap.get("updated"):
-            parts.append("Reported " + local_time(snap["updated"], "%H:%M"))
+            parts.append(tr(self.hass, "Reported") + " " + local_time(snap["updated"], "%H:%M"))
         if test:
-            parts.append("Test")
+            parts.append(tr(self.hass, "Test"))
         # The title is the information itself; the message carries the details.
-        return {"title": parts[0] if parts else spec["title"], "message": " · ".join(parts[1:]) or spec["title"], "data": data}
+        return {"title": parts[0] if parts else tr(self.hass, spec["title"]), "message": " · ".join(parts[1:]) or tr(self.hass, spec["title"]), "data": data}
 
     @staticmethod
     def rule(kind):
@@ -324,6 +364,8 @@ class LiveStatus:
             state.pop("unknown_since", None)
         lost = enabled and snap is None and now - state.get("unknown_since", now) >= options["max_age"]
         wanted = bool(snap and snap["active"])
+        if kind == "open" and not wanted and not active:
+            state.pop("since", None)  # Restart pending delay on closed, moving, stale or unknown.
         if wanted:
             state.pop("stop_since", None)
             state.setdefault("since", now)
@@ -349,7 +391,7 @@ class LiveStatus:
         if not active and (not enabled or stop):
             kept = {key: state[key] for key in ("test_devices", "expired") if state.get(key)}
             if state.get("logged"):
-                await self.owner.record(self.rule(kind), "live_ended")
+                await self.owner.record(self.rule(kind), "live_ended", trigger={"reason": "Disabled or recipient removed" if not enabled else "Reports unavailable or stale" if lost else "Maximum runtime reached" if state.get("expired") else self.end_reason(kind, options), "snapshot": deepcopy(snap)})
                 await self.owner.persist()
             self.state[kind] = kept
             return
@@ -373,7 +415,7 @@ class LiveStatus:
                 self.last_errors.pop((kind, device), None)
                 if not state.get("logged"):  # one Recent activity entry per live notification, not one per update
                     state["logged"] = True
-                    await self.owner.record(self.rule(kind), "live_started", deliveries=[result])
+                    await self.owner.record(self.rule(kind), "live_started", deliveries=[result], trigger=self.trigger_details(kind, now, options, snap, state.get("since")))
                     await self.owner.persist()
             elif self.last_errors.get((kind, device)) != result["error"]:
                 self.last_errors[(kind, device)] = result["error"]

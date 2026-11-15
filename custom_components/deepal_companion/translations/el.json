@@ -53,30 +53,6 @@
       "not_deepal_battery": "Επίλεξε τον αισθητήρα μπαταρίας αυτοκινήτου από το Deepal Alternative."
     }
   },
-  "entity": {
-    "sensor": {
-      "sessions": {
-        "name": "Ολοκληρωμένες φορτίσεις"
-      },
-      "battery_kwh": {
-        "name": "Ενέργεια που προστέθηκε στην μπαταρία"
-      },
-      "cost": {
-        "name": "Καταγεγραμμένο κόστος φόρτισης"
-      },
-      "unpriced": {
-        "name": "Φορτίσεις χωρίς τιμή"
-      },
-      "archive_status": {
-        "name": "Κατάσταση αρχείου",
-        "state": {
-          "ok": "Εντάξει",
-          "degraded": "Με προβλήματα",
-          "stopped": "Σταματημένο"
-        }
-      }
-    }
-  },
   "selector": {
     "powertrain": {
       "options": {

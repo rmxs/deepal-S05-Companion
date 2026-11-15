@@ -11,7 +11,7 @@ module.exports=async page=>{
   const baseline=await panel.evaluate(root=>JSON.parse(JSON.stringify(root.preview._c)));
   const started=Date.now();await panel.locator('deepal-companion-settings [data-tab=look]').click();
   await panel.locator('deepal-companion-settings .settings-loading').waitFor();
-  assert(await panel.locator('.settings-loading .arc').evaluate(svg=>parseFloat(getComputedStyle(svg).width)===56));
+  assert(await panel.locator('.settings-loading .arc').evaluate(svg=>Math.abs(parseFloat(getComputedStyle(svg).width)-95.2)<.1),'Settings use the shared 95.2px loader');
   assert(await panel.locator('.settings-loading .arc').evaluate(svg=>getComputedStyle(svg).animationName==='ds-spin'&&svg.getAnimations().some(animation=>animation.playState==='running')),'Settings must reuse the animated shared loader');
   assert.equal(await panel.locator('.settings-loading>i').count(),0,'Use one shared loader without extra skeleton elements');
   await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').settings._tabLoading);

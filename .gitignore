@@ -30,3 +30,12 @@ htmlcov/
 !.env.example
 .DS_Store
 Thumbs.db
+
+.offline-wheels/
+
+# Local Python virtual environments and offline package wheels
+.venv/
+.venv-*/
+venv/
+offline-wheels/
+*.whl

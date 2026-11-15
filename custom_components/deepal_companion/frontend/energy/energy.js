@@ -11,7 +11,7 @@ const T = (s, ...a) => (K ? K.T(s, ...a) : fill(s, a));
 const ico = (n, c) => (K ? K.ico(n, c) : "");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 /* ───── Data: history → series → charges, drives, daily figures ───── */
-const DAYS_BACK = 5, CHG_A = 0.5, GAP = 15 * 60e3, MIN_CHG = 8 * 60e3, DRV_GAP = 12 * 60e3, DEF_KWH = 18.4, DEF_TANK = 51;
+const DAYS_BACK = 5, CHG_A = 0.5, GAP = 15 * 60e3, MIN_CHG = 8 * 60e3, DRV_GAP = 12 * 60e3, DEF_KWH = 18.4;
 const ts = (v) => { if (typeof v === "number") return v > 1e11 ? v : v * 1000; const n = Date.parse(v); return Number.isFinite(n) ? n : NaN; };
 const num = (s) => { if (s === null || s === undefined || s === "" || s === "unknown" || s === "unavailable") return NaN; const n = Number(s); return Number.isFinite(n) ? n : NaN; };
 /* HA history (minimal_response) → [[t, state]] sorted */
@@ -33,8 +33,7 @@ function at(ser, t) {
   const value=lo?ser[lo-1][1]:NaN;
   return Number.isFinite(value)?value:ser[0][1];
 }
-const dayKey = (t) => { const d = new Date(t); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
-const dayStart = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const dayKey = (t,timezone) => energyDayStart(0,timezone,t);
 
 /* Charges from the AC/DC currents. The "charging" binary_sensor is not reliable on this vehicle, while the current is.
    unavailable/unknown values do NOT count as 0: we keep the previous state up to GAP. Gaps ≤ GAP are joined. */
@@ -105,7 +104,7 @@ function despike(ser) {
   });
 }
 /* All together for the sheet. cap = battery capacity in kWh (setting) */
-function model(raw, now, cap, t0in, nDays = DAYS_BACK, liveOk = true) {
+function model(raw, now, cap, t0in, nDays = DAYS_BACK, liveOk = true, timezone) {
   const batt = despike(numSeries(raw.batt)), odo = numSeries(raw.odo);
   const chg = chargeSegments(raw.ac, raw.dc, now, liveOk);
   chg.forEach((g) => {
@@ -114,10 +113,10 @@ function model(raw, now, cap, t0in, nDays = DAYS_BACK, liveOk = true) {
     g.kwh = cap > 0 && Number.isFinite(g.from) && Number.isFinite(g.to) && g.to > g.from ? (g.to - g.from) / 100 * cap : null;
   });
   const drv = driveSegments(raw.pow, odo, now);
-  const days = [], t0 = t0in !== undefined ? t0in : dayStart(now - (DAYS_BACK - 1) * 86400000);
-  for (let i = 0; i < nDays; i++) { const s = new Date(t0); s.setDate(s.getDate() + i); days.push({ t: s.getTime(), key: dayKey(s.getTime()), km: 0, kwh: 0, n: 0 }); }
-  drv.forEach((d) => { const x = days.find((y) => y.key === dayKey(d.s)); if (x) x.km += d.km; });
-  chg.forEach((g) => { const x = days.find((y) => y.key === dayKey(g.s)); if (x) { x.n++; if (g.kwh) x.kwh += g.kwh; } });
+  const days = [], t0 = t0in !== undefined ? t0in : energyDayStart(-(nDays-1),timezone,now);
+  for (let i = 0; i < nDays; i++) { const s = energyDayStart(i,timezone,t0); days.push({ t: s, key: dayKey(s,timezone), km: 0, kwh: 0, n: 0 }); }
+  drv.forEach((d) => { const x = days.find((y) => y.key === dayKey(d.s,timezone)); if (x) x.km += d.km; });
+  chg.forEach((g) => { const x = days.find((y) => y.key === dayKey(g.s,timezone)); if (x) { x.n++; if (g.kwh) x.kwh += g.kwh; } });
   // Keep a low-water baseline across drives: small rebounds must not be consumed twice.
   // Estimated battery energy discharged during drives; charging starts a new baseline.
   let batteryBase = NaN;
@@ -132,15 +131,16 @@ function model(raw, now, cap, t0in, nDays = DAYS_BACK, liveOk = true) {
     const drop = batteryBase - value; batteryBase = value;
     const drive = drv.find((d, j) => t > d.s && t <= Math.min(d.e + 10 * 60e3, j + 1 < drv.length ? drv[j + 1].s : Infinity));
     if (!drive || !(cap > 0)) continue;
-    const day = days.find((d) => d.key === dayKey(t));
+    const day = days.find((d) => d.key === dayKey(t,timezone));
     if (day) day.batteryUsed = (day.batteryUsed || 0) + drop * cap / 100;
   }
   const fuel = despike(numSeries(raw.fuel).filter((p) => p[1] >= 0 && p[1] <= 100));
-  let fuelUsed = false, base = fuel.length ? fuel[0][1] : NaN;
+  const volume=despike(numSeries(raw.volume||[]).filter(p=>p[1]>=0));
+  let fuelUsed = false, base = volume.length ? volume[0][1] : NaN;
   drv.forEach((d) => { d.fuel = 0; });
-  for (let i = 1; i < fuel.length; i++) {
-    const [t, value] = fuel[i], next = fuel[i + 1];
-    // A rise of at least 5 points is a refill only when another reading supports it.
+  for (let i = 1; i < volume.length; i++) {
+    const [t, value] = volume[i], next = volume[i + 1];
+    // A rise of at least 5 litres is a refill only when another reading supports it.
     if (value >= base + 5) {
       if (next && next[1] >= value - 2) base = value;
       continue;
@@ -152,15 +152,16 @@ function model(raw, now, cap, t0in, nDays = DAYS_BACK, liveOk = true) {
     const d = drv.find((d, j) => t > d.s && t <= Math.min(d.e + 10 * 60e3, j + 1 < drv.length ? drv[j + 1].s : Infinity));
     if (!d) continue;
     d.fuel += drop; fuelUsed = true;
-    const day = days.find((x) => x.key === dayKey(t));
+    const day = days.find((x) => x.key === dayKey(t,timezone));
     if (day) day.fuel = (day.fuel || 0) + drop;
   }
-  return { batt, chg, drv, days, t0, now, nDays, fuel, fuelUsed, hasData: batt.length > 0 };
+  return { batt, chg, drv, days, t0, now, nDays, timezone, fuel, fuelUsed, hasData: batt.length > 0 };
 }
 /* ───── The sheet: current state, 5-day battery curve, per day, list of charges ───── */
 const PCSS = `
+.enpanel .cc-location-details{transition:transform .18s cubic-bezier(.2,.8,.2,1),box-shadow .18s}.enpanel .cc-location-details.drag{transition:none;z-index:5;position:relative;cursor:grabbing;box-shadow:0 10px 26px #0007;background:var(--ds-card,var(--card-background-color))}.enpanel .cc-profiles.dragging{user-select:none;-webkit-user-select:none}.enpanel .cc-profiles.dragging .cc-grip{cursor:grabbing!important}
+.enpanel{--energy-charge:light-dark(#087f5b,#34e5a4);--energy-drive:light-dark(#2457c5,#82acff);--energy-parked:light-dark(#8793a1,#8693a5);--energy-fuel:light-dark(#a85a06,#ffcb66)}
 .enpanel .cc-removed-profile{display:block;color:rgb(var(--ds-warn));font-size:11px;line-height:1.5;margin-top:4px}.enpanel .cc-removed-profile ha-icon{--mdc-icon-size:16px;vertical-align:middle}
-.enpanel .ldr{display:flex;align-items:center;justify-content:center;gap:12px;min-height:96px;padding:24px;font-size:12px;color:var(--ds-fg2)}.enpanel .ldr .ring{position:relative;display:grid;place-items:center;width:36px;height:36px;flex:none}.enpanel .ldr .arc{position:absolute;inset:0;width:36px;height:36px;animation:ds-spin 1.1s linear infinite}.enpanel .ldr .i{position:relative;width:18px;height:18px;color:rgb(var(--ds-ok))}@keyframes ds-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.enpanel .ldr .arc{animation:none}}
 .enpanel .en-cost-tabs {display:flex;gap:8px;margin-bottom:10px}.enpanel .en-cost-tabs button {border:1px solid var(--ds-line);border-radius:10px;padding:8px 12px;background:transparent;color:var(--ds-fg);font:inherit;font-size:12px;cursor:pointer}.enpanel .en-cost-tabs button[aria-pressed=true] {background:rgba(var(--ds-ok),.14);border-color:rgba(var(--ds-ok),.4)}.enpanel .en-cost-heading h3 {font-size:16px;margin:6px 0}.enpanel .en-cost-heading small {font-size:11px;color:var(--ds-fg2)}
 .enpanel .cc-summary {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--ds-line);border-radius:16px;background:rgba(121,173,255,.045)}
 .enpanel .cc-summary small {display:block;color:var(--ds-fg2);font-size:11px;line-height:1.5}
@@ -189,7 +190,7 @@ const PCSS = `
 .enpanel .cc-session .cc-location-name{display:block;font-size:12px;font-weight:600;margin-bottom:4px}.enpanel .cc-session>span:first-child{min-width:0;overflow-wrap:anywhere}
 .enpanel .cc-session small {display:block;font-size:10px;line-height:1.6;color:var(--ds-fg2)}
 .enpanel .cc-session .cc-price-badge {flex:none;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:rgba(var(--ds-ok),.09);color:rgb(var(--ds-ok))}.enpanel .cc-session b{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}.enpanel .cc-session .cc-price-badge small{font-size:9px}.enpanel .cc-session .cc-price-badge i{font-style:normal;opacity:.65}
-.enpanel .en-body.is-period-loading{position:relative}.en-period-loader{position:absolute;inset:0;z-index:2;display:grid;place-items:center;border-radius:12px;background:var(--ds-card,#202226);opacity:.94;min-height:120px}.en-period-loader .ds-loader{margin:0}.enpanel .is-period-loading .en-cw>svg{visibility:hidden}.enpanel .is-period-loading .en-cw{position:relative}.enpanel .en-load-error{padding:12px;color:rgb(var(--ds-warn));font-size:12px}
+.enpanel .en-body.is-period-loading>.dc-loader{visibility:hidden}.enpanel .en-body.is-period-loading{position:relative}.en-period-loader{position:absolute;inset:0;z-index:2;display:grid;place-items:center;border-radius:12px;background:var(--ds-card,#202226);opacity:.94;min-height:120px}.en-period-loader .dc-loader{margin:0}.enpanel .is-period-loading .en-cw>svg{visibility:hidden}.enpanel .is-period-loading .en-cw{position:relative}.enpanel .en-load-error{padding:12px;color:rgb(var(--ds-warn));font-size:12px}
 .cc-charts{position:relative;border:1px solid var(--ds-line,var(--divider-color));border-radius:14px;padding:12px;margin:12px 0}.cc-chart-tip{position:absolute;right:12px;top:36px;max-width:calc(100% - 24px);z-index:2;pointer-events:none;padding:7px 10px;border:1px solid var(--ds-line,var(--divider-color));border-radius:10px;background:var(--ds-card,var(--card-background-color));color:var(--ds-fg,var(--primary-text-color));font-size:11px;box-shadow:0 4px 18px #0004}.cc-chart-tip[hidden]{display:none}.cc-chart-heading{font-size:13px;font-weight:600;margin-bottom:10px}.cc-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cc-chart{min-width:0}.cc-chart b{font-size:11px}.cc-chart svg{display:block;width:100%;color:var(--ds-fg,var(--primary-text-color))}.cc-charts small{font-size:10px;line-height:1.5;color:var(--ds-fg2,var(--secondary-text-color))}@media(max-width:480px){.cc-chart-grid{grid-template-columns:1fr}}
 .enpanel .cc-location {margin:12px 0} .enpanel .cc-advanced {margin:10px 0 14px} .enpanel .cc-advanced summary {font-size:11px;color:var(--ds-fg2);cursor:pointer} .enpanel .cc-day-cost {display:block;font-size:10px;line-height:1.5;color:var(--ds-fg2)}
 .enpanel [data-cc-entity-field][hidden],.enpanel .cc-paid[hidden]{display:none}.enpanel .cc-profile-head{display:grid;grid-template-columns:1fr auto;align-items:end;gap:12px}.enpanel .cc-profile-head .cc-check{padding-bottom:10px}.enpanel .cc-actions{margin-top:12px}.enpanel .cc-profile{min-width:0}.enpanel .cc-profiles{min-width:0}
@@ -208,7 +209,7 @@ const PCSS = `
 .enpanel .en-st small { font-size:12px; font-weight:500; color: var(--ds-fg2); }
 .enpanel .en-big { display:flex; align-items:baseline; gap:10px; margin-top:8px; flex-wrap:wrap; } .enpanel .en-big b { font-size:38px; line-height:1; font-weight:600; font-variant-numeric: tabular-nums; } .enpanel .en-big span { font-size:14px; color: var(--ds-fg2); }
 .enpanel .en-sub { margin-top:4px; font-size:13px; color: var(--ds-fg2); line-height:1.45; }
-.enpanel .en-leg { display:flex; flex-wrap:wrap; gap:6px 14px; margin:0 0 4px; font-size:12px; color: var(--ds-fg2); } .enpanel .en-leg i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+.enpanel .en-leg { display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; margin:0 0 4px; font-size:12px; color: var(--ds-fg2); } .enpanel .en-leg i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
 .enpanel .en-cw { position:relative; } .enpanel .en-tip { position:absolute; top:2px; z-index:2; pointer-events:none; padding:8px 10px; border-radius:12px; font-size:12px; line-height:1.5; background: var(--ds-card, #1b1f27); border:1px solid var(--ds-line); box-shadow:0 4px 14px rgba(0,0,0,.35); font-variant-numeric: tabular-nums; white-space:nowrap; } .enpanel .en-tip[hidden] { display:none; } .enpanel .en-tip b { display:block; font-weight:600; margin-bottom:2px; } .enpanel .en-tip i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 .enpanel svg.en-ch { cursor:crosshair; touch-action:pan-y; user-select:none; -webkit-user-select:none;} .enpanel svg.en-ch { display:block; width:100%; height:auto; overflow:visible; } .enpanel svg text { font-size:11px; fill: var(--ds-fg2); }
 .enpanel .en-tb { display:grid; grid-template-columns: 1.1fr .7fr 1fr 1fr; gap:6px; font-size:13px; padding:8px 2px; border-top:1px solid var(--ds-line); font-variant-numeric: tabular-nums; }
@@ -225,8 +226,8 @@ const PCSS = `
 .enpanel .en-tot { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:8px; } .enpanel .en-tot div { border-radius:12px; padding:9px 12px; background: rgba(var(--rgb-primary-text-color, 255,255,255), .04); border:1px solid var(--ds-line); font-size:12px; color: var(--ds-fg2); } .enpanel .en-tot b { display:block; margin-top:2px; font-size:18px; font-weight:600; color: var(--ds-fg); font-variant-numeric: tabular-nums; } .enpanel .en-tot b.ok { color: rgb(var(--ds-ok)); }
 .enpanel .en-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:30px 18px; text-align:center; color: var(--ds-fg2); font-size:13.5px; line-height:1.5; }
 `;
-const CL_OK = "rgb(var(--ds-ok))", CL_DRV = "#79adff", CL_FUEL = "#f3bd62";
-const ENT = { batt: "sensor.battery_level", ac: "sensor.ac_charge_current", dc: "sensor.dc_charge_current", odo: "sensor.total_odometer", pow: "sensor.power_status", fuel: "sensor.fuel_level", range: "sensor.remaining_range", left: "sensor.remaining_charge_time_h_mm", tank: "sensor.fuel_tank_capacity" };
+const CL_OK = "var(--energy-charge)", CL_DRV = "var(--energy-drive)", CL_FUEL = "var(--energy-fuel)";
+const ENT = { batt: "sensor.battery_level", ac: "sensor.ac_charge_current", dc: "sensor.dc_charge_current", odo: "sensor.total_odometer", pow: "sensor.power_status", fuel: "sensor.fuel_level", range: "sensor.remaining_range", left: "sensor.remaining_charge_time_h_mm", volume: "sensor.fuel_volume" };
 
 /* Smooth curve (monotone cubic: no overshoot) from points [x,y] with increasing x */
 function mono(P) {
@@ -282,11 +283,27 @@ function chargingCost(g,r,series,unit) {
   return {...e,costEstimated:total===null&&!r.profile.free&&e.estimated,cost:cost===null||Number.isFinite(cost)?cost:null};
 }
 EN.costMath={chargingEnergy,chargingCost};
+function energyDayStart(offset, timezone, now=Date.now()) {
+  if(!timezone)return NaN;
+  const fields=(stamp,withTime=false)=>Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:timezone,...(withTime?{hourCycle:'h23',hour:'2-digit',minute:'2-digit',second:'2-digit'}:{}),year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(stamp)).map(part=>[part.type,part.value]));
+  const today=fields(now),date=new Date(Date.UTC(+today.year,+today.month-1,+today.day+offset)),target=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate());
+  let guess=target;for(let i=0;i<3;i++){const local=fields(guess,true);guess+=target-Date.UTC(+local.year,+local.month-1,+local.day,+local.hour,+local.minute,+local.second);}
+  return guess;
+}
+EN.periodDayStart=energyDayStart;
 class ChargingCosts {
   constructor(card,host) {
     this.card=card;this.host=host;this.data={profiles:defaultProfiles(),sessions:{}};this.queue=Promise.resolve();this.editor=null;this.message="";this.dirty=false;
     this.key="deepal_charge_costs_"+(card._c?.prefix||"s05");this.cacheKey=this.key+"_"+(card._hass?.user?.id||"local")+"_"+(card._companion?.vehicle_id||"");this.ready=this.load();
     host.addEventListener("click",e=>this.click(e));
+    host.addEventListener('pointerdown',e=>{
+      const grip=e.target.closest?.('.cc-grip');if(!grip||this.saving||(e.pointerType==='mouse'&&e.button!==0))return;
+      clearTimeout(this.autoTimer);
+      const row=grip.closest('.cc-location-details');
+      window.__DEEPAL_COMPANION_UI.startReorder(e,grip,row,row.parentElement,(from,to)=>{
+        this.data.profiles=this.collectProfiles(false);const [profile]=this.data.profiles.splice(from,1);this.data.profiles.splice(to,0,profile);this.renderEditor();
+      },()=>this.scheduleProfileSave());
+    });
     host.addEventListener("input",e=>{if(e.target.name==="total")this.manualTotal(e.target.closest("form"));if(e.target.closest("[data-cc-form]"))this.updateDirty();if(e.target.closest('[data-cc-form="profiles"]'))this.scheduleProfileSave(2000);});
     host.addEventListener("change",e=>{
 
@@ -354,7 +371,7 @@ class ChargingCosts {
   label(r){return {unassigned:T("Choose location"),receipt:T("Entered energy"),meter:T("Measured energy"),power:T("Estimated from power"),battery:T("Estimated from battery"),fallback:T("Sensor unavailable: battery estimate")}[r.source];}
   decorate(m,ctx) {
     this.model=m;this.ctx=ctx;const b=this.host.querySelector(".en-body");if(!b)return;
-    const graph=b.querySelector(".cc-charts");if(graph&&EN.renderChargingChart)graph.outerHTML=EN.renderChargingChart(m.chg,this.card._hass.locale?.language||"en",m.now);
+    const graph=b.querySelector(".cc-charts");if(graph&&EN.renderChargingChart)graph.outerHTML=EN.renderChargingChart(m.chg,this.card._hass.locale?.language||"en",m.now,{fmt:ctx.fmt});
     b.querySelectorAll(".cc-added").forEach(n=>n.remove());
     const completed=m.chg.filter(g=>!g.live),results=completed.map(g=>this.result(g)),known=results.filter(r=>r.cost!==null),total=known.reduce((n,r)=>n+r.cost,0);
     const canEdit=this.card._hass?.user?.is_admin!==false;/* the backend only lets administrators save costs */
@@ -363,7 +380,7 @@ class ChargingCosts {
     const totals=b.querySelector(".en-tot");if(totals)totals.after(top);else b.prepend(top);
     const days=m.days.filter(d=>d.t<=m.now).slice().reverse();
     [...b.querySelectorAll(".en-tb:not(.h)")].forEach((row,i)=>{
-      const day=days[i];if(!day)return;const values=m.chg.filter(g=>dayKey(g.s)===day.key).map(g=>this.result(g));if(!values.length)return;
+      const day=days[i];if(!day)return;const values=m.chg.filter(g=>dayKey(g.s,m.timezone)===day.key).map(g=>this.result(g));if(!values.length)return;
       const priced=values.filter(r=>r.cost!==null),sum=priced.reduce((n,r)=>n+r.cost,0),note=document.createElement("small");note.className="cc-added cc-day-cost";
       note.textContent=priced.length?(priced.some(r=>r.costEstimated)?"≈ ":"")+this.money(sum)+(priced.length<values.length?" *":""):T("Price not set");
       note.title=T("Charging cost. * = some sessions have no price.");row.children[2]?.append(note);
@@ -377,7 +394,7 @@ class ChargingCosts {
       if(this.profileRemoved(r?.profile)){const warning=document.createElement('span');warning.className='cc-removed-profile';warning.innerHTML='<ha-icon icon="mdi:map-marker-alert-outline"></ha-icon> '+esc(T("Profile removed · assign another"));n.querySelector('.cc-location-name').append(warning);}
       const curve=document.createElement('button');curve.className='cc-button cc-curve';curve.dataset.cc='curve';curve.dataset.start=String(g.s);curve.innerHTML=ico('pulse')+'<span>Curve</span>';curve.setAttribute('aria-label','View charging curve');group.append(curve);row.after(group);
     });
-    const editor=document.createElement("div");editor.className="cc-added cc-editor";const anchor=this.editor&&this.editor!=="profiles"?[...b.querySelectorAll(".cc-session")].find(n=>n.dataset.start===String(this.editor)):null;(anchor?.closest('.cc-session-row')||anchor||top).after(editor);this.editorNode=editor;this.renderEditor();EN.bindChargingChart?.(b);
+    const editor=document.createElement("div");editor.className="cc-added cc-editor";const anchor=this.editor&&this.editor!=="profiles"?[...b.querySelectorAll(".cc-session")].find(n=>n.dataset.start===String(this.editor)):null;(anchor?.closest('.cc-session-row')||anchor||top).after(editor);this.editorNode=editor;this.renderEditor();EN.bindChargingChart?.(b,ctx.fmt);
   }
   field(label,name,value,type="text",extra=""){return '<label class="cc-field">'+esc(label)+'<input name="'+esc(name)+'" type="'+type+'" value="'+esc(name==="efficiency"&&Number(value)===90?"":value??"")+'"'+(name==="efficiency"?' placeholder="90"':"")+' '+(type==="number"?'min="0" step="any" ':"")+extra+"></label>";}
   bindEntityPicker(group){
@@ -413,7 +430,7 @@ class ChargingCosts {
     const close='<button class="cc-button" data-cc="close">'+esc(T("Close"))+' ×</button>',message=this.message?'<p class="cc-info" role="status">ⓘ '+esc(this.message)+"</p>":'<p class="cc-info" role="status" hidden></p>';
     if(this.editor==="profiles"){
       const sensorOptions=Object.entries(this.card._hass.states||{}).filter(([id,s])=>id.startsWith("sensor.")&&["Wh","kWh","W","kW"].includes(s.attributes?.unit_of_measurement)).map(([id,s])=>'<option value="'+esc(id)+'">'+esc(s.attributes?.friendly_name||id)+"</option>").join("");
-      const profiles=this.data.profiles.map((p,i)=>'<details class="cc-location-details'+(p.free?' is-free':'')+'"><summary><span>'+esc(profileName(p))+'</span><small>'+esc(p.free?T("Free charging"):p.price!=null?p.price+' €/kWh':T("Set price"))+'</small><span aria-hidden="true">›</span></summary><fieldset class="cc-profile" data-index="'+i+'"><legend>'+esc(profileName(p))+'</legend><div class="cc-profile-head">'+this.field(T("Name"),"name",p.name||profileName(p))+'<label class="cc-check"><input name="free" type="checkbox"'+(p.free?' checked':'')+'>'+esc(T("Free charging"))+'</label></div><div class="cc-paid"'+(p.free?' hidden':'')+'><div class="cc-grid">'+this.field("€/kWh","price",p.price,"number")+'<label class="cc-field">'+esc(T("Energy source"))+'<select name="source" data-cc-source>'+this.options(p.source)+'</select></label><div data-cc-entity-field'+(p.source==="battery"?' hidden':'')+'>'+'<input type="hidden" name="entity" value="'+esc(p.entity||'')+'"><div class="cc-entity-picker"></div><small class="cc-entity-name"></small>'+'</div></div></div><div class="cc-grid">'+this.field(T("Charging efficiency (%)"),"efficiency",p.efficiency,"number",'min="1" max="100"')+'</div><button type="button" class="cc-button danger" data-cc="remove-profile">'+esc(T("Delete profile"))+'</button></fieldset></details>').join("");
+      const profiles=this.data.profiles.map((p,i)=>'<details class="cc-location-details'+(p.free?' is-free':'')+'"><summary><span>'+esc(profileName(p))+'</span><small>'+esc(p.free?T("Free charging"):p.price!=null?p.price+' €/kWh':T("Set price"))+'</small><span aria-hidden="true">›</span></summary><fieldset class="cc-profile" data-index="'+i+'"><legend>'+esc(profileName(p))+'</legend><div class="cc-profile-head">'+this.field(T("Name"),"name",p.name||profileName(p))+'<label class="cc-check"><input name="free" type="checkbox"'+(p.free?' checked':'')+'>'+esc(T("Free charging"))+'</label></div><div class="cc-paid"'+(p.free?' hidden':'')+'><div class="cc-grid">'+this.field("€/kWh","price",p.price,"number")+'<label class="cc-field">'+esc(T("Energy source"))+'<select name="source" data-cc-source>'+this.options(p.source)+'</select></label><div data-cc-entity-field'+(p.source==="battery"?' hidden':'')+'>'+'<input type="hidden" name="entity" value="'+esc(p.entity||'')+'"><div class="cc-entity-picker"></div><small class="cc-entity-name"></small>'+'</div></div></div><div class="cc-grid">'+this.field(T("Battery estimate efficiency (%)"),"efficiency",p.efficiency,"number",'min="1" max="100"')+'</div><p class="cc-hint">'+esc(T("Efficiency applies only to battery estimates, including fallback estimates. Measured charger energy and receipt energy bypass it. Power readings are integrated over time."))+'</p><button type="button" class="cc-button danger" data-cc="remove-profile">'+esc(T("Delete profile"))+'</button></fieldset></details>').join("");
       this.editorNode.innerHTML='<form data-cc-form="profiles"><div class="cc-editor-head"><b>'+esc(T("Charging profiles"))+'</b>'+close+'</div><p class="cc-hint">'+esc(T("Each location keeps its tariff and optional charger sensor. Saved sessions keep their price."))+'</p><datalist id="cc-sensors">'+sensorOptions+'</datalist><div class="cc-profiles">'+profiles+'</div><div class="cc-actions"><button class="cc-button" data-cc="add">'+esc(T("Add location"))+'</button></div>'+message+'</form>';
     } else {
       const g=this.model.chg.find(g=>String(g.s)===String(this.editor));if(!g){this.editor=null;return;}const r=this.record(g),p=r?.profile,result=this.result(g);
@@ -432,6 +449,10 @@ class ChargingCosts {
     this.editorNode.querySelectorAll(".cc-profile").forEach(group=>this.bindEntityPicker(group));
     window.__DEEPAL_COMPANION_UI?.enhanceChoices(this.editorNode,this.card._hass);
     this.bindProfileNames();
+    this.editorNode.querySelectorAll('.cc-location-details>summary').forEach(summary=>{
+      const grip=document.createElement('button');grip.type='button';grip.className='cc-grip';grip.textContent='⠿';grip.setAttribute('aria-label',T('Reorder'));grip.style.cssText='touch-action:none;cursor:grab;padding:6px;border:0;background:transparent;color:inherit;flex:none';grip.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();});
+      grip.addEventListener('keydown',e=>{if(!['ArrowUp','ArrowDown'].includes(e.key)||this.saving)return;e.preventDefault();const row=summary.parentElement,rows=[...row.parentElement.children],from=rows.indexOf(row),to=from+(e.key==='ArrowUp'?-1:1);if(to<0||to>=rows.length)return;this.data.profiles=this.collectProfiles(false);const [profile]=this.data.profiles.splice(from,1);this.data.profiles.splice(to,0,profile);this.renderEditor();this.editorNode.querySelectorAll('.cc-grip')[to]?.focus();this.scheduleProfileSave();});summary.prepend(grip);
+    });
     this.formBaseline=this.formState();this.updateDirty();
   }
   manualTotal(form){
@@ -490,7 +511,7 @@ class ChargingCosts {
       const g=this.model?.chg.find(row=>String(row.s)===button.dataset.start);if(!g)return;
       button.disabled=true;
       try{
-        const module=await import('/deepal_companion/frontend/charging-curve.js?v=0.1.8');if(!this.host.isConnected)return;
+        const module=await import('/deepal_companion/frontend/charging-curve.js?v=0.2.0&rev=20261115-23');if(!this.host.isConnected)return;
         this.curveDialog?.remove();
         this.curveDialog=module.openCurveDialog(this.host.getRootNode(),this.card._hass,async()=>{
           if(g.id&&!String(g.id).startsWith('recorder_')){const data=await this.card._hass.companionRequest('session_curve',{session_id:g.id});return {...data,mode:data.mode||(typeof g.dc==='boolean'?(g.dc?'DC':'AC'):null)};}
@@ -528,36 +549,37 @@ EN.ChargingCosts = ChargingCosts;
 EN.styles = PCSS;
 const LOAD = () => K.loaderHtml("bolt");
 function renderEnergyGraph(m,ctx){
-  const f=(n)=>new Intl.NumberFormat(ctx.lang,{maximumFractionDigits:1}).format(n),fu=m.fuelUsed&&ctx.hasFuel,dateFormat=new Intl.DateTimeFormat(ctx.lang,{weekday:'short',day:'numeric'});
+  const f=(n)=>new Intl.NumberFormat(ctx.lang,{maximumFractionDigits:1}).format(n),fu=m.fuel.length>0&&ctx.hasFuel;
   const W=Math.max(300,Math.min(1440,Number(ctx.chartWidth)||340)),H=W>700?300:W>420?245:215,L=36,R=12,top=26,ph=H-82,bottom=top+ph,track=bottom+17,pw=W-L-R;
-  const t0=m.t0,span=m.nDays*86400000,tEnd=m.now,X=t=>L+(Math.min(Math.max(t,t0),t0+span)-t0)/span*pw;
+  const t0=ctx.zoomRange?.start??m.t0,span=(ctx.zoomRange?.end??energyDayStart(m.nDays,m.timezone,m.t0))-t0,tEnd=Math.min(m.now,t0+span),X=t=>L+(Math.min(Math.max(t,t0),t0+span)-t0)/span*pw;
   const values=m.batt.map(p=>p[1]).concat(fu?m.fuel.map(p=>p[1]):[]),lo=values.length?Math.min(...values):50,ymin=Math.max(0,Math.min(60,Math.floor((lo-5)/10)*10)),Y=v=>top+(100-Math.min(100,Math.max(ymin,v)))/(100-ymin)*ph;
-  const ticks=Math.max(3,Math.min(10,Math.floor(pw/85))),every=Math.max(1,Math.ceil(m.nDays/ticks));
-  let svg=`<svg class="en-ch" tabindex="0" data-t0="${t0}" data-span="${span}" data-ymin="${ymin}" data-width="${W}" data-left="${L}" data-right="${R}" data-top="${top}" data-height="${ph}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(T('Battery and petrol history'))}">`;
+  const ticks=Math.max(3,Math.min(10,Math.floor(pw/85))),every=Math.max(1,Math.ceil(span/86400000/ticks));
+  let svg=`<svg class="en-ch" tabindex="0" data-t0="${t0}" data-span="${span}" data-ymin="${ymin}" data-width="${W}" data-left="${L}" data-right="${R}" data-top="${top}" data-height="${ph}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(T(fu ? 'Battery and petrol history' : 'Battery history'))}">`;
   for(const level of [100,Math.round((100+ymin)/2),ymin])svg+=`<line x1="${L}" x2="${W-R}" y1="${Y(level)}" y2="${Y(level)}" stroke="currentColor" stroke-opacity=".13" stroke-dasharray="3 5"/><text x="${L-8}" y="${Y(level)+4}" text-anchor="end" style="font-size:10px">${level}%</text>`;
-  m.days.forEach((day,index)=>{if(index%every===0){const x=X(day.t);svg+=`<line x1="${x}" x2="${x}" y1="${top}" y2="${bottom}" stroke="currentColor" stroke-opacity=".045"/><text x="${Math.min(W-R-20,Math.max(L+18,x))}" y="${H-3}" text-anchor="middle" style="font-size:10px">${esc(ctx.fmt.dm(day.t))}</text>`;}});
+  m.days.filter(day=>span>=2*86400000&&day.t>=t0&&day.t<t0+span).forEach((day,index)=>{if(index%every===0){const x=X(day.t);svg+=`<line x1="${x}" x2="${x}" y1="${top}" y2="${bottom}" stroke="currentColor" stroke-opacity=".045"/><text x="${Math.min(W-R-20,Math.max(L+18,x))}" y="${H-3}" text-anchor="middle" style="font-size:10px">${esc(ctx.fmt.dm(day.t))}</text>`;}});
+  if(span<2*86400000)for(let i=0;i<5;i++){const t=t0+span*i/4;svg+=`<text x="${Math.max(L+16,Math.min(W-R-16,X(t)))}" y="${H-3}" text-anchor="middle" style="font-size:10px">${esc(ctx.fmt.hm(t))}</text>`;}
   if(tEnd<t0+span-60000)svg+=`<rect x="${X(tEnd)}" y="${top}" width="${Math.max(0,W-R-X(tEnd))}" height="${ph}" fill="currentColor" opacity=".025"/>`;
   const labels=[];
-  m.chg.forEach(g=>{const x=X(g.s),width=Math.max(2,X(g.e)-x);svg+=`<rect x="${x}" y="${top}" width="${width}" height="${ph}" rx="2" fill="${CL_OK}" opacity=".065"/>`;if(g.kwh>0){const text=f(g.kwh),half=text.length*3+4;labels.push({x:Math.min(W-R-half,Math.max(L+half,(X(g.s)+X(g.e))/2)),text,half,value:g.kwh});}});
+  m.chg.filter(g=>g.e>t0&&g.s<t0+span).forEach(g=>{const x=X(g.s),width=Math.max(2,X(g.e)-x);svg+=`<rect x="${x}" y="${top}" width="${width}" height="${ph}" rx="2" fill="${CL_OK}" opacity=".12"/>`;if(g.kwh>0){const text=f(g.kwh),half=text.length*3+4;labels.push({x:Math.min(W-R-half,Math.max(L+half,(X(g.s)+X(g.e))/2)),text,half,value:g.kwh});}});
   const kept=[];for(const label of labels.sort((a,b)=>b.value-a.value)){if(!kept.some(other=>Math.abs(other.x-label.x)<other.half+label.half+8))kept.push(label);}
   for(const label of kept)svg+=`<text x="${label.x}" y="15" text-anchor="middle" style="fill:${CL_OK};font-size:10px;font-weight:600">${esc(label.text)}</text>`;
-  const curve=series=>{const points=[];for(const [t,value]of ramped(series,t0,tEnd)){const x=X(t);if(!points.length||x>points[points.length-1][0]+.01)points.push([x,Y(value)]);}return points;};
+  const curve=series=>{if(tEnd<t0)return [];const points=[];for(const [t,value]of ramped(series,t0,tEnd)){const x=X(t);if(!points.length||x>points[points.length-1][0]+.01)points.push([x,Y(value)]);}return points;};
   const battery=curve(m.batt);
-  if(battery.length>1){const path=mono(battery),last=battery[battery.length-1];svg+=`<path d="${path} L${last[0]} ${bottom} L${battery[0][0]} ${bottom} Z" fill="${CL_OK}" opacity=".035"/><path d="${path}" fill="none" stroke="${CL_OK}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="4.5" fill="${CL_OK}" stroke="var(--ds-card,#1b1f27)" stroke-width="2"/>`;}
+  if(battery.length>1){const path=mono(battery),last=battery[battery.length-1];svg+=`<path d="${path} L${last[0]} ${bottom} L${battery[0][0]} ${bottom} Z" fill="${CL_OK}" opacity=".09"/><path d="${path}" fill="none" stroke="${CL_OK}" stroke-width="3.25" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${last[0]}" cy="${last[1]}" r="4.5" fill="${CL_OK}" stroke="var(--ds-card,#1b1f27)" stroke-width="2"/>`;}
   if(fu){const petrol=curve(m.fuel);if(petrol.length>1)svg+=`<path d="${mono(petrol)}" fill="none" stroke="${CL_FUEL}" stroke-width="2" stroke-dasharray="6 5" stroke-linejoin="round" stroke-linecap="round"/>`;}
-  svg+=`<rect x="${L}" y="${track}" width="${pw}" height="6" rx="3" fill="currentColor" opacity=".07"/>`;
-  for(const [list,color]of [[m.drv,null],[m.chg,CL_OK]])for(const g of list)svg+=`<rect x="${X(g.s)}" y="${track}" width="${Math.max(2,X(g.e)-X(g.s))}" height="6" rx="3" fill="${color||(fu&&g.fuel>0?CL_FUEL:CL_DRV)}"/>`;
+  svg+=`<rect x="${L}" y="${track}" width="${pw}" height="6" rx="3" fill="var(--energy-parked)" opacity=".45"/>`;
+  for(const [list,color]of [[m.drv,null],[m.chg,CL_OK]])for(const g of list.filter(g=>g.e>t0&&g.s<t0+span))svg+=`<rect x="${X(g.s)}" y="${track}" width="${Math.max(2,X(g.e)-X(g.s))}" height="6" rx="3" fill="${color||(fu&&g.fuel>0?CL_FUEL:CL_DRV)}"/>`;
   svg+=`<g class="en-cur" visibility="hidden"><line y1="${top}" y2="${track+6}" stroke="var(--ds-fg)" stroke-opacity=".5" stroke-dasharray="3 4"/><circle r="4" cy="0" fill="${CL_OK}" stroke="var(--ds-card,#1b1f27)" stroke-width="2"/></g></svg>`;
-  return `<div class="energy-chart-block"><h4>${esc(T('Battery'))}</h4><div class="en-leg"><span><i style="background:${CL_OK}"></i>${esc(T('Charging'))} (kWh)</span><span><i style="background:${CL_DRV}"></i>${esc(T('Driving'))}</span>${fu?`<span><i style="background:${CL_FUEL}"></i>${esc(T('Petrol driving'))}</span>`:''}<span><i style="background:var(--ds-line)"></i>${esc(T('Parked'))}</span></div><div class="en-cw">${svg}<div class="en-tip" hidden></div></div><p class="hint" style="margin-top:8px">${esc(T('Tap the chart to see the values at that moment.'))}</p></div>`;
+  return `<div class="energy-chart-block"><h4>${esc(T('Battery'))}</h4><div class="en-leg"><span><i style="background:${CL_OK}"></i>${esc(T('Charging'))} (kWh)</span><span><i style="background:${CL_DRV}"></i>${esc(T('Driving'))}</span>${fu?`<span><i style="background:${CL_FUEL}"></i>${esc(T('Petrol driving'))}</span>`:''}<span><i style="background:var(--energy-parked)"></i>${esc(T('Parked'))}</span></div><div class="en-cw">${svg}<div class="en-tip" hidden></div></div><p class="hint" style="margin-top:8px">${esc(T('Tap the chart to see the values at that moment.'))}</p></div>`;
 }
 
 function view(m, ctx) {
   const { lang, cap, st, hasFuel, now } = ctx, f = (n, d) => new Intl.NumberFormat(lang, { maximumFractionDigits: d, minimumFractionDigits: d }).format(n);
   const hm = (t) => ctx.fmt.hm(t);
   const wd = (t) => ctx.fmt.dm(t);
-  const lbl = (t) => { const k = dayKey(t); return k === dayKey(now) ? T("Today") : k === dayKey(now - 86400000) ? T("Yesterday") : wd(t); };
+  const lbl = (t) => { const key=ctx.fmt.dayStart(t);return key===ctx.fmt.dayStart(now)?T("Today"):key===ctx.fmt.dayStart(now,-1)?T("Yesterday"):wd(t); };
   const v = (id) => { const s = st[id]; return s ? s.state : undefined; };
-  const tank = ctx.tankCapacity, bat = (() => { const x = num(v("batt")), g = m.batt.length ? m.batt[m.batt.length - 1][1] : NaN; return (!Number.isFinite(x) || (x === 0 && g > 5)) && Number.isFinite(g) ? g : x; })(), range = num(v("range")), liveSeg = m.chg.find((g) => g.live);
+  const bat = (() => { const x = num(v("batt")), g = m.batt.length ? m.batt[m.batt.length - 1][1] : NaN; return (!Number.isFinite(x) || (x === 0 && g > 5)) && Number.isFinite(g) ? g : x; })(), range = num(v("range")), liveSeg = m.chg.find((g) => g.live);
   const acN = num(v("ac")), dcN = num(v("dc")), curA = Math.max(Number.isFinite(acN) ? acN : 0, Number.isFinite(dcN) ? dcN : 0);
   const chgNow = !!liveSeg || curA > CHG_A, on = v("pow") === "on";
   /* 1. current state */
@@ -583,7 +605,7 @@ function view(m, ctx) {
   h += renderEnergyGraph(m,ctx);
   /* 3. per day: days/values without data show "–", not 0 */
   h += `<div><h4>${esc(T("Per day"))}</h4><div class="en-tb h${fu ? " f4" : ""}"><span>${esc(T("Day"))}</span><span>${esc(T("Km"))}</span><span>${esc(T("Charging"))}</span><span>${esc(T("Battery"))} ↓</span>${fu ? `<span>${esc(T("Petrol"))}</span>` : ""}</div>`;
-  m.days.filter((d) => d.t <= tEnd).reverse().forEach((d) => { h += `<div class="en-tb${fu ? " f4" : ""}"><span>${esc(lbl(d.t))}</span><span class="${d.km > 0 ? "" : "z"}">${d.km > 0 ? esc(f(d.km, d.km < 10 ? 1 : 0)) : "–"}</span><span class="${d.n ? "ok" : "z"}">${d.n ? (d.kwh > 0 ? esc(f(d.kwh, 1)) + " kWh" : "✓") : "–"}</span><span class="${d.batteryUsed > 0 ? "bu" : "z"}">${d.batteryUsed > 0 ? "−" + esc(f(d.batteryUsed, 1)) + " kWh" : "–"}</span>${fu ? `<span class="${d.fuel > 0 ? "fu" : "z"}">${d.fuel > 0 ? "−" + esc(f(d.fuel * tank / 100, 1)) + " L" : "–"}</span>` : ""}</div>`; });
+  m.days.filter((d) => d.t <= tEnd).reverse().forEach((d) => { h += `<div class="en-tb${fu ? " f4" : ""}"><span>${esc(lbl(d.t))}</span><span class="${d.km > 0 ? "" : "z"}">${d.km > 0 ? esc(f(d.km, d.km < 10 ? 1 : 0)) : "–"}</span><span class="${d.n ? "ok" : "z"}">${d.n ? (d.kwh > 0 ? esc(f(d.kwh, 1)) + " kWh" : "✓") : "–"}</span><span class="${d.batteryUsed > 0 ? "bu" : "z"}">${d.batteryUsed > 0 ? "−" + esc(f(d.batteryUsed, 1)) + " kWh" : "–"}</span>${fu ? `<span class="${d.fuel > 0 ? "fu" : "z"}">${d.fuel > 0 ? "−" + esc(f(d.fuel, 1)) + " L" : "–"}</span>` : ""}</div>`; });
   h += "</div>";
   /* 4. charges */
   h += `<div><h4>${esc(T("Charges"))}</h4>`;
@@ -593,7 +615,7 @@ function view(m, ctx) {
     const ok = Number.isFinite(g.from) && Number.isFinite(g.to), lo = ok ? Math.min(100, Math.max(0, Math.min(g.from, g.to))) : 0, wd2 = ok ? Math.min(100, Math.max(1, Math.abs(g.to - g.from))) : 0;
     h += `<div class="en-li"><span class="a"><span class="ic">${ico("plug")}</span><span class="mid">${esc(lbl(g.s))} · ${esc(hm(g.s))} – ${esc(g.live ? T("now") : hm(g.e))}<span class="bd">${esc(g.dc ? "DC" : "AC")}</span>${ok ? `<span class="bar"><i style="left:${lo}%;width:${wd2}%"></i></span>` : ""}<small>${ok ? esc(f(g.from, 0)) + " → " + esc(f(g.to, 0)) + "% · " : ""}${esc(dh)}</small></span></span><span class="b">${g.kwh ? esc(f(g.kwh, 1)) + " kWh" : ""}</span></div>`;
   });
-  h += `<aside class="en-info"><span class="en-info-icon" aria-hidden="true">ⓘ</span><div><p>${esc(T("Battery use: net level drop during drives × {0} kWh capacity.", f(cap, 1)))}</p>${fu ? `<p>${esc(T("Petrol use: filtered level drop × {0} L tank.", f(tank, Number.isInteger(tank) ? 0 : 1)))}</p>` : ""}<p>${esc(T("Charging: battery level increase × capacity. All figures are estimates; delayed readings and small refills may be missed."))}</p><p>${esc(T("History follows HA Recorder retention. For 30 days, set purge_keep_days: 30 or higher."))}</p></div></aside></div>`;
+  h += `<aside class="en-info"><span class="en-info-icon" aria-hidden="true">ⓘ</span><div><p>${esc(T("Battery use: net level drop during drives × {0} kWh capacity.", f(cap, 1)))}</p>${fu ? `<p>${esc(T("Petrol use: recorded fuel-volume decreases during drives. No tank capacity is assumed."))}</p>` : ""}<p>${esc(T("Charging: battery level increase × capacity. All figures are estimates; delayed readings and small refills may be missed."))}</p><p>${esc(T("History follows HA Recorder retention. For 30 days, set purge_keep_days: 30 or higher."))}</p></div></aside></div>`;
 
   return h;
 }
@@ -664,14 +686,14 @@ EN.loadChargingSessions=async(card)=>{
 };
 
 function renderChargingChart(sessions,lang="en",now=Date.now(),options={}){
-  const count=options.period===7?7:30,dateLabel=t=>options.fmt?.date?options.fmt.date(t):new Date(t).toLocaleDateString(lang),shortDate=t=>options.fmt?.dm?options.fmt.dm(t):new Date(t).toLocaleDateString(lang,{month:"short",day:"numeric"}),heading="Charging · "+count+" days";
+  const count=options.period===7?7:30,dateLabel=t=>options.fmt?.date?options.fmt.date(t):"—",shortDate=t=>options.fmt?.dm?options.fmt.dm(t):"—",heading="Charging · "+count+" days";
   
   if(!sessions.some(row=>!row.live&&row.s<=now))return '<section class="cc-charts cc-chart-empty"><div class="cc-chart-heading">'+esc(heading)+'</div><p class="cc-hint">'+esc(T("No completed charging sessions available for this chart yet."))+'</p></section>';
-  const days=[],end=new Date(now);end.setHours(0,0,0,0);
-  for(let i=count-1;i>=0;i--){const d=new Date(end);d.setDate(d.getDate()-i);days.push({t:d.getTime(),energy:0,cost:0,missing:0});}
+  const zone=options.fmt?.timeZone,days=[];
+  for(let i=count-1;i>=0;i--){const t=energyDayStart(-i,zone,now);days.push({t,energy:0,cost:0,missing:0});}
   for(const row of sessions){
     if(row.live||row.s>now)continue;
-    const d=new Date(row.s);d.setHours(0,0,0,0);const day=days.find(x=>x.t===d.getTime());if(!day)continue;
+    const t=energyDayStart(0,zone,row.s);const day=days.find(x=>x.t===t);if(!day)continue;
     const energy=Number.isFinite(row.pricing?.energy)?row.pricing.energy:row.kwh;
     if(Number.isFinite(energy)&&energy>0)day.energy+=energy;
     if(Number.isFinite(row.pricing?.cost))day.cost+=row.pricing.cost;else day.missing++;
@@ -681,11 +703,11 @@ function renderChargingChart(sessions,lang="en",now=Date.now(),options={}){
   const chart=(key,label,unit,color)=>{
     const max=Math.max(1,...days.map(d=>d[key])),bars=days.map((d,i)=>{
       const height=d[key]/max*80,x=30+i*300/count,y=100-height;
-      return '<rect x="'+x+'" y="'+y+'" width="'+Math.max(3,300/count-3)+'" height="'+height+'" rx="2" fill="'+color+'"><title>'+esc(dateLabel(d.t)+': '+fmt.format(d[key])+' '+unit)+'</title></rect>'+(key==="cost"&&d.missing?'<circle cx="'+(x+3.5)+'" cy="108" r="2" fill="#f4b95f"><title>'+esc(T("Unpriced sessions"))+'</title></circle>':"");
+      return '<rect x="'+x+'" y="'+y+'" width="'+Math.max(3,300/count-3)+'" height="'+height+'" rx="2" fill="'+color+'"><title>'+esc(dateLabel(d.t)+': '+fmt.format(d[key])+' '+unit)+'</title></rect>'+(key==="cost"&&d.missing?'<circle cx="'+(x+3.5)+'" cy="108" r="2" fill="var(--energy-fuel)"><title>'+esc(T("Unpriced sessions"))+'</title></circle>':"");
     }).join("");
-    return '<div class="cc-chart"><b>'+esc(label)+'</b><svg viewBox="0 0 340 133" role="img" tabindex="0" aria-label="'+esc(label)+'"><title>'+esc(label+' · '+count+" days")+'</title><line x1="27" y1="100" x2="331" y2="100" stroke="currentColor" opacity=".2"/><text x="27" y="14" fill="currentColor" font-size="9">'+esc(fmt.format(max)+' '+unit)+'</text>'+bars+'<text x="30" y="128" fill="currentColor" font-size="9">'+esc(shortDate(days[0].t))+'</text><text x="327" y="128" text-anchor="end" fill="currentColor" font-size="9">'+esc(shortDate(end))+'</text></svg></div>';
+    return '<div class="cc-chart"><b>'+esc(label)+'</b><svg viewBox="0 0 340 133" role="img" tabindex="0" aria-label="'+esc(label)+'"><title>'+esc(label+' · '+count+" days")+'</title><line x1="27" y1="100" x2="331" y2="100" stroke="currentColor" opacity=".2"/><text x="27" y="14" fill="currentColor" font-size="9">'+esc(fmt.format(max)+' '+unit)+'</text>'+bars+'<text x="30" y="128" fill="currentColor" font-size="9">'+esc(shortDate(days[0].t))+'</text><text x="327" y="128" text-anchor="end" fill="currentColor" font-size="9">'+esc(shortDate(now))+'</text></svg></div>';
   };
-  return '<section class="cc-charts" data-cc-series="'+esc(JSON.stringify(days))+'" data-cc-lang="'+esc(lang)+'"><div class="cc-chart-heading">'+esc(heading)+'</div><div class="cc-chart-grid">'+chart("energy",T("Charged energy"),"kWh","#61cda3")+chart("cost",T("Charging cost"),"€","#79adff")+'</div><div class="cc-chart-tip" role="tooltip" hidden></div><small>'+esc(T("Energy may be estimated. Amber dots indicate sessions without a price; these are excluded from cost bars."))+'</small></section>';
+  return '<section class="cc-charts" data-cc-series="'+esc(JSON.stringify(days))+'" data-cc-lang="'+esc(lang)+'"><div class="cc-chart-heading">'+esc(heading)+'</div><div class="cc-chart-grid">'+chart("energy",T("Charged energy"),"kWh","var(--energy-charge)")+chart("cost",T("Charging cost"),"€","var(--energy-drive)")+'</div><div class="cc-chart-tip" role="tooltip" hidden></div><small>'+esc(T("Energy may be estimated. Amber dots indicate sessions without a price; these are excluded from cost bars."))+'</small></section>';
 }
 EN.renderChargingChart=renderChargingChart;
 EN.bindChargingChart=(host,haFormat=null)=>{
@@ -694,7 +716,7 @@ EN.bindChargingChart=(host,haFormat=null)=>{
     if(root._ccBound)continue;root._ccBound=true;
     const days=JSON.parse(root.dataset.ccSeries),lang=root.dataset.ccLang||"en",format=new Intl.NumberFormat(lang,{maximumFractionDigits:2}),tip=root.querySelector(".cc-chart-tip");let index=days.length-1;
     const show=(svg,i)=>{index=Math.max(0,Math.min(days.length-1,i));const day=days[index];if(!day)return;
-      tip.textContent=(haFormat?.date?haFormat.date(day.t):new Date(day.t).toLocaleDateString(lang))+" · "+format.format(day.energy)+" kWh · "+format.format(day.cost)+" €"+(day.missing?" · "+day.missing+" "+T("unpriced"):"");tip.hidden=false;
+      tip.textContent=(haFormat?.date?haFormat.date(day.t):"—")+" · "+format.format(day.energy)+" kWh · "+format.format(day.cost)+" €"+(day.missing?" · "+day.missing+" "+T("unpriced"):"");tip.hidden=false;
     };
     const point=event=>{const svg=event.target.closest(".cc-chart svg");if(!svg)return;const box=svg.getBoundingClientRect();show(svg,Math.floor(((event.clientX-box.left)/box.width*340-30)/(300/days.length)));};
     root.addEventListener("pointermove",point);root.addEventListener("pointerdown",point);
@@ -708,7 +730,7 @@ EN.bindChargingChart=(host,haFormat=null)=>{
 function renderChargingCosts(m,ctx){
   const rows=m.chg.slice().reverse();
   let html='<div class="en-cost-heading"><h3>'+esc(T("Charging costs"))+'</h3><small>'+rows.length+" "+esc(T("charging sessions"))+'</small></div>';
-  html+=renderChargingChart(rows,ctx.lang,ctx.now);
+  html+=renderChargingChart(rows,ctx.lang,ctx.now,{fmt:ctx.fmt});
   if(!rows.length)return html+'<p class="hint">'+esc(T("No charging sessions have been recorded yet."))+'</p>';
   html+='<div class="en-cost-list">';
   for(const g of rows){
@@ -729,14 +751,14 @@ EN.panel = (d, card, options = {}) => {
   const ids = () => { const o = {}; for (const [k, key] of Object.entries(ENT)) o[k] = K.resolveId(get(), card._c, key); return o; };
   const body = () => d.querySelector(".en-body");
   const empty = (icon, txt, retry) => { const b = body(); if (!b) return; b.innerHTML = `${options.chartOnly?'<div class="en-nav"></div>':''}<div class="en-empty">${ico(icon)}<span>${esc(txt)}</span>${retry ? `<button class="btn sm" data-retry>${esc(T("Retry"))}</button>` : ""}</div>`;if(options.chartOnly)paintNav(get().locale?.language||"en"); };
-  let selT = null;
+  let selT = null,chartRange=null;
   /* tap/drag on the chart: vertical line and the values at that moment */
   const bind = (m, ctx) => {
     const b = body(), svg = b && b.querySelector("svg.en-ch"), tip = b && b.querySelector(".en-tip"), cur = svg && svg.querySelector(".en-cur"); if (!svg || !tip || !cur) return;
     const t0 = Number(svg.dataset.t0), span = Number(svg.dataset.span), ymin = Number(svg.dataset.ymin), VW = Number(svg.dataset.width)||340, left=Number(svg.dataset.left)||10, right=Number(svg.dataset.right)||10, top=Number(svg.dataset.top)||12, ph=Number(svg.dataset.height)||96, plotWidth=VW-left-right, f0 = (n) => new Intl.NumberFormat(ctx.lang, { maximumFractionDigits: 0 }).format(n);
     const fmt = { format: (t) => K.haFmt(get()).wdh(t) };
     const show = (t) => {
-      t = Math.min(m.now, Math.max(t0, t)); selT = t;
+      if(t0>m.now){tip.hidden=true;return;}t = Math.min(m.now,t0+span, Math.max(t0, t)); selT = t;
       const bv = at(m.batt, t), fv = m.fuel.length ? at(m.fuel, t) : NaN, vx = left + (t - t0) / span * plotWidth;
       const chg = m.chg.find((g) => t >= g.s && t <= (g.live ? ctx.now : g.e)), drv = !chg && m.drv.find((g) => t >= g.s && t <= g.e);
       const stx = chg ? [CL_OK, T("Charging") + " " + (chg.dc ? "DC" : "AC")] : drv ? (drv.fuel > 0 ? [CL_FUEL, T("Petrol driving")] : [CL_DRV, T("Driving")]) : ["var(--ds-fg2)", T("Parked")];
@@ -754,17 +776,20 @@ EN.panel = (d, card, options = {}) => {
     svg.addEventListener("pointermove", (e) => { if (down || e.pointerType === "mouse") show(at_(e)); });
     const up = () => { down = false; }; svg.addEventListener("pointerup", up); svg.addEventListener("pointercancel", up);
     svg.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse" && !down) { cur.setAttribute("visibility", "hidden"); tip.hidden = true; selT = null; } });
+    const wrapper=svg.parentElement;
+    if(!wrapper._dcChartZoom)wrapper._dcChartZoom=window.__DEEPAL_COMPANION_UI.mountChartZoom(wrapper,()=>({start:m.t0,end:energyDayStart(m.nDays,m.timezone,m.t0)}),range=>{chartRange=range;ctx.zoomRange=range;const template=document.createElement('template');template.innerHTML=renderEnergyGraph(m,ctx);wrapper.innerHTML=template.content.querySelector('.en-cw').innerHTML;bind(m,ctx);},{minSpan:3600000,initial:chartRange,controlsHost:wrapper.parentElement.querySelector('.en-leg')});
     if (selT !== null) show(selT);
   };
   let off = 0, period = 7, reqId = 0, limitT = null;
   let costView=false,lastEnergyModel=null;
   if(options.chartOnly)period=7;
   /* 7-day windows ending today (not Monday–Sunday): always full days; offset -1 = the 7 days before */
-  const wkStart = (o) => { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - (period - 1) + o * period); return x.getTime(); };
+  const zone=()=>K.haFmt(get()).timeZone;
+  const wkStart = (o,now=Date.now()) => energyDayStart(-(period-1)+o*period,zone(),now);
+  const wkEnd = (o,now=Date.now()) => energyDayStart(1+o*period,zone(),now);
   const paintNav = (lang) => {
     const n = d.querySelector(".en-nav"); if (!n) return;
-    const t0 = wkStart(off), t1 = new Date(t0), fm = { format: (t) => K.haFmt(get()).dm(t) };
-    t1.setDate(t1.getDate() + period - 1);
+    const now=Date.now(),t0=wkStart(off,now),t1=wkEnd(off,now)-1, fm = { format: (t) => K.haFmt(get()).dm(t) };
     const noPrev = !options.chartOnly && limitT !== null && limitT > t0, days = limitT !== null ? Math.max(1, Math.round((Date.now() - limitT) / 86400000)) : 0;
     n.innerHTML = `<div class="en-period" role="group" aria-label="${esc(T("Period"))}"><button data-period="7" aria-pressed="${period === 7}">${esc(T("Weekly"))}</button><button data-period="30" aria-pressed="${period === 30}">${esc(T("Monthly"))}</button></div><div class="en-dates"><button class="btn" data-wk="-1" aria-label="${esc(T("Previous period"))}"${noPrev ? " disabled" : ""}>${ico("chevl")}</button><div class="en-wk"><b>${esc(fm.format(t0))} – ${esc(fm.format(t1))}</b><small>${esc(T(off === 0 ? "Last {0} days" : "{0}-day period", period))}</small></div><button class="btn" data-wk="1" aria-label="${esc(T("Next period"))}"${off >= 0 ? " disabled" : ""}>${ico("chevr")}</button></div>${noPrev ? `<p class="hint en-lim">${esc(T("Recorder limit: history goes back about {0} days.", days))}</p>` : ""}`;
 
@@ -793,22 +818,25 @@ EN.panel = (d, card, options = {}) => {
       }
       costs.archiveOnly=false;
 
-      const t0 = wkStart(off), tEnd = Math.min(real, (() => { const end = new Date(t0); end.setDate(end.getDate() + period); return end.getTime(); })()), cur = off === 0, lang = (hass.locale && hass.locale.language) || hass.language || "en";
+      const t0 = wkStart(off,real), tEnd = Math.min(real,wkEnd(off,real)), cur = off === 0, lang = (hass.locale && hass.locale.language) || hass.language || "en";
       paintNav(lang);
       if(options.chartOnly)d.dispatchEvent(new CustomEvent('energy-period',{detail:{start:t0,end:tEnd,period},bubbles:true}));
       if (!st[id.batt]) { empty("info", T("Battery sensor not found. Check the prefix in Settings → Vehicle.")); return; }
-      const want = ["batt", "ac", "dc", "odo", "pow", "fuel"].filter((k) => st[id[k]]);
+      const fuelOn = card._hasFuel ? card._hasFuel() : cfg.powertrain !== "ev"; /* an electric car has no fuel data to load or draw */
+      const want = ["batt", "ac", "dc", "odo", "pow", "fuel", "volume"].filter((k) => st[id[k]] && (fuelOn || (k !== "fuel" && k !== "volume")));
       let res;
       try {
         res = await hass.callWS({ type: "history/history_during_period", start_time: new Date(t0).toISOString(), end_time: new Date(tEnd).toISOString(), entity_ids: want.map((k) => id[k]), include_start_time_state: true, significant_changes_only: false, minimal_response: true, no_attributes: true });
       } catch (_) { if (my === reqId){if(!body().querySelector('.en-now'))empty("alert", T("Couldn't load history from Home Assistant."), true);else{const note=document.createElement('p');note.className='en-load-error';note.textContent=T("Couldn't load history from Home Assistant.");body().querySelector('.en-nav')?.after(note);}}return; }
       if (my !== reqId) return;
-      const raw = {}; for (const k of ["batt", "ac", "dc", "odo", "pow", "fuel"]) raw[k] = rowsOf(res && res[id[k]]);
+      const raw = {}; for (const k of ["batt", "ac", "dc", "odo", "pow", "fuel", "volume"]) raw[k] = rowsOf(res && res[id[k]]);
+      const volumeUnit=st[id.volume]?.attributes?.unit_of_measurement;
+      if(!['L','l','litre','liter','litres','liters'].includes(volumeUnit))raw.volume=[];
       /* recorder limit: if the data starts inside the week (or is missing) there is no older history */
       const fr = raw.batt.length ? raw.batt[0][0] : null;
       if (fr === null) { if (limitT === null) limitT = tEnd; } else if (fr > t0 + 5 * 60e3) limitT = limitT === null ? fr : Math.min(limitT, fr);
       paintNav(lang);
-      const m = model(raw, tEnd, cap, t0, period, cur);
+      const m = model(raw, tEnd, cap, t0, period, cur, K.haFmt(hass).timeZone);
       if (hass.companionRequest) {
         const archiveRows = await hass.companionRequest("sessions", {
           start_time: new Date(t0).toISOString(), end_time: new Date(tEnd).toISOString()
@@ -821,14 +849,13 @@ EN.panel = (d, card, options = {}) => {
         ].sort((a,b)=>a.s-b.s);
         for (const day of m.days) { day.n=0; day.kwh=0; }
         for (const charge of m.chg) {
-          const day=m.days.find(d=>d.key===dayKey(charge.s));
+          const day=m.days.find(d=>d.key===dayKey(charge.s,m.timezone));
           if(day){day.n++;if(charge.kwh>0)day.kwh+=charge.kwh;}
         }
       }
 m.curveRaw=raw;
       if (!m.hasData) { empty("info", T("No battery history yet. The Home Assistant recorder must record it.")); return; }
-      const tankCapacity = Number(cfg.fuel_tank_liters) > 0 ? Number(cfg.fuel_tank_liters) : num(st[id.tank]?.state) > 0 ? num(st[id.tank].state) : DEF_TANK;
-      const ctx = { chartWidth: Math.round(body()?.clientWidth||340), fmt: K.haFmt(hass), lang, cap, tankCapacity, cur, st: Object.fromEntries(Object.keys(ENT).map((k) => [k, st[id[k]]])), hasFuel: !!st[id.fuel] && cfg.powertrain !== "ev", now: real };
+      const ctx = { zoomRange:chartRange,chartWidth: Math.round(body()?.clientWidth||340), fmt: K.haFmt(hass), lang, cap, cur, st: Object.fromEntries(Object.keys(ENT).map((k) => [k, st[id[k]]])), hasFuel: fuelOn && !!st[id.fuel], now: real };
       await costs.history(m);
       if (my !== reqId || costs.dirty || stop) return;
       ctx.chartWidth=Math.round(body()?.clientWidth||340);
@@ -863,9 +890,9 @@ m.curveRaw=raw;
     if (e.target.closest("[data-cc]")) return;
     const p = e.target.closest("[data-period]");
     if (costs.dirty && e.target.closest("[data-period],[data-wk]")) { const status = d.querySelector(".cc-editor [role=status]"); if (status) status.textContent = T("Save or close the editor before changing dates."); return; }
-    if (p && Number(p.dataset.period) !== period) { period = Number(p.dataset.period); off = 0; selT = null; startPeriodLoading();run(true, true); return; }
+    if (p && Number(p.dataset.period) !== period) { period = Number(p.dataset.period); off = 0; selT = null;chartRange=null; startPeriodLoading();run(true, true); return; }
     const w = e.target.closest("[data-wk]");
-    if (w && !w.disabled) { off = Math.min(0, off + Number(w.dataset.wk)); selT = null; startPeriodLoading();run(true, true); return; }
+    if (w && !w.disabled) { off = Math.min(0, off + Number(w.dataset.wk)); selT = null;chartRange=null; startPeriodLoading();run(true, true); return; }
     if (e.target.closest("[data-retry]")) { body().innerHTML = '<div class="en-nav"></div>' + LOAD(); run(true, true); }
   });
   run(true);

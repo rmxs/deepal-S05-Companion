@@ -424,8 +424,8 @@ NF.localRules = (hass, cfg) => {
     const variables={};
     const number=en=>`{{ states('${en}') | float(none) }}`;
     Object.assign(variables,{name:x.name,battery:number(x.E.batt),range:number(x.E.range),fuel_range:number(x.E.fuelr),minutes:`{{ ${event.delay} + (repeat.index - 1) * ${event.repeat} }}`,items:lg.items?`${lg.pre}\n${lg.items}`:'',left:lg.left?`${lg.pre}\n${lg.left}`:''});
-    return {id,name:spec.label,enabled:false,preset:id,preset_options:{...event},threshold:spec.thr||null,controls:spec.ctl,fresh:x.n.fresh,devices:[...x.n.devices],condition:ruleCondition(x,id),checks:ruleChecks(x,id),
-      title:event.title||spec.title,message:event.text||spec.text,variables,
+    return {id,name:T(spec.label),enabled:false,preset:id,preset_options:{...event},threshold:spec.thr||null,controls:spec.ctl,fresh:x.n.fresh,devices:[...x.n.devices],condition:ruleCondition(x,id),checks:ruleChecks(x,id),
+      title:event.title||T(spec.title),message:event.text||T(spec.text),variables,
       delay:event.delay*60,repeat:event.repeat*60,max_sends:cnt(event),cooldown:id==='charge_done'||id==='charge_started'?1800:0,
       severity:event.sev,quiet:{enabled:x.n.quiet.on,from:x.n.quiet.from,to:x.n.quiet.to,mode:x.n.quiet.mode==='skip'?'skip':'silent'},
       url:x.n.url||'/deepal-companion',buttons:[...event.actions],data:{notification_icon:event.icon||spec.icon},

@@ -14,7 +14,27 @@ module = importlib.import_module("companion_lifecycle.runtime")
 Runtime = module.VehicleRuntime
 
 
-def make_runtime(states=None, db=None):
+def snapshot_from_db(db):
+    """Test adapter: a read snapshot backed by an async db fake. Each load runs on an executor thread and every store call
+    is forwarded to the fake with the same method names the archive uses, so call sequences stay comparable."""
+    async def read_db(load):
+        loop = asyncio.get_running_loop()
+        def call(method, *args):
+            return asyncio.run_coroutine_threadsafe(db(method, *args), loop).result()
+        class Store:
+            def sessions(self, vehicle, start=None, end=None):
+                return call("sessions", vehicle, start, end)
+            def get(self, vehicle, key, default=None):
+                return call("get", vehicle, key, default)
+            def pricing_inputs(self, vehicle, requests):
+                return call("pricing_inputs", vehicle, requests)
+            def session_page(self, vehicle, before=None, limit=5, location="", sort="newest"):
+                return call("session_page", vehicle, before, limit, location, sort)
+        return await loop.run_in_executor(None, load, Store())
+    return read_db
+
+
+def make_runtime(states=None, db=None, read_db=None):
     states = states if states is not None else {}
     def get(entity):
         value = states.get(entity)
@@ -22,7 +42,9 @@ def make_runtime(states=None, db=None):
     async def default_db(method, *args):
         return None
     hass = types.SimpleNamespace(states=types.SimpleNamespace(get=get), async_create_task=lambda coro: asyncio.ensure_future(coro))
-    runtime = Runtime(types.SimpleNamespace(hass=hass, db=db or default_db), types.SimpleNamespace(unique_id="car"))
+    fake_db = db or default_db
+    hub = types.SimpleNamespace(hass=hass, db=fake_db, read_db=read_db or snapshot_from_db(fake_db))
+    runtime = Runtime(hub, types.SimpleNamespace(unique_id="car"))
     runtime.entities = {"batt": "sensor.battery", "charging": "sensor.charging", "odometer": "sensor.odo"}
     runtime.engine = types.SimpleNamespace(state={})
     return runtime, states
@@ -75,6 +97,31 @@ class LastGoodValueTests(unittest.TestCase):
         self.assertEqual(runtime.snapshot()["batt"], "55")
         states["sensor.battery"] = "56"
         self.assertEqual(runtime.snapshot()["batt"], "56")
+
+    def test_carried_value_expires_after_six_hours(self):
+        runtime, states = make_runtime({"sensor.battery": "55"})
+        self.assertEqual(runtime.snapshot(1000)["batt"], "55")
+        states["sensor.battery"] = "unavailable"
+        self.assertEqual(runtime.snapshot(2000)["batt"], "55")
+        self.assertEqual(runtime.snapshot(2000 + 6 * 3600 - 1)["batt"], "55")
+        self.assertIsNone(runtime._expired_since)
+        self.assertEqual(runtime.snapshot(2000 + 6 * 3600)["batt"], "unavailable")
+        self.assertEqual(runtime._expired_since, 2000)
+        states["sensor.battery"] = "60"
+        self.assertEqual(runtime.snapshot(2000 + 7 * 3600)["batt"], "60")
+        self.assertIsNone(runtime._expired_since)
+        states["sensor.battery"] = "unavailable"
+        self.assertEqual(runtime.snapshot(2000 + 8 * 3600)["batt"], "60", "A new outage gets its own six hours")
+
+    def test_expired_unrelated_sensor_cannot_end_a_charge(self):
+        # Only readings the charging engine decides on may seed the outage start: an odometer that stayed unavailable
+        # for hours must not make a later short cloud drop close an open charge at once.
+        runtime, states = make_runtime({"sensor.battery": "55", "sensor.odo": "1200"})
+        runtime.snapshot(1000)
+        states["sensor.odo"] = "unavailable"
+        self.assertEqual(runtime.snapshot(2000)["odometer"], "1200")
+        self.assertEqual(runtime.snapshot(2000 + 7 * 3600)["odometer"], "unavailable")
+        self.assertIsNone(runtime._expired_since)
 
     def test_never_reported_stays_unavailable(self):
         runtime, _ = make_runtime({"sensor.battery": "unavailable"})

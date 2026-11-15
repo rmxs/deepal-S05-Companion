@@ -10,6 +10,8 @@ import re
 import time
 import uuid
 
+from .phone_text import tr
+
 DEFAULT = {"enabled": False, "devices": [], "min_interval": 300,
            "battery_step": 5, "show_timer": True, "max_age": 1800, "icon": "", "url": ""}
 
@@ -54,10 +56,13 @@ def stamp(state):
     return value.timestamp() if isinstance(value, datetime) else 0
 
 
-def local_time(timestamp, fmt):
-    """Format a UTC timestamp in the Home Assistant time zone."""
+def local_time(timestamp, fmt, hass=None):
+    """Format a UTC timestamp in the Home Assistant time zone (month names in the Home Assistant language)."""
     from homeassistant.util import dt as dt_util
-    return dt_util.as_local(datetime.fromtimestamp(timestamp, timezone.utc)).strftime(fmt)
+    from .phone_text import month
+    local = dt_util.as_local(datetime.fromtimestamp(timestamp, timezone.utc))
+    name = month(hass, local.month) if hass is not None and "%b" in fmt else None
+    return local.strftime(fmt.replace("%b", name) if name else fmt)
 
 
 def number(state):
@@ -146,12 +151,12 @@ class LiveCharging:
         return "dc_test_" + key if test else "dc_charge_" + key + "_" + uuid.uuid4().hex[:16]
 
     def payload(self, snapshot, options, tag, test=False):
-        updated = local_time(snapshot["updated"], "%d %b %H:%M")
-        status = "Charging" if snapshot["charging"] else "Not charging"
-        parts = [("Test · " if test else "") + status, str(snapshot["battery"]) + "%"]
+        updated = local_time(snapshot["updated"], "%d %b %H:%M", self.hass)
+        status = tr(self.hass, "Charging" if snapshot["charging"] else "Not charging")
+        parts = [(tr(self.hass, "Test") + " · " if test else "") + status, str(snapshot["battery"]) + "%"]
         if snapshot["charging"] and snapshot["current"] is not None:
             parts.append(f'{snapshot["mode"]} · {snapshot["current"]:g} A')
-        parts.append("Reported " + updated)
+        parts.append(tr(self.hass, "Reported") + " " + updated)
         color = self.runtime.config.get("lvl_green", "#63cba3")
         if not isinstance(color, str) or not re.fullmatch(r"#[a-fA-F0-9]{6}", color):
             color = "#63cba3"

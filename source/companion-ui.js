@@ -81,6 +81,7 @@ window.__DEEPAL_COMPANION_UI = {
   settingsAppCss: companionSettingsAppCss,
   loaderCss: LOADER_CSS,
   loaderHtml,
+  startReorder, mountChartZoom,
   applyPalette(element,config={}){
     const colors={ok:UI.hex2rgb(config.lvl_green||DEFAULTS.lvl_green,'52,211,153'),warn:UI.hex2rgb(config.lvl_yellow||DEFAULTS.lvl_yellow,'250,204,21'),bad:UI.hex2rgb(config.lvl_red||DEFAULTS.lvl_red,'248,113,113'),info:'121,173,255'};
     for(const [key,value]of Object.entries(colors)){element.style.setProperty('--companion-'+key,value);element.style.setProperty('--ds-'+key,value);}

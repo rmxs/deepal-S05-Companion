@@ -9,9 +9,10 @@ import types
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location("local_notifications_test", Path(__file__).resolve().parents[1] / "custom_components/deepal_companion/notifications.py")
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+package = types.ModuleType("dcpkg_notify")
+package.__path__ = [str(Path(__file__).resolve().parents[1] / "custom_components/deepal_companion")]
+sys.modules["dcpkg_notify"] = package
+mod = importlib.import_module("dcpkg_notify.notifications")
 
 
 def rule(**changes):
@@ -24,6 +25,24 @@ def json_state(engine):
 
 
 class Notifications(unittest.IsolatedAsyncioTestCase):
+    async def test_combined_live_activity(self):
+        await self.engine.record(rule(id="live_open"), "live_started", trigger={"items": ["Trunk"]})
+        ident = self.engine.history[0]["id"]
+        self.time.return_value = 10100
+        await self.engine.record(rule(id="live_open"), "live_ended", trigger={"reason": "Condition cleared"})
+        page = self.engine.history_page()
+        self.assertEqual(page["total"], 1)
+        row = page["rows"][0]
+        self.assertEqual(row["id"], ident)
+        self.assertEqual((row["start_time"], row["end_time"]), (10000, 10100))
+        self.assertEqual(row["trigger"]["items"], ["Trunk"])
+        self.assertEqual(row["end_trigger"]["reason"], "Condition cleared")
+        self.engine.combine_live_history()
+        self.assertEqual(len(self.engine.history), 1)
+        self.engine.history = [{"id": "e" * 32, "time": 10200, "rule_id": "live_open", "status": "live_ended"}, {"id": "s" * 32, "time": 10100, "rule_id": "live_open", "status": "live_started"}]
+        self.assertEqual(self.engine.history_page()["total"], 1)
+        self.assertEqual(self.engine.history[0]["start_time"], 10100)
+
     async def asyncSetUp(self):
         self.store, self.calls = {}, []
         async def db(method, vehicle, key, value=None):

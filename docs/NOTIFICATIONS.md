@@ -33,7 +33,7 @@ The device list comes from the Home Assistant Mobile App integration. Recheck yo
 | Vehicle warning | A supported vehicle warning is active | Delay, repeats and severity |
 | Key battery | The key battery warning is active | Delay, repeats and severity |
 | Low battery | Battery level is below your threshold | Percentage threshold, delay and repeats |
-| Low fuel | Hybrid fuel range is below your threshold | Remaining range in km, delay and repeats |
+| Low fuel | Hybrid fuel range is below your threshold (not available on electric cars) | Remaining range in km, delay and repeats |
 | Climate left on | Climate has remained on | Delay, repeats, available conditions and Advanced conditions |
 | Comfort functions left on | Seat heating, ventilation or steering-wheel heating remains on while locked and parked | Delay, repeats, available conditions and Advanced conditions |
 | Lost connection to the vehicle | The cloud connection remains unavailable | Delay, repeats and severity |
@@ -165,6 +165,10 @@ The **LIVE** tag next to each name is yellow while that notification is on and g
 3. Choose **End test** when finished.
 
 A test uses a separate notification from a real one, and ending it leaves your real notification unchanged. If a normal test notification works but a live test does not, check live-activity permissions, the app version and the connection to Home Assistant.
+
+## Language
+
+Alert titles and messages, button names and everything in the Live notifications use the Home Assistant language: English, Italian, Spanish, German or Greek. Other languages stay English. An alert keeps the language it had when you saved it, so choose **Reset alert** or re-save it after changing the Home Assistant language. Titles and messages you wrote yourself are sent as written. Times use the Home Assistant time zone.
 
 ## Recent activity
 

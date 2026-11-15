@@ -13,23 +13,17 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
-## Latest release — v0.1.7
+## What’s new in 0.2.0
 
-- **Light and dark themes everywhere:** the Notifications page and the Sessions filters now follow your Home Assistant theme, so alert rows, device buttons, time boxes, switches and lists are readable on a white theme.
-- **Interior view:** the temperature, the On/Off label and the power button on the car screen are always white and visible, also on a light theme.
-- Dark themes look the same as before.
-- **New Sessions page:** key figures for the selected period, compact session cards with the real battery start and end level, a daily energy chart split into free, paid and not-priced charging, and weekly history by default.
-- **Correct your charging history** (administrators): change a charge between AC and DC, remove false current readings, or delete a charge and restore it within 30 days.
-- A false DC reading right after an AC charge no longer turns the charge into a DC session.
-- Safer saving: temporary database errors are retried, a slow database can no longer pile up readings, and a sensor that becomes unavailable keeps its last good value.
-- Charging efficiency is now visible for free profiles too.
-- **Card only page:** a second page, **Deepal Card**, shows just the card. On a phone it fills the whole screen like an app; on a computer it stays a normal card. It is hidden from the sidebar by default; turn it on under **Card Settings → Advanced → Sidebar**. New installations open it when a notification is tapped.
-- **Car View backgrounds by time of day:** morning and afternoon show a deeper blue sky that suits the dark theme, the evening shows a dusk sky, and the night keeps the moon and stars.
-- **One confirmation window for every command:** lock, unlock, windows, trunk, climate, lights, horn, locate and refresh all show the same window you get from the lock on the car image.
-- **Back on the phone:** when you return to the dashboard, the card reconnects by itself and reloads its data.
-- **Redesigned Profile box** that starts closed (the arrow opens it), with a connection badge (**Active**, **Offline** or **No data**) for the Deepal Alternative link to the vehicle cloud.
+- **Electric or hybrid, decided for you:** the car is detected as Electric or Plug-in hybrid at setup, and **Automatic** keeps following its fuel sensors. An electric car shows no fuel tiles, fuel colours, petrol history or fuel health checks.
+- **Phone notifications in your language:** alerts, Live notifications, their buttons and dates follow the Home Assistant language (Italian, Spanish, German, Greek or English). Health messages are translated too.
+- **Reorder charging profiles** by dragging, and **pinch to zoom** Energy history, delivery bars and charging curves.
+- **Custom tiles that do something:** give your own info and diagnostic entities a tap action, with optional confirmation.
+- **Home Assistant time everywhere**, including Live notifications.
+- **Steadier dashboard totals:** totals keep loading while sessions are saved, and summary sensors recover if a calculation stalls.
+- **More reliable “left open or unlocked” alerts:** the delay you set is the delay you get, and any interruption restarts it.
 
-[Release notes](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.7) · [Full changelog](CHANGELOG.md)
+[Full changelog](CHANGELOG.md)
 
 ## Release highlights
 
@@ -95,12 +89,16 @@ Made for my car, shared for yours.
 [![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rmxs&repository=deepal-S05-Companion&category=integration)
 
 
+## Version 0.2.0
+
+This release adds charging-profile reordering, chart zoom, custom entity actions, translated phone notifications and cleaner electric-car views. See [CHANGELOG.md](CHANGELOG.md) for release notes. After updating, restart Home Assistant and hard-refresh the browser. Saved settings and charging records are kept.
+
 ## Features
 
 ### Your vehicle
 
 - Lock, windows, tailgate, climate, lights, horn and locate controls, where supported by your vehicle entities.
-- Battery and fuel levels, electric and fuel range, odometer, temperatures and humidity.
+- Battery level and electric range, plus fuel level and fuel range on plug-in hybrids, with odometer, temperatures and humidity. Electric cars show no fuel items anywhere.
 - Climate temperature controls, seat heating and ventilation, and steering-wheel heating where available.
 - Tyre pressures in bar, kPa or psi, with vehicle warnings and adjustable pressure limits.
 - Vehicle diagnostics, selectable warning indicators and custom sensor tiles.
@@ -112,7 +110,8 @@ Made for my car, shared for yours.
 - Mobile, Tablet and Energy designs with adjustable width.
 - Independent card profiles with editable names, duplication and profile management.
 - Show, hide and reorder card sections, control buttons, top-right buttons and information tiles.
-- Reorder user-added information tiles and diagnostic entities.
+- Reorder user-added information tiles and diagnostic entities; choose tap actions with optional targets or navigation paths. Long press always opens entity info.
+- Ten additional matching SVG icons: power on/off, wallbox, solar, garage, trip, location, timer, Wi-Fi and shield.
 - Choose button layouts, sizes, labels and action confirmations.
 - Select Photos or Car View, backgrounds, image zoom, spacing, aspect ratio and custom photos.
 - Green, Grey and Blue tile icon presets, plus a custom colour picker.
@@ -120,20 +119,25 @@ Made for my car, shared for yours.
 - Interactive preview with live data and simulated vehicle states, including a charging-detected reminder demo.
 - Settings updates shared between Companion and cards using the same profile.
 - Add to dashboard button and visual Home Assistant card editor.
-- English interface with Greek and Spanish translations on supported screens.
+- English interface with Greek, Spanish, German and Italian translations on supported screens.
 
 ### Charging, energy and costs
 
 - Automatic charging-session recording while dashboards are closed.
 - A permanent charging archive containing sessions, saved prices and available charging curves.
-- Weekly (default) and monthly battery/fuel history with previous-period navigation.
-- Daily distance, charged energy, estimated battery use and estimated petrol use.
+- Weekly (default) and monthly battery history, with fuel history on plug-in hybrids, and previous-period navigation.
+- Daily distance, charged energy, estimated battery use and petrol use from recorded fuel-volume decreases. Fuel level and volume use the vehicle sensors; no tank capacity or 51 L assumption is needed.
 - Smooth charging-current curves with changed-reading dots, touch/keyboard inspection, Low/High current and battery percentages when recorded.
 - Optional on-card charging curve while charging.
 - Charging details, cable flow, charge-port pulse and light-sweep effects.
 - Charging locations with individual tariffs, free charging and optional charger entities.
 - Searchable charging-network name suggestions, custom names and profile deletion that preserves saved charges.
-- Energy calculation from battery estimates, total energy meters, session energy meters or charger power, with an adjustable charging efficiency for every profile, including free ones.
+- Drag charging profiles by their grip to reorder them, or focus the grip and press Up/Down. The order saves automatically and is used in session profile dropdowns.
+- Energy calculation from battery estimates, total energy meters, session energy meters or charger power. W/kW power is integrated over elapsed time; Wh/kWh energy meters are differenced.
+- Charging efficiency accepts 1–100% (default 90%) and applies only to battery-based estimates: estimated charger energy = battery energy ÷ (efficiency / 100). Measured charger energy and entered receipt energy bypass this adjustment.
+- An entered total paid takes precedence over the tariff calculation, including zero. Saved session prices remain independent of later profile edits.
+- Displayed times, notification activity, health checks, session dates and Energy/charging charts always use Home Assistant’s configured server time zone, independently of the browser or user-profile time-zone choice. Language, date order and 12/24-hour display still follow the user profile. Daily chart grouping and period boundaries account for daylight-saving changes.
+- Monthly energy delivery charts show spaced date labels; daily values remain available by hovering or focusing each bar.
 - Per-session location, price per kWh, measured energy and total-payment editing.
 - Euro cost totals for the selected period (energy, cost, paid price per kWh and free share) and a daily energy chart that separates free, paid and not-priced charging.
 - Compact session cards with the real battery start and end level, charge duration and quick curve and edit buttons.
@@ -155,6 +159,7 @@ Made for my car, shared for yours.
 - A red unread counter on the card’s notifications button, saved per Home Assistant user.
 - Information, Important and Critical severity.
 - Editable titles, messages and icons, with vehicle-value tags and message previews.
+- Alert text, buttons and Live notifications follow the Home Assistant language (English, Italian, Spanish, German, Greek).
 - Supported action buttons, including Lock vehicle and Dismiss.
 - Test notifications and recent activity with Load more, Delete and Delete all.
 - Live charging, Live climate and Left open or unlocked as Live Activities on iPhone and Live Updates on supported Android devices.
@@ -205,7 +210,7 @@ The dashboard has four main pages: **Card Settings → Notifications → Session
 | **Card Settings → Charging** | Charging text, visual effects and Energy-tile behaviour |
 | **Card Settings → Colours** | Tile icon presets/custom colour, airflow colours and battery/fuel thresholds |
 | **Card Settings → Diagnostics & tyres** | Warning indicators, tyre units and pressure limits |
-| **Card Settings → Advanced** | Show “Deepal Card” in the sidebar, vehicle type, paint, wheels, capacities, custom photos, sensor mapping, custom diagnostics and configuration backup/reset |
+| **Card Settings → Advanced** | Show “Deepal Card” in the sidebar, vehicle type (Automatic, Plug-in hybrid or Electric), paint, wheels, capacities, custom photos, sensor mapping, custom diagnostics and configuration backup/reset |
 | **Notifications** | Devices, alerts, timing, messages, quiet hours, Live notifications, tests and recent activity |
 | **Sessions** | Charging history, costs, curves, filters, sorting, charts and data options |
 | **Charging Profiles** | Charging locations, tariffs, free charging, energy sources and charger sensors |

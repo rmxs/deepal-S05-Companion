@@ -1,5 +1,12 @@
 /* A shared scale for the supplied notification screens; behaviour stays in the adapter. */
 export const notificationLayoutCss=`
+.design-root .alert-row[data-enabled=true] .design-event-icon{color:light-dark(#087f5b,#55e6ad)!important}
+.design-root .alert-row[data-enabled=true]{background:light-dark(#e6f5ec,#17392d)!important;border-color:light-dark(#a4d5b9,#317257)!important}
+.design-root .alert-row[data-enabled=false]{opacity:1;filter:none;background:light-dark(#f1f3f5,#22262c)!important}
+.design-root .alert-row[data-enabled=false]>div:first-child{opacity:.6;filter:grayscale(1)}
+.design-root label>input.peer:not(:checked)+div{background:light-dark(#8793a1,#626e7e)!important;box-shadow:inset 0 0 0 1px light-dark(#6e7a89,#8390a1)}
+.design-root label>input.peer+div::after{background:#fff!important;box-shadow:0 1px 3px #0005}
+.design-root button:is(.bg-emerald-400,.device-pill.active,.preset-btn.active){border:1px solid transparent!important;border-radius:var(--nf-radius)!important;box-shadow:0 2px 5px #0002;font-weight:600}
 .design-root{--nf-field:44px;--nf-action:40px;--nf-radius:10px;--nf-gap:12px;font-size:13px;line-height:1.5}
 .design-root button{box-sizing:border-box;height:var(--nf-action);min-height:var(--nf-action);padding:8px 12px;border-radius:var(--nf-radius);font-size:13px;line-height:20px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:normal}
 .design-root input:not([type=checkbox]),.design-root select{box-sizing:border-box;height:var(--nf-field);min-height:var(--nf-field);max-height:var(--nf-field);font-size:16px;line-height:20px;padding:10px 12px;border-radius:var(--nf-radius);font-weight:400}

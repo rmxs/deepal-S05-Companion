@@ -1,5 +1,77 @@
 # Changelog
 
+## 0.2.0 — Charging profile order, Energy history and electric-car clean-up
+
+### Updating
+- Restart Home Assistant after updating (backend files changed), then hard-refresh the browser (Ctrl+F5). In the Companion app, reset the frontend cache if the old interface remains.
+- Saved profiles, session prices, receipts, settings and notification choices are preserved.
+
+### New features
+- **Charging profile order:** drag the grip beside a charging profile to reorder it, or focus the grip and use Up/Down. The order saves automatically and is used by the session profile dropdowns. Charging profiles and card settings share the same drag behaviour.
+- **Chart zoom:** pinch to change the data range on Energy history (including monthly views), energy-delivery bars and charging curves, with a small reset icon. Ctrl/Command + mouse wheel also zooms. One finger still inspects readings, and zooming never changes saved history or totals.
+- **Charging-curve bubble:** hover, tap or use the arrow keys to see the time, current and battery level in a bubble inside the graph, in the card popup, the live card curve and the Sessions popup.
+- **Custom entity actions:** choose a tap action for each custom info or diagnostic entity: more info, toggle, on/off, press, navigate, open a URL or none. Read-only sensors can control another entity through an optional target. Toggle, on/off and press can ask for confirmation using the card’s Cancel/Confirm dialog. Long press always opens the original entity’s info.
+- **Ten new icons:** power on/off, wallbox, solar, garage, trip, location, timer, Wi-Fi and shield, in the existing card icon style.
+- **Live notification activity:** each start and end appears as one entry with Home Assistant-time badges. New entries record what triggered them (items, parking inference, delay, sensor values and report times) and why they ended.
+- **Phone notifications in your language:** alert titles and messages, the live charging, live climate and left-open notifications, their buttons (Dismiss, Lock vehicle, Open dashboard, Turn off) and their dates are written in Italian, Spanish, German or Greek when Home Assistant uses that language. Other languages stay English. Alerts you saved earlier keep their saved text until you re-save or reset them.
+- **Health indicator:** the Health tab shows a pulsing red dot for warnings or errors and clears after healthy checks. It respects reduced-motion settings.
+- **Vehicle connection warning:** a red banner over the vehicle image asks you to check the Deepal Alternative connection and entity prefix when the vehicle is offline or missing.
+- **Translated health messages:** every Health check message and fix is now available in Italian, Spanish, German and Greek.
+
+### Improvements
+- **Electric vehicles show no fuel items:** a vehicle detected as, or set to, Electric no longer shows fuel in info tiles (including petrol volume), level-colour settings, the Energy history chart and title, or Health checks. Plug-in hybrids are unchanged.
+- **Hybrid fuel readings:** the tank-capacity setting, the unused capacity sensor and the 51 L fallback are removed. Fuel percentage uses the fuel level, and litres used come from recorded fuel-volume decreases while driving, with transient drops filtered. No litres are shown when volume readings are unavailable. Saved sessions and settings are preserved.
+- **Mobile charging curves:** taller plots, selected readings that stay visible after you lift your finger, and one-finger scrubbing without accidental text selection.
+- **Custom entity editor:** action options start collapsed, use the shared field styling and show target, confirmation or path fields only for the chosen action. In the minimal layout the icon and title stay fixed while the settings expand below.
+- **Settings navigation:** the tabs use four columns when the editor is wide, then three, two or one as space shrinks.
+- **Profile header:** clicking anywhere on the header expands or collapses a profile; keyboard activation works too.
+- **One loading animation:** a single, larger rotating ring is used for Energy, curve popups, activity and the dashboard, with reduced-motion support. Switching tabs shows the LK initials inside the ring.
+- **Chart contrast:** darker series on light themes, brighter and thicker series on dark themes, shared by Energy history, daily bars and charging curves.
+- **Notification page themes:** active notification cards have a pale green background in light mode, inactive switches have a solid grey track and white thumb, selected action buttons share the device-button look, and disabled alerts and live notifications are more muted while their switches stay usable.
+- **Home Assistant time everywhere:** notification activity, Health checks, session dates, the card’s day/night fallback and the daily Energy and charging charts use Home Assistant’s configured time zone, including daylight-saving changes. Live notification times follow it too.
+- **Energy delivery chart:** monthly charts show a date every five days; each bar keeps its full date in its tooltip.
+- **Charging efficiency:** the setting is labelled as the battery-estimate efficiency, and the help explains that measured charger energy and receipt energy bypass it.
+- **Faster updates:** the loader, panel and lazy-loaded card assets share one frontend revision, so browsers fetch new files after an update.
+- **Italian wording:** corrected following tester feedback, including the Health tab’s “Check again” button.
+- **Steadier totals while charging:** the dashboard and Sessions page read one consistent set of figures, so refreshing totals no longer waits for a session save. Repeated requests for the same figures share one calculation.
+
+### Bug fixes
+- **Left-open alerts follow your report interval:** a new setting, **Count as parked after**, sets how long the odometer must stay unchanged before the car counts as parked (default 6 minutes). A report that repeats the same odometer value no longer counts as driving, so a parked car now gets its alert even when the car reports every 5 minutes. Set it a little longer than how often your car reports.
+- **Clear reason when a live notification ends:** Recent activity now says “Climate turned off”, “Vehicle moving” or “Everything closed and locked”, translated into Italian, Spanish, German and Greek.
+- **Charges end 6 hours after the car goes offline:** while the car is unreachable, a running charge keeps its last readings for 6 hours and then closes at its last known reading. A reading from an unrelated sensor (for example the odometer) can no longer close a charge early.
+- **English entity names:** the Companion sensors keep their English names in every Home Assistant language, so names no longer switch to Greek.
+- **Unlocked alert with one missing sensor:** a stale or unavailable lock-state sensor no longer hides an unlocked car.
+- **Electric cars no longer report missing fuel sensors:** Health no longer warns about fuel level or fuel volume on a vehicle without fuel.
+- **Left-open and unlocked delay:** “Wait before showing” now uses exactly the seconds you set (default 5 minutes). The hidden five-minute floor and two-minute reduction are gone.
+- **Waits restart after interruptions:** if the car is closed or locked, moves (with “Only when parked”), loses its connection or reports unknown or stale readings before the alert is sent, the wait starts again from zero. Restarting Home Assistant also discards a wait that was not yet confirmed. Running notifications keep their state.
+- **Stale openings cannot start an alert:** stale, restored or unknown door, window and lock readings no longer trigger one. With parking filtering on, a stale or unknown odometer blocks the start. No new setting or migration is needed.
+- **Charging costs update immediately:** switching a saved session to Manual, or saving an edited tariff or total, refreshes the session and the dashboard totals. Battery-based estimates are marked “≈”.
+- **Energy units:** W/kW readings are integrated over elapsed time and Wh/kWh meters are differenced. Receipt energy and measured charger energy bypass efficiency.
+- **Energy history dates:** “today” and the selected period follow Home Assistant’s time zone, including daylight-saving days.
+- **Notification destination field:** its height now matches the adjacent control after a cold load, with the name, path, clear button and arrow centred.
+- **Activity order:** notification activity entries recorded in the same instant stay newest first, so paging no longer skips or repeats entries.
+- **Summary sensors no longer stall:** a summary calculation that takes too long is stopped, and the sensors recover on a later update instead of staying frozen.
+
+### Good to know
+- **Vehicle type is a view setting.** Automatic decides from the fuel sensors; choosing Electric on a hybrid only hides fuel items. The vehicle keeps recording fuel readings and still behaves as a hybrid, and choosing Plug-in hybrid again shows everything.
+- **Parked detection is an estimate.** It uses the two-minute odometer-report rule and does not prove the gear is in P; delayed reports or long stops can look like parking.
+- Phone notification texts follow the Home Assistant language, not the language of the browser you used to set them up.
+- **Default battery capacity:** when you do not enter a kWh value, plug-in hybrids use 18.4 kWh and electric cars use 68.8 kWh. A value you enter is always used.
+
+### Testing
+- Added tests for the exact delay, brief closures, stale evidence, movement, disconnection and waits across a restart; manual tariff and total saves, receipt precedence, power integration, meter differences, unit validation and battery-only efficiency; Health checks for electric and hybrid vehicles; notification text translation; and activity ordering.
+- Added tests for summary timeouts and recovery, reads that stay consistent during saves, shared repeated calculations and the default battery capacities.
+
+## 0.1.9 — Update Spanish translations
+
+### Changes
+- Updated Spanish translations, contributed by **@Sunek0**.
+
+### Contributors
+- **@Sunek0** made their first contribution.
+
+[Published release](https://github.com/rmxs/deepal-S05-Companion/releases/tag/v0.1.9) · [Full comparison: v0.1.8…v0.1.9](https://github.com/rmxs/deepal-S05-Companion/compare/v0.1.8...v0.1.9)
+
 ## 0.1.8 — German and Italian, light themes and local times
 
 ### Updating

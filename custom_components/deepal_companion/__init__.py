@@ -14,7 +14,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .api import register
-from .const import CARD_PANEL_URL, DOMAIN, FRONTEND_URL, PANEL_URL, SIGNAL, VERSION
+from .const import CARD_PANEL_URL, DOMAIN, FRONTEND_URL, PANEL_URL, SIGNAL, VERSION, FRONTEND_VERSION
 from .database import Database
 from .runtime import VehicleRuntime
 
@@ -53,6 +53,10 @@ class Hub:
         async with self.lock:
             return await self.hass.async_add_executor_job(getattr(self.archive, method), *args)
 
+    async def read_db(self, load):
+        """Read-only queries in one SQLite snapshot. hub.lock is not taken, so archive writes proceed while this runs."""
+        return await self.hass.async_add_executor_job(self.archive.read_snapshot, load)
+
     def changed(self, vehicle):
         async_dispatcher_send(self.hass, SIGNAL, vehicle)
 
@@ -65,7 +69,7 @@ async def _register_card_panel(hass, hub):
         hass, frontend_url_path=CARD_PANEL_URL, webcomponent_name="deepal-companion-card-panel",
         sidebar_title="Deepal Card" if hub.card_panel_in_sidebar else None,
         sidebar_icon="mdi:car-electric-outline" if hub.card_panel_in_sidebar else None,
-        module_url=FRONTEND_URL + "/companion-card-panel.js?v=" + VERSION,
+        module_url=FRONTEND_URL + "/companion-card-panel.js?v=" + FRONTEND_VERSION,
         require_admin=False,
     )
     hub._card_panel_registered = True
@@ -82,11 +86,11 @@ async def async_setup(hass, config):
     await hass.http.async_register_static_paths([
         StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), False),
     ])
-    add_extra_js_url(hass, FRONTEND_URL + "/loader.js?v=" + VERSION)
+    add_extra_js_url(hass, FRONTEND_URL + "/loader.js?v=" + FRONTEND_VERSION)
     await async_register_panel(
         hass, frontend_url_path=PANEL_URL, webcomponent_name="deepal-companion-panel",
         sidebar_title="Deepal Companion", sidebar_icon="mdi:car-electric",
-        module_url=FRONTEND_URL + "/companion-panel.js?v=" + VERSION,
+        module_url=FRONTEND_URL + "/companion-panel.js?v=" + FRONTEND_VERSION,
         require_admin=False,
     )
     try:
@@ -106,7 +110,7 @@ async def async_setup(hass, config):
     resources = getattr(lovelace, "resources", None)
     if resources is not None and hasattr(resources, "async_create_item"):
         await resources.async_get_info()
-        url = FRONTEND_URL + "/loader.js?v=" + VERSION
+        url = FRONTEND_URL + "/loader.js?v=" + FRONTEND_VERSION
         existing = next((r for r in resources.async_items() if r.get("url", "").split("?")[0] == url.split("?")[0]), None)
         if existing is None:
             await resources.async_create_item({"res_type": "module", "url": url})

@@ -30,7 +30,7 @@ module.exports=async function settingsRoundtrip(page){
   });
   const fixed={
     prefix:"validation",name:"Settings validation vehicle",image_path:"/deepal_companion/frontend/images/car/",layers_path:"/deepal_companion/frontend/images/",image_aspect:"4 / 3",
-    fuel_max:940,fuel_tank_liters:51,battery_kwh:24,image_scale:1.1,tire_min:2.2,tire_max:3.4,air_t1:21,air_t2:25,button_primary:4,toast_duration:8,
+    fuel_max:940,battery_kwh:24,image_scale:1.1,tire_min:2.2,tire_max:3.4,air_t1:21,air_t2:25,button_primary:4,toast_duration:8,
     bat_t1:25,bat_t2:55,bat_t3:75,fuel_t1:12,fuel_t2:28,fuel_t3:45,
     confirm:["unlock"],order:[...defaults.order].reverse(),hidden:["stats"],buttons:[...defaults.buttons].reverse(),buttons_hidden:["honk"],top_buttons:[...defaults.top_buttons].reverse(),top_buttons_hidden:["diag"],
     info_order:[...defaults.info_order].reverse(),diag:[],diag_mode:"all",diag_custom:[{entity:"binary_sensor.s05_cloud_connection",label:"Validation connection",icon:"info"}],diag_ignore:["binary_sensor.s05_engine_warning"],hero_show:["name","range","cloud","updated"],info:["humidity"],

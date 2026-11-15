@@ -23,8 +23,18 @@ sys.modules["dcpkg"] = package
 status = importlib.import_module("dcpkg.live_status")
 
 
+def ensure_local_time():
+    """Another test module may have replaced the Home Assistant time stub; keep as_local available."""
+    util = sys.modules.setdefault("homeassistant.util", types.ModuleType("homeassistant.util"))
+    stub = getattr(util, "dt", None) or sys.modules.setdefault("homeassistant.util.dt", types.ModuleType("homeassistant.util.dt"))
+    if not hasattr(stub, "as_local"):
+        stub.as_local = lambda value: value
+    util.dt = sys.modules["homeassistant.util.dt"] = stub
+
+
 class Base(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        ensure_local_time()
         self.now = 100000
         self.calls, self.history, self.store, self.states, self.services = [], [], {}, {}, []
         async def db(method, vehicle, key, value=None):
@@ -210,7 +220,56 @@ class Climate(Base):
         self.assertEqual(self.calls[-1][1]["message"], "clear_notification")
 
 
+class ParkedAfter(Base):
+    def odometer(self, reported_ago, changed_ago):
+        self.state("sensor.s05_total_odometer", 1000, age=reported_ago)
+        self.states["sensor.s05_total_odometer"].last_changed = datetime.fromtimestamp(self.now - changed_ago, timezone.utc)
+
+    async def test_same_value_reported_again_is_not_movement(self):
+        # The car reports every 5 minutes. A report that repeats the same odometer value must not look like driving.
+        self.odometer(reported_ago=10, changed_ago=1500)
+        self.assertFalse(self.live.running({"parked_after": 360}))
+        self.odometer(reported_ago=10, changed_ago=200)
+        self.assertTrue(self.live.running({"parked_after": 360}))
+
+    async def test_the_window_is_the_users_setting(self):
+        self.odometer(reported_ago=10, changed_ago=400)
+        self.assertFalse(self.live.running({"parked_after": 360}))
+        self.assertTrue(self.live.running({"parked_after": 600}))
+
+    async def test_setting_is_validated_and_defaults_for_saved_notifications(self):
+        saved = {key: value for key, value in status.KINDS["open"]["default"].items() if key != "parked_after"}
+        self.assertEqual(status.validate_status("open", saved)["parked_after"], 360)
+        for bad in (59, 3601, True, "360", 360.5):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                status.validate_status("open", {**saved, "parked_after": bad})
+
+    async def test_the_end_reason_names_what_really_happened(self):
+        open_options = {**status.KINDS["open"]["default"], "only_parked": True}
+        self.assertEqual(self.live.end_reason("climate", status.KINDS["climate"]["default"]), "Climate turned off")
+        self.odometer(reported_ago=10, changed_ago=60)
+        self.assertEqual(self.live.end_reason("open", open_options), "Vehicle moving")
+        self.odometer(reported_ago=10, changed_ago=1500)
+        self.assertEqual(self.live.end_reason("open", open_options), "Everything closed and locked")
+
+    async def test_parked_after_covers_the_five_minute_report_interval(self):
+        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=False, only_parked=True)
+        self.doors(("trunk",))
+        self.odometer(reported_ago=10, changed_ago=700)
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1, "Parked for a long time: the alert shows although the odometer was just reported")
+
+
 class OpenOrUnlocked(Base):
+    async def test_missing_or_stale_second_lock_sensor_does_not_hide_an_unlocked_car(self):
+        options = {**status.KINDS["open"]["default"], "include_unlocked": True, "only_parked": False, "items": []}
+        self.doors((), unlocked=True)
+        for value, age in (("off", 99999), ("unavailable", 0), ("unknown", 0)):
+            self.state("binary_sensor.s05_doors_lock_state", value, age=age)
+            self.assertTrue(self.live.open_snapshot(self.now, options)["unlocked"], value)
+        self.state("binary_sensor.s05_doors_lock_state", "off")  # fresh and locked: the second sensor decides
+        self.assertFalse(self.live.open_snapshot(self.now, options)["unlocked"])
+
     async def test_list_updates_and_clears_when_secure(self):
         self.doors(("front_left_door", "trunk"), unlocked=True)
         await self.live.tick()
@@ -236,7 +295,7 @@ class OpenOrUnlocked(Base):
         self.assertEqual(self.calls[-1][1]["message"], "clear_notification")
 
     async def test_nothing_while_the_car_is_running(self):
-        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=False, only_parked=True)
+        self.config["live_open"].update(start_delay=60, end_delay=0, include_unlocked=False, only_parked=True)
         self.doors(("front_left_window",))
         self.state("binary_sensor.s05_engine", "on")
         self.state("sensor.s05_power_status", "on")
@@ -247,8 +306,8 @@ class OpenOrUnlocked(Base):
         self.assertEqual(self.calls, [], "power still on")
         self.state("sensor.s05_power_status", "off")
         await self.live.tick()
-        self.assertEqual(self.calls, [], "parked: it still waits (the car reports about every 5 minutes)")
-        self.now += 181
+        self.assertEqual(self.calls, [], "parked: the full configured wait starts now")
+        self.now += 60
         self.doors(("front_left_window",))
         self.state("sensor.s05_power_status", "off")
         await self.live.tick()
@@ -258,15 +317,16 @@ class OpenOrUnlocked(Base):
         await self.live.tick()
         self.assertEqual(self.calls[-1][1]["message"], "clear_notification", "driving off ends it")
         self.config["live_open"]["only_parked"] = False
+        self.config["live_open"]["start_delay"] = 0
         self.now += 60
         await self.live.tick()
         self.assertEqual(self.calls[-1][1]["title"], "Front left window", "the switch restores the old behaviour")
 
-    def test_wait_is_at_least_five_minutes_while_parked(self):
+    def test_wait_is_exact_user_delay(self):
         wait = status.LiveStatus.wait
-        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 60}), 180)
-        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 300}), 180)
-        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 600}), 480)
+        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 60}), 60)
+        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 300}), 300)
+        self.assertEqual(wait("open", {"only_parked": True, "start_delay": 600}), 600)
         self.assertEqual(wait("open", {"only_parked": False, "start_delay": 60}), 60)
         self.assertEqual(wait("climate", {"only_parked": True, "start_delay": 0}), 0)
         self.assertEqual(status.KINDS["open"]["default"]["start_delay"], 300)
@@ -281,6 +341,74 @@ class OpenOrUnlocked(Base):
         self.assertEqual(self.calls, [])
         self.state("sensor.s05_total_odometer", 1000, age=400)
         self.assertFalse(self.live.running(), "power is on but the odometer is still: parked")
+
+    async def test_full_delay_restarts_after_brief_closed_and_stale(self):
+        self.config["live_open"].update(start_delay=300, end_delay=60)
+        self.doors(("trunk",))
+        await self.live.tick()
+        self.now += 299
+        await self.live.tick()
+        self.assertEqual(self.calls, [])
+        self.doors(())
+        await self.live.tick()
+        self.now += 1
+        self.doors(("trunk",))
+        await self.live.tick()
+        self.now += 299
+        await self.live.tick()
+        self.assertEqual(self.calls, [])
+        for sensor in self.states.values():
+            sensor.last_reported = datetime.fromtimestamp(self.now - 4000, timezone.utc)
+        await self.live.tick()
+        self.now += 1
+        self.doors(("trunk",))
+        await self.live.tick()
+        self.now += 299
+        await self.live.tick()
+        self.assertEqual(self.calls, [])
+        self.now += 1
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(self.history[0][2]["trigger"]["effective_wait_seconds"], 300)
+
+    async def test_unknown_connection_restarts_pending_delay(self):
+        self.config["live_open"].update(start_delay=300)
+        self.doors(("trunk",))
+        await self.live.tick()
+        self.now += 299
+        self.state("binary_sensor.s05_cloud_connection", "off")
+        await self.live.tick()
+        self.now += 1
+        self.state("binary_sensor.s05_cloud_connection", "on")
+        await self.live.tick()
+        self.now += 299
+        await self.live.tick()
+        self.assertEqual(self.calls, [])
+        self.now += 1
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1)
+
+    async def test_restart_does_not_count_downtime_as_pending_wait(self):
+        self.store["live_status_state"] = {"open": {"since": self.now - 300}}
+        await self.live.start()
+        self.assertNotIn("since", self.live.state["open"])
+
+    async def test_movement_restarts_full_delay(self):
+        self.config["live_open"].update(start_delay=300, only_parked=True)
+        self.doors(("trunk",))
+        self.state("sensor.s05_total_odometer", 1000, age=400)
+        await self.live.tick()
+        self.now += 299
+        self.state("sensor.s05_total_odometer", 1001)
+        await self.live.tick()
+        self.now += 360  # the odometer must stay unchanged for "Parked after" (default 6 minutes) first
+        await self.live.tick()
+        self.now += 299
+        await self.live.tick()
+        self.assertEqual(self.calls, [])
+        self.now += 1
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1)
 
     async def test_recent_activity_gets_one_start_and_one_end(self):
         self.config["live_open"].update(start_delay=0, end_delay=0)

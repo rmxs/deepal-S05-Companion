@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from test_lifecycle import integration
+from test_recorder_resilience import snapshot_from_db
 
 Runtime = importlib.import_module("companion_lifecycle.runtime").VehicleRuntime
 
@@ -14,11 +15,7 @@ Runtime = importlib.import_module("companion_lifecycle.runtime").VehicleRuntime
 class RuntimePerformanceTests(unittest.IsolatedAsyncioTestCase):
     async def test_removed_profile_marker_preserves_cost_and_clears_on_reassignment(self):
         runtime = self.runtime(1)
-        original_db = runtime.hub.db
-        settings = await original_db("get", "car", "costs", {})
-        async def db(method, *args):
-            return deepcopy(settings) if method == "get" else await original_db(method, *args)
-        runtime.hub.db = db
+        settings = self.settings  # the fake archive hands out copies of this; changes here are what the next read sees
         before = (await runtime.priced_sessions())[0]
         settings["profiles"] = []
         removed = (await runtime.priced_sessions())[0]
@@ -31,6 +28,22 @@ class RuntimePerformanceTests(unittest.IsolatedAsyncioTestCase):
         assignment["profile"]["id"] = "work"
         settings["profiles"] = [deepcopy(assignment["profile"])]
         self.assertFalse((await runtime.priced_sessions())[0]["profile_removed"])
+
+    def test_fuel_follows_the_vehicle_type_then_the_fuel_sensors(self):
+        module = importlib.import_module("companion_lifecycle.runtime")
+        def car(mode, present=()):
+            states = {entity: object() for entity in present}
+            return types.SimpleNamespace(config={"powertrain": mode, "prefix": "s05"}, entities={"fuel": "sensor.s05_fuel_level"},
+                                         hass=types.SimpleNamespace(states=types.SimpleNamespace(get=states.get)))
+        registry = types.SimpleNamespace(async_get=lambda entity: None)
+        with patch.object(module.er, "async_get", lambda hass: registry, create=True):
+            self.assertFalse(Runtime.has_fuel(car("ev", ["sensor.s05_fuel_level"])))  # an explicit choice wins
+            self.assertTrue(Runtime.has_fuel(car("phev")))
+            self.assertTrue(Runtime.has_fuel(car("auto", ["sensor.s05_fuel_range"])))
+            self.assertTrue(Runtime.has_fuel(car("auto", ["sensor.s05_fuel_level"])))
+            self.assertFalse(Runtime.has_fuel(car("auto")))  # no fuel sensors: electric only
+            self.assertEqual(Runtime.capacity(types.SimpleNamespace(config={"powertrain": "ev", "prefix": "s05"}, has_fuel=lambda: False)), 68.8)
+            self.assertEqual(Runtime.capacity(types.SimpleNamespace(config={"powertrain": "phev", "prefix": "s05"}, has_fuel=lambda: True)), 18.4)
 
     async def test_snapshot_does_not_treat_restored_current_as_live_charging(self):
         runtime = self.runtime(0)
@@ -108,6 +121,7 @@ class RuntimePerformanceTests(unittest.IsolatedAsyncioTestCase):
             start = 1700000000000 + i * 7200000
             rows.append({"id": str(i), "s": start, "e": start + 3600000, "live": False, "from": 20, "to": 70, "kwh": 9.2, "capacity": 18.4})
             assignments[str(round(start / 1000))] = {"profile": deepcopy(profile), "capacity": 18.4}
+        self.settings = {"profiles": [profile], "sessions": assignments}
         async def db(method, *args):
             self.calls.append(method)
             await asyncio.sleep(0)
@@ -118,13 +132,13 @@ class RuntimePerformanceTests(unittest.IsolatedAsyncioTestCase):
                 page = [row for row in reversed(rows) if before is None or row["s"] < before][:limit]
                 return {"rows": deepcopy(page), "total": len(rows), "has_more": len(rows)>limit, "next_before": page[-1]["s"]}
             if method == "get":
-                return {"profiles": [profile], "sessions": assignments}
+                return deepcopy(self.settings)
             if method == "pricing_inputs":
                 self.requests.append(len(args[1]))
                 return {key: {"readings": [], "unit": "kWh"} for key, *_ in args[1]}
             raise AssertionError(method)
         hass = types.SimpleNamespace(states=types.SimpleNamespace(get=lambda entity: None))
-        hub = types.SimpleNamespace(hass=hass, db=db)
+        hub = types.SimpleNamespace(hass=hass, db=db, read_db=snapshot_from_db(db))
         return Runtime(hub, types.SimpleNamespace(unique_id="car"))
 
     async def test_four_sensors_share_one_summary_query(self):

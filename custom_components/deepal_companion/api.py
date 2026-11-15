@@ -138,7 +138,9 @@ async def request(hass, connection, msg):
             if not connection.user.is_admin:
                 raise PermissionError("Administrator access is required for notification templates and devices")
             from .notifications import validate
-            engine = runtime.notifications
+            engine = getattr(runtime, "notifications", None)
+            if engine is None:  # the vehicle is still starting: the card asks again on its next refresh
+                raise ValueError("Companion is still starting. Try again in a moment.")
             if op == "notifications_get":
                 from .live_charging import supported
                 activity = engine.history_page()
@@ -203,7 +205,7 @@ async def request(hass, connection, msg):
             patch = data.get("patch", {})
             if not isinstance(patch, dict) or set(patch) - hub.setting_keys:
                 raise ValueError("Unknown card setting")
-            for k in ("battery_kwh", "fuel_tank_liters"):
+            for k in ("battery_kwh",):
                 if k in patch and (isinstance(patch[k], bool) or not isinstance(patch[k], (int, float)) or not 0 <= patch[k] <= 500):
                     raise ValueError("Invalid capacity")
             for key, (low, high) in RANGES.items():

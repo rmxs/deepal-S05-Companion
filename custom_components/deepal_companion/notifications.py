@@ -10,6 +10,8 @@ import re
 import time
 import uuid
 
+from .phone_text import tr
+
 SERVICE = re.compile(r"^mobile_app_[a-z0-9_]+$")
 ENTITY = re.compile(r"^notify\.[a-z0-9_]+$")
 IDENTITY = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
@@ -344,12 +346,32 @@ class NotificationEngine:
         self.history.insert(0, {"id": uuid.uuid4().hex, "time": time.time(), "rule_id": rule["id"], "name": rule["name"], "status": status,
                                 "icon": rule.get("data", {}).get("notification_icon", "mdi:bell-outline"),
                                 "severity": rule.get("severity", "info"), **details})
+        self.combine_live_history()
         del self.history[200:]
+
+    def combine_live_history(self):
+        """Pair live lifecycles before pagination, including previously saved separate events."""
+        opened, rows = {}, []
+        for item in reversed(self.history):
+            key = item.get("rule_id")
+            if item.get("status") == "live_started":
+                item.setdefault("start_time", item["time"])
+                opened[key] = item
+            elif item.get("status") == "live_ended" and key in opened:
+                start = opened.pop(key)
+                start.update(end_time=item.get("end_time", item["time"]), time=item["time"], status="live_ended")
+                if item.get("trigger"):
+                    start["end_trigger"] = item["trigger"]
+                continue
+            rows.append(item)
+        # Oldest first, then reversed: entries with the same timestamp stay newest first.
+        self.history = sorted(rows, key=lambda row: row["time"])[::-1]
 
     def history_page(self, limit=5, before=None):
         """Bounded responses; the dashboard requests subsequent pages explicitly."""
         if type(limit) is not int or not 1 <= limit <= 20:
             raise ValueError("Choose between 1 and 20 activity entries")
+        self.combine_live_history()
         start = 0
         if before is not None:
             if not isinstance(before, str) or not re.fullmatch(r"[a-f0-9]{32}", before):
@@ -412,11 +434,11 @@ class NotificationEngine:
             data.update(url=rule["url"], clickAction=rule["url"])
         actions = []
         if "dismiss" in rule["buttons"] and not test:
-            actions.append({"action": token, "title": "Dismiss"})
+            actions.append({"action": token, "title": tr(self.hass, "Dismiss")})
         if "lock" in rule["buttons"] and not test:
-            actions.append({"action": token.replace("_DISMISS_", "_LOCK_"), "title": "Lock vehicle"})
+            actions.append({"action": token.replace("_DISMISS_", "_LOCK_"), "title": tr(self.hass, "Lock vehicle")})
         if "open" in rule["buttons"] and rule["url"]:
-            actions.append({"action": "URI", "title": "Open dashboard", "uri": rule["url"]})
+            actions.append({"action": "URI", "title": tr(self.hass, "Open dashboard"), "uri": rule["url"]})
         if actions:
             data["actions"] = actions
         async def send(service):
@@ -426,7 +448,7 @@ class NotificationEngine:
                     if not allowed:
                         return {"device": service, "status": "skipped"}
                 async with asyncio.timeout(15):
-                    resolved = await self.send_to_recipient(service, {"title": ("[Test] " if test else "") + preview["title"], "message": preview["message"], "data": deepcopy(data)})
+                    resolved = await self.send_to_recipient(service, {"title": (("[" + tr(self.hass, "Test") + "] ") if test else "") + preview["title"], "message": preview["message"], "data": deepcopy(data)})
                 return {"device": resolved, "status": "accepted"}
             except Exception as error:
                 return {"device": service, "status": "error", "error": str(error)[:300] or type(error).__name__}

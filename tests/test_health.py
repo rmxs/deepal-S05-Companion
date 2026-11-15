@@ -40,6 +40,25 @@ class Sensors(unittest.TestCase):
         self.assertEqual(rows["sensor_batt"]["status"], "error")
         self.assertEqual(rows["sensor_cloud"]["status"], "warning")
 
+    def test_messages_carry_a_template_and_values_for_translation(self):
+        rows = by_id(health.sensor_checks(runtime({}), NOW))
+        row = rows["sensor_batt"]
+        self.assertEqual(row["detail"], "sensor.s05_battery_level was not found in Home Assistant.")
+        self.assertEqual(row["detail_key"], "{0} was not found in Home Assistant.")
+        self.assertEqual(row["args"], ["sensor.s05_battery_level"])
+
+    def test_electric_car_does_not_check_fuel_sensors_but_a_hybrid_does(self):
+        entities = {"batt": "sensor.s05_battery_level", "fuel": "sensor.s05_fuel_level", "volume": "sensor.s05_fuel_volume"}
+        states = {"sensor.s05_battery_level": state("80")}
+        electric = runtime(states, entities)
+        electric.has_fuel = lambda: False
+        rows = by_id(health.sensor_checks(electric, NOW))
+        self.assertEqual(set(rows), {"sensor_batt"})
+        hybrid = runtime(states, entities)
+        hybrid.has_fuel = lambda: True
+        rows = by_id(health.sensor_checks(hybrid, NOW))
+        self.assertEqual(rows["sensor_fuel"]["status"], "warning")
+
     def test_unavailable_cloud_and_cloud_off_and_stale_battery(self):
         rows = by_id(health.sensor_checks(runtime({"sensor.s05_battery_level": state("80", age=7 * 3600), "binary_sensor.s05_cloud": state("off")}), NOW))
         self.assertEqual(rows["sensor_batt"]["status"], "warning")

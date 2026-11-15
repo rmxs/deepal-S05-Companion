@@ -1,13 +1,15 @@
 """Constants for Deepal Companion."""
 DOMAIN = "deepal_companion"
-VERSION = "0.1.8"
+VERSION = "0.2.0"
+FRONTEND_REVISION = "20261115-23"
+FRONTEND_VERSION = VERSION + "&rev=" + FRONTEND_REVISION
 SIGNAL = f"{DOMAIN}_updated"
 FRONTEND_URL = f"/{DOMAIN}/frontend"
 PANEL_URL = "deepal-companion"
 CARD_PANEL_URL = "deepal-companion-card"  # page that shows only the card
 SHARED_KEYS = frozenset({
     "prefix", "entities", "powertrain", "battery_kwh", "fuel_max",
-    "fuel_tank_liters", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump",
+    "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump",
     "car_color", "iso_wheels",  # what the car physically looks like: the same in every display profile
 })
 # User settings (card Settings): defaults and allowed ranges, shared by the API and the backend.
@@ -20,7 +22,7 @@ ENERGY_KEYS = {
     "dc": "sensor.dc_charge_current", "odo": "sensor.total_odometer",
     "pow": "sensor.power_status", "fuel": "sensor.fuel_level",
     "charging": "binary_sensor.charging", "plug": "binary_sensor.charger_plugged",
-    "tank": "sensor.fuel_tank_capacity",
+    "volume": "sensor.fuel_volume",
     "cloud": "binary_sensor.cloud_connection",
 }
 DEFAULT_PROFILES = [

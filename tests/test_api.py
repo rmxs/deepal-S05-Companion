@@ -124,7 +124,7 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         async def sessions(start, end):
             return self.db.sessions("car", start, end)
         runtime = types.SimpleNamespace(entry=types.SimpleNamespace(data={"battery_entity": "sensor.batt"}, options={}), refresh=refresh, priced_sessions=sessions)
-        self.hub = types.SimpleNamespace(db=db, vehicles={"car": runtime}, setting_keys={"car_color", "battery_kwh", "fuel_tank_liters", "entities", "prefix", "companion_design", "companion_width", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump"}, changed=lambda vehicle: None)
+        self.hub = types.SimpleNamespace(db=db, vehicles={"car": runtime}, setting_keys={"car_color", "battery_kwh", "entities", "prefix", "companion_design", "companion_width", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump"}, changed=lambda vehicle: None)
         self.hass = types.SimpleNamespace(data={"deepal_companion": self.hub})
 
     async def asyncTearDown(self):
@@ -163,6 +163,21 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         for op in ("notifications_get", "notifications_set", "notifications_preview", "notifications_test", "notifications_live_test", "notifications_live_stop_test", "notifications_history", "notifications_history_delete", "sessions_import"):
             c = await self.request(op, {}, Connection(admin=False))
             self.assertEqual(c.errors[0][0], "unauthorized")
+
+    async def test_notification_card_request_during_startup_gets_a_plain_message(self):
+        # The card can ask for notifications before the vehicle has finished starting: answer in plain words, do not fail.
+        runtime = self.hub.vehicles["car"]
+        had = hasattr(runtime, "notifications")
+        saved = getattr(runtime, "notifications", None)
+        if had:
+            del runtime.notifications
+        try:
+            c = await self.request("notifications_unread", {})
+            self.assertEqual(c.errors[0][0], "invalid_format")
+            self.assertIn("still starting", c.errors[0][1])
+        finally:
+            if saved is not None:
+                runtime.notifications = saved
 
     async def test_non_admin_export_excludes_notification_templates_and_messages(self):
         self.db.put("car", "local_notification_history", [{"message": "Private notification"}])

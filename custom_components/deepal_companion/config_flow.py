@@ -30,9 +30,9 @@ def detect_powertrain(hass, battery):
         key = getattr(entity, "translation_key", None)
         stem = entity.entity_id.split(".", 1)[1]
         unique = str(getattr(entity, "unique_id", ""))
-        if key in {"fuel_level", "fuel_range"} or any(
+        if key in {"fuel_level", "fuel_range", "fuel_volume"} or any(
             stem.endswith("_" + role) or unique.endswith("_" + role)
-            for role in ("fuel_level", "fuel_range")
+            for role in ("fuel_level", "fuel_range", "fuel_volume")
         ):
             return "phev"
     return "ev"

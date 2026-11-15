@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import timedelta
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
@@ -14,6 +15,7 @@ from .const import DOMAIN, SIGNAL
 from .health import BACKLOG_LIMIT
 
 SCAN_INTERVAL = timedelta(seconds=60)  # only used by the archive status sensor, which reads runtime flags
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities) -> None:
@@ -25,6 +27,7 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 class CompanionSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
+    SUMMARY_TIMEOUT = 60  # seconds one update waits for the shared summary; tests shorten it on the instance
 
     def __init__(self, runtime, key):
         self.runtime, self.key = runtime, key
@@ -48,6 +51,7 @@ class CompanionSensor(SensorEntity):
         self._queued = False
         self._update_task = None
         self._removed = False
+        self._stall_logged = False
 
     async def async_added_to_hass(self):
         self._removed = False
@@ -78,7 +82,18 @@ class CompanionSensor(SensorEntity):
         try:
             while not self._removed:
                 self._queued = False
-                await self.async_update()
+                try:
+                    await asyncio.wait_for(self.async_update(), self.SUMMARY_TIMEOUT)
+                except asyncio.TimeoutError:
+                    # Stop waiting only: the shared calculation keeps running and is not restarted here.
+                    if not self._stall_logged:
+                        self._stall_logged = True
+                        _LOGGER.warning("Companion summary %s is stalled waiting for the database; "
+                                        "it will update when the database responds", self.key)
+                    if self._queued and not self._removed:
+                        continue  # a change arrived while waiting: retry, one timeout window per attempt
+                    break  # the next change or minute tick starts a new update
+                self._stall_logged = False
                 if not self._removed:
                     self.async_write_ha_state()
                 if not self._queued:

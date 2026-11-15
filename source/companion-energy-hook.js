@@ -10,7 +10,7 @@
         ].sort((a,b)=>a.s-b.s);
         for (const day of m.days) { day.n=0; day.kwh=0; }
         for (const charge of m.chg) {
-          const day=m.days.find(d=>d.key===dayKey(charge.s));
+          const day=m.days.find(d=>d.key===dayKey(charge.s,m.timezone));
           if(day){day.n++;if(charge.kwh>0)day.kwh+=charge.kwh;}
         }
       }

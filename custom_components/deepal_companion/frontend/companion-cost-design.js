@@ -1,4 +1,4 @@
-import {costHtml,costCss} from './cost-design.js?v=0.1.8';
+import {costHtml,costCss} from './cost-design.js?v=0.2.0&rev=20261115-23';
 let templates;
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const iconNames={'bolt-lightning':'mdi:lightning-bolt',bolt:'mdi:lightning-bolt','charging-station':'mdi:ev-station',coins:'mdi:cash-multiple','grip-vertical':'mdi:view-grid-outline',list:'mdi:format-list-bulleted','chevron-down':'mdi:chevron-down',pen:'mdi:pencil-outline','location-dot':'mdi:map-marker-outline'};
@@ -68,9 +68,9 @@ const css=`
 .supplied-costs .energy-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;padding:0;list-style:none;font-size:12px;color:var(--secondary-text-color)}
 .supplied-costs .energy-legend li{display:inline-flex;align-items:center;gap:6px}
 .supplied-costs .energy-legend li::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--c)}
-.supplied-costs .energy-legend .free,.supplied-costs .energy-stack .free{--c:rgb(var(--cost-ok))}
-.supplied-costs .energy-legend .paid,.supplied-costs .energy-stack .paid{--c:rgb(var(--cost-info))}
-.supplied-costs .energy-legend .unpriced,.supplied-costs .energy-stack .unpriced{--c:rgb(var(--cost-warn))}
+.supplied-costs .energy-legend .free,.supplied-costs .energy-stack .free{--c:light-dark(#087f5b,#34e5a4)}
+.supplied-costs .energy-legend .paid,.supplied-costs .energy-stack .paid{--c:light-dark(#2457c5,#82acff)}
+.supplied-costs .energy-legend .unpriced,.supplied-costs .energy-stack .unpriced{--c:light-dark(#a85a06,#ffcb66)}
 .supplied-costs .energy-plot{--ax:56px;position:relative;height:210px}
 .supplied-costs .energy-grid,.supplied-costs .energy-y{position:absolute;top:0;bottom:24px}
 .supplied-costs .energy-grid{left:var(--ax);right:0}
@@ -84,6 +84,7 @@ const css=`
 .supplied-costs .energy-col:hover .energy-stack,.supplied-costs .energy-col:focus-visible .energy-stack{filter:brightness(1.15)}
 .supplied-costs .energy-col:focus-visible .energy-stack{outline:2px solid rgb(var(--cost-info));outline-offset:2px}
 .supplied-costs .energy-date{position:absolute;top:100%;margin-top:6px;font-size:11px;color:var(--secondary-text-color);white-space:nowrap}
+.supplied-costs .energy-cols.is-month .energy-col:not(:nth-child(5n+1)) .energy-date{visibility:hidden}
 .supplied-costs .energy-tip{display:none;position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:2;padding:6px 10px;border-radius:10px;background:var(--card-background-color);border:1px solid var(--divider-color);font-size:12px;white-space:nowrap;pointer-events:none;color:var(--primary-text-color)}
 .supplied-costs .energy-col:hover .energy-tip,.supplied-costs .energy-col:focus-visible .energy-tip{display:block}
 .supplied-costs .energy-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;font-size:11px;color:var(--secondary-text-color);padding-top:10px;border-top:1px solid var(--divider-color)}
@@ -105,7 +106,7 @@ export function costFrame(panel,page,actions){
 
 export function costCardContent(panel,row){
  const f=panel.sessionFormat(),start=new Date(row.s),end=new Date(row.e),valid=Number.isFinite(start.getTime()),ended=Number.isFinite(end.getTime())&&!row.live,from=Number.isFinite(row.from)?Math.min(100,Math.max(0,row.from)):null,to=Number.isFinite(row.to)?Math.min(100,Math.max(0,row.to)):null,state=panel.sessionState(row);
- const date=valid?f.date.format(start):'—',time=valid?f.time.format(start)+(ended?' – '+(start.toDateString()!==end.toDateString()?f.date.format(end)+' ':'')+f.time.format(end):''):'',length=valid&&ended?sessionDuration(end-start):'';
+ const date=valid?f.date.format(start):'—',time=valid?f.time.format(start)+(ended?' – '+(f.date.format(start)!==f.date.format(end)?f.date.format(end)+' ':'')+f.time.format(end):''):'',length=valid&&ended?sessionDuration(end-start):'';
  const measured=Number.isFinite(row.pricing?.energy),amount=measured?row.pricing.energy:Number.isFinite(row.kwh)?row.kwh:null,estimated=!measured||row.pricing?.estimated!==false;
  const type=row.live?'Charging':typeof row.dc==='boolean'?(row.dc?'DC':'AC'):'—',price=state==='unpriced'?'Not priced':f.money.format(row.pricing.cost),note=state==='unpriced'?'Add a tariff or receipt':state==='free'?'Free charging':'Charging cost',action=state==='unpriced'?'Set price':'Edit charge';
  const left=from==null?0:Math.min(from,to??from),width=to==null?0:Math.max(from==null?to:to-left,from==null?0:2);
@@ -118,9 +119,9 @@ function sessionDuration(ms){const minutes=Math.max(0,Math.round(ms/60000)),h=Ma
 
 const energyStep=max=>{const raw=max/4||1,pow=Math.pow(10,Math.floor(Math.log10(raw)));return [1,2,2.5,5,10].map(m=>m*pow).find(step=>step>=raw)||10*pow;};
 export function energyChartMarkup(panel,summary,period){
- const f=panel.sessionFormat(),lang=panel._hass?.locale?.language||'en',days=period?.period||7,end=new Date(period?.end??Date.now()),dayFmt=new Intl.DateTimeFormat(lang,{day:'numeric',month:'short'});
- const last=new Date(end);last.setHours(0,0,0,0);const byDay=new Map((summary?.chart_rows||[]).map(row=>[row.s,row]));
- const cols=[];for(let i=days-1;i>=0;i--){const d=new Date(last);d.setDate(d.getDate()-i);const split=byDay.get(d.getTime())?.split||{};cols.push({t:d.getTime(),paid:split.paid||0,free:split.free||0,unpriced:split.unpriced||0});}
+ const f=panel.sessionFormat(),lang=panel._hass?.locale?.language||'en',days=period?.period||7,end=new Date(period?.end??Date.now()),ha=window.__DEEPAL_COMPANION_UI.format(panel._hass),dayFmt={format:ha.dm};
+ const last=ha.dayStart(period?.start!=null?Number(end)-1:end);const byDay=new Map((summary?.chart_rows||[]).map(row=>[row.s,row]));
+ const cols=[];for(let i=days-1;i>=0;i--){const t=ha.dayStart(last,-i);const split=byDay.get(t)?.split||{};cols.push({t,paid:split.paid||0,free:split.free||0,unpriced:split.unpriced||0});}
  const totals=cols.map(c=>c.paid+c.free+c.unpriced),max=Math.max(0,...totals),step=energyStep(max),top=Math.max(step,Math.ceil(max/step-1e-9)*step);
  const pct=v=>(v/top*100)+'%',num=v=>f.number.format(v);
  const ticks=[];for(let v=0;v<=top+step/2;v+=step)ticks.push(Math.round(v*1000)/1000);
@@ -128,11 +129,16 @@ export function energyChartMarkup(panel,summary,period){
  const lines=ticks.map(v=>'<i style="bottom:'+pct(v)+'"></i>').join('');
  const cells=cols.map((c,i)=>{const total=totals[i],label=dayFmt.format(new Date(c.t)),tip=label+' · '+(total?num(total)+' kWh':'no charging')+(c.paid?' · paid '+num(c.paid):'')+(c.free?' · free '+num(c.free):'')+(c.unpriced?' · not priced '+num(c.unpriced):'');
   const part=(k,v)=>v?'<b class="'+k+'" style="flex-grow:'+v+'"></b>':'';
-  return '<div class="energy-col" tabindex="0" aria-label="'+escape(tip)+'"><div class="energy-stack" style="height:'+pct(total)+'">'+part('paid',c.paid)+part('free',c.free)+part('unpriced',c.unpriced)+'</div><span class="energy-tip" aria-hidden="true">'+escape(tip)+'</span><span class="energy-date">'+escape(label)+'</span></div>';}).join('');
+  return '<div class="energy-col" data-day="'+c.t+'" tabindex="0" aria-label="'+escape(tip)+'"><div class="energy-stack" style="height:'+pct(total)+'">'+part('paid',c.paid)+part('free',c.free)+part('unpriced',c.unpriced)+'</div><span class="energy-tip" aria-hidden="true">'+escape(tip)+'</span><span class="energy-date">'+escape(label)+'</span></div>';}).join('');
  const cost=summary?.cost,unpriced=summary?.unpriced||0;
  return '<section class="energy-chart" aria-label="Energy delivered"><header class="energy-head"><div><h3>Energy delivered (kWh)</h3><p>Hover over bars to inspect daily sessions</p></div><ul class="energy-legend"><li class="free">Free charging</li><li class="paid">Paid charging</li><li class="unpriced">Unpriced session</li></ul></header>'
-  +'<div class="energy-plot"><div class="energy-grid">'+lines+'</div><div class="energy-y">'+labels+'</div><div class="energy-cols" style="grid-template-columns:repeat('+days+',minmax(0,1fr))">'+cells+'</div></div>'
+  +'<div class="energy-plot"><div class="energy-grid">'+lines+'</div><div class="energy-y">'+labels+'</div><div class="energy-cols'+(days>14?' is-month':'')+'" style="grid-template-columns:repeat('+days+',minmax(0,1fr))">'+cells+'</div></div>'
   +'<footer class="energy-foot"><span><ha-icon icon="mdi:alert-circle-outline"></ha-icon> Energy values may be estimated based on charger telemetry.</span><span>Cost '+escape(f.money.format(cost||0))+(unpriced?' · '+unpriced+' not priced':'')+' · Last updated '+escape(f.date.format(new Date())+', '+f.time.format(new Date()))+'</span></footer></section>';
+}
+export function bindEnergyChartZoom(panel){
+ const plot=panel.costGraph?.querySelector('.energy-plot'),columns=plot?.querySelector('.energy-cols');if(!plot||plot._dcChartZoom||!columns?.children.length)return;
+ const original=[...columns.children],ha=window.__DEEPAL_COMPANION_UI.format(panel._hass),start=Number(original[0].dataset.day),end=ha.dayStart(Number(original.at(-1).dataset.day),1);
+ plot._dcChartZoom=window.__DEEPAL_COMPANION_UI.mountChartZoom(plot,()=>({start,end}),range=>{const visible=range?original.filter(node=>ha.dayStart(Number(node.dataset.day),1)>range.start&&Number(node.dataset.day)<range.end):original;columns.replaceChildren(...visible);columns.style.gridTemplateColumns='repeat('+visible.length+',minmax(0,1fr))';columns.classList.toggle('is-month',visible.length>14);},{minSpan:86400000});
 }
 export function applyCostDesign(panel){
  const root=panel.shadowRoot.querySelector('.supplied-costs');if(!root)return;window.__DEEPAL_COMPANION_UI.applyPalette(root,panel.config);for(const role of ['ok','warn','bad','info'])root.style.setProperty('--cost-'+role,root.style.getPropertyValue('--ds-'+role).replaceAll(',',' '));
@@ -143,7 +149,7 @@ function periodTotals(data){
  return {sessions:null,energy:rows.reduce((sum,row)=>sum+(row.pricing?.energy||0),0),cost:rows.reduce((sum,row)=>sum+(row.pricing?.cost||0),0),unpriced:rows.reduce((sum,row)=>sum+(row.unpriced_count||0),0),paid_sessions:null,paid_energy:null,free_sessions:null,free_energy:null};
 }
 export function updateCostHeader(panel){
- const root=panel.shadowRoot.querySelector('.supplied-costs');if(!root)return;const data=panel.dashboardSummary||{},f=panel.sessionFormat();root.querySelector('[data-energy-total]').textContent=Number.isFinite(data.energy)?f.number.format(data.energy)+' kWh':'—';root.querySelector('[data-cost-total]').textContent=data.priced||!data.total?f.money.format(data.cost||0):'—';root.querySelector('[data-cost-total]').title=(data.priced||0)+' of '+(data.total||0)+' completed charges priced';
+ const root=panel.shadowRoot.querySelector('.supplied-costs');if(!root)return;const data=panel.dashboardSummary||{},f=panel.sessionFormat();root.querySelector('[data-energy-total]').textContent=Number.isFinite(data.energy)?(data.battery_estimated>0?'≈ ':'')+f.number.format(data.energy)+' kWh':'—';root.querySelector('[data-cost-total]').textContent=data.priced||!data.total?f.money.format(data.cost||0):'—';root.querySelector('[data-cost-total]').title=(data.priced||0)+' of '+(data.total||0)+' completed charges priced';
  if(!root.querySelector('.cost-kpis'))return;const p=periodTotals(data),days=panel.costChartPeriod?.period||7,set=(key,value,note)=>{root.querySelector('[data-kpi='+key+']').textContent=value;root.querySelector('[data-kpi-note='+key+']').textContent=note;};
  const known=p.paid_energy!=null,eligible=known?p.paid_energy+p.free_energy:0,plural=(count,word)=>count+' '+word+(count===1?'':'s');
  set('energy',(p.battery_estimated>0?'≈ ':'')+f.number.format(p.energy||0)+' kWh',(p.sessions==null?'':plural(p.sessions,'session')+' · ')+days+' days');

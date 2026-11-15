@@ -212,7 +212,7 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 
 ## 13. Check that everything works
 
-Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. A problem says what is wrong and what to do. The page only reads; it never changes settings or sends a notification.
+Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. A problem says what is wrong and what to do, in the Home Assistant language where a translation exists. Electric cars are not checked for fuel sensors. A pulsing red dot on the tab means a warning or error. The page only reads; it never changes settings or sends a notification.
 
 In **Notifications**, choose **Why isn’t it sending?** on an alert to see why it is or is not being sent right now: switches, condition (each part with its current value), delay, send limit, repeat, quiet hours and devices. Tap **?** beside a line to learn what the sensor is and when it changes.
 

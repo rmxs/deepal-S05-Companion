@@ -8,7 +8,6 @@
   "image_aspect": null,
   "powertrain": "auto",
   "fuel_max": 0,
-  "fuel_tank_liters": 0,
   "confirm": [
     "unlock",
     "trunk",

@@ -1,7 +1,7 @@
 function renderChargingCosts(m,ctx){
   const rows=m.chg.slice().reverse();
   let html='<div class="en-cost-heading"><h3>'+esc(T("Charging costs"))+'</h3><small>'+rows.length+" "+esc(T("charging sessions"))+'</small></div>';
-  html+=renderChargingChart(rows,ctx.lang,ctx.now);
+  html+=renderChargingChart(rows,ctx.lang,ctx.now,{fmt:ctx.fmt});
   if(!rows.length)return html+'<p class="hint">'+esc(T("No charging sessions have been recorded yet."))+'</p>';
   html+='<div class="en-cost-list">';
   for(const g of rows){

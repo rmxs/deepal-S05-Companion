@@ -165,7 +165,7 @@ const dzRing=(pct,rgb,icon,label,kind)=>{const p=pct===null||pct===undefined?nul
   return '<div class="dz-ring '+kind+'" role="img" style="--rg:'+rgb+'" aria-label="'+esc(label+": "+(p===null?T("unavailable"):Math.round(p)+"%"))+'"><span class="rw"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="rt" cx="32" cy="32" r="26"/><circle class="rv" cx="32" cy="32" r="26" stroke-dasharray="'+((p||0)*C/100).toFixed(1)+' '+C+'" transform="rotate(-90 32 32)"/></svg><b>'+(p===null?"--":Math.round(p)+"<small>%</small>")+'</b></span><span class="rl">'+ico(icon)+esc(label)+'</span></div>';};
 const dzChip=(icon,label,value)=>'<div class="dz-chip">'+ico(icon)+'<span class="k">'+esc(label)+'</span><b>'+esc(value)+'</b></div>';
 const dzInfo=card=>{const c=card._c,out=[];if(c.hidden.includes("info"))return out;
-  for(const id of (c.info_order||[]).filter(id=>(c.info||[]).includes(id))){const it=INFO_ITEMS[id];if(!it)continue;if(id==="fuel_level"&&!hasFuel(card._hass,c))continue;
+  for(const id of (c.info_order||[]).filter(id=>(c.info||[]).includes(id))){const it=INFO_ITEMS[id];if(!it)continue;if((id==="fuel_level"||id==="fuel_volume")&&!hasFuel(card._hass,c))continue;
     const n=it[3]===null?null:card._nl(it[0]).v,raw=card._s(it[0]);if(raw===null&&n===null)continue;
     out.push({ent:card._id(it[0]),icon:it[2],label:T(it[1]),val:it[3]===null?(raw===null?"--":stateText(raw)):n===null?"--":(card._fmtNum(n,it[3])+" "+card._unit(it[0])).trim()});}
   for(const x of c.info_custom||[]){const o=card._eobj(x.entity),n=o?parseFloat(o.state):NaN;

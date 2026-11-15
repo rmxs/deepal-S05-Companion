@@ -16,7 +16,7 @@ const server=http.createServer((req,res)=>{
  await new Promise(r=>server.listen(0,"127.0.0.1",r));
  const browser=await chromium.launch({headless:true,...(fs.existsSync("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe")?{executablePath:"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"}:{})});
  try {
-  const page=await browser.newPage({viewport:{width:1440,height:1050}}),errors=[];page.on("pageerror",e=>{errors.push(e.message);console.error("BROWSER:",e.stack);});
+  const page=await browser.newPage({viewport:{width:1440,height:1050},...(process.env.ENERGY_COST_ONLY?{timezoneId:"Pacific/Honolulu"}:{})}),errors=[];page.on("pageerror",e=>{errors.push(e.message);console.error("BROWSER:",e.stack);});
   await page.goto("http://127.0.0.1:"+server.address().port);
   await page.evaluate(()=>{
     window.activeIntervals=new Set();const original=setInterval,clear=clearInterval;
@@ -39,11 +39,11 @@ const server=http.createServer((req,res)=>{
    window.viewNames={};window.views={mobile:{car_color:"black",hero_style:"carview"},tablet:{car_color:"white",hero_style:"carview"},energy:{car_color:"silver",hero_style:"carview"}};
    window.common={prefix:"s05",entities:{"sensor.battery_level":"sensor.s05_battery_level"}};
    window.costs={profiles:[{id:"home",name:"Home",price:.22,free:false,source:"battery",efficiency:90},{id:"work",name:"Work",price:null,free:true,source:"battery",efficiency:90},{id:"free",name:"Free",price:null,free:true,source:"battery",efficiency:90},{id:"ionity",name:"Ionity",price:null,free:false,source:"battery",efficiency:90},{id:"public",name:"Public",price:null,free:false,source:"battery",efficiency:90}],sessions:{}};
-   let revision=0;const shared=new Set(["battery_kwh","fuel_tank_liters","prefix","entities","powertrain","fuel_max"]);
+   let revision=0;const shared=new Set(["battery_kwh","prefix","entities","powertrain","fuel_max"]);
    const publish=()=>queueMicrotask(()=>window.subscribers.forEach(fn=>fn({vehicle_id:'car'})));
    const reminder=()=>{const p=window.promptFixture;if(!p||(window.dismissedPrompts||[]).includes(p.id)||window.costs.sessions[String(Math.round(p.s/1000))]?.profile)return null;return {...p,profiles:window.costs.profiles};};
    const config=m=>({vehicle_id:"car",view_id:m.view_id||"mobile",view_name:window.viewNames[m.view_id]||m.view_id||"mobile",revision:[revision,revision],config:{...window.views[m.view_id||"mobile"],...window.common},charge_prompt:reminder()});
-   const hass=window.testHass={locale:{language:"en"},language:"en",user:{id:"admin",is_admin:true},states,entities:{},devices:{},services:{notify:{mobile_app_phone:{}},lock:{lock:{},unlock:{}},cover:{open_cover:{},close_cover:{}},climate:{set_temperature:{},turn_on:{},turn_off:{}}},config:{unit_system:{temperature:"°C"}},
+   const hass=window.testHass={locale:{language:"en"},language:"en",user:{id:"admin",is_admin:true},states,entities:{},devices:{},services:{notify:{mobile_app_phone:{}},lock:{lock:{},unlock:{}},cover:{open_cover:{},close_cover:{}},climate:{set_temperature:{},turn_on:{},turn_off:{}}},config:{time_zone:"UTC",unit_system:{temperature:"°C"}},
     connection:{subscribeMessage:async(fn,m)=>{window.subscribers.push(fn);return ()=>{window.subscribers=window.subscribers.filter(f=>f!==fn);};}},
     callService:async(...args)=>{window.serviceCalls.push(args);},callApi:async(...args)=>{window.apiCalls.push(args);return {};},
     callWS:async m=>{
@@ -78,7 +78,7 @@ const server=http.createServer((req,res)=>{
        return {sort,curves_synced:1,recorder_synced:window.forceRecorderSync?0:Date.now()/1000,rows:structuredClone(items),total:rows.length,locations:window.costs.profiles.map(p=>({id:p.id,name:p.name})),has_more:hasMore,next_before:hasMore?(['highest','lowest'].includes(sort)?{start:last.s,cost:last.pricing?.cost??null}:last.s):null};
      }
      if(m.op==='session_curve')return {start:Date.now()-3600000,end:Date.now(),session_id:m.data.session_id,series:{ac:[{lu:(Date.now()-3600000)/1000,s:'8'},{lu:(Date.now()-1800000)/1000,s:'16'}],dc:[],battery:[]}};
-     if(m.op==='charging_dashboard'){const rows=(window.pageRows||await hass.callWS({...m,op:'sessions',data:{}})).filter(r=>!r.live),priced=rows.filter(r=>r.pricing?.cost!=null);return {total:rows.length,priced:priced.length,unpriced:rows.length-priced.length,cost:priced.reduce((sum,r)=>sum+r.pricing.cost,0),energy:rows.reduce((sum,r)=>sum+(r.pricing?.energy??r.kwh??0),0),chart_rows:(()=>{const days=new Map();for(const r of rows){const d=new Date(r.s);d.setHours(0,0,0,0);const b=days.get(d.getTime())||{s:d.getTime(),split:{paid:0,free:0,unpriced:0}},cost=r.pricing?.cost;b.split[cost==null?'unpriced':cost===0?'free':'paid']+=r.pricing?.energy??r.kwh??0;days.set(b.s,b);}return [...days.values()];})()};}
+     if(m.op==='charging_dashboard'){const rows=(window.pageRows||await hass.callWS({...m,op:'sessions',data:{}})).filter(r=>!r.live).map(r=>{const receipt=window.costs.sessions[String(Math.round(r.s/1000))];if(!receipt)return r;const energy=receipt.energy??receipt.kwh??r.kwh,profile=receipt.profile,cost=receipt.total??(profile.free?0:profile.price==null?null:profile.price*energy);return {...r,pricing:{energy,cost,estimated:receipt.energy==null,source:profile.source||'battery'}};}),priced=rows.filter(r=>r.pricing?.cost!=null);return {total:rows.length,priced:priced.length,unpriced:rows.length-priced.length,cost:priced.reduce((sum,r)=>sum+r.pricing.cost,0),energy:rows.reduce((sum,r)=>sum+(r.pricing?.energy??r.kwh??0),0),battery_estimated:rows.filter(r=>r.pricing?.estimated&&r.pricing?.source==='battery').length,chart_rows:(()=>{const days=new Map();for(const r of rows){const d=new Date(r.s);d.setUTCHours(0,0,0,0);const b=days.get(d.getTime())||{s:d.getTime(),split:{paid:0,free:0,unpriced:0}},cost=r.pricing?.cost;b.split[cost==null?'unpriced':cost===0?'free':'paid']+=r.pricing?.energy??r.kwh??0;days.set(b.s,b);}return [...days.values()];})()};}
      if(m.op==="list")return [{id:"car",name:"Deepal S05",config:window.common,views:Object.keys(window.views).map(id=>({id,name:window.viewNames[id]||id,revision}))}];
      if(m.op==="config_get"){const value=structuredClone(config(m));if(window.delayGet?.[m.view_id])await new Promise(r=>setTimeout(r,window.delayGet[m.view_id]));return value;}
      if(m.op==="config_patch"){if(window.delayPatchMS)await new Promise(r=>setTimeout(r,window.delayPatchMS));if(m.data.reset)window.views[m.view_id]={};for(const[k,v]of Object.entries(m.data.patch||{}))(shared.has(k)?window.common:window.views[m.view_id])[k]=v;revision++;queueMicrotask(()=>window.subscribers.forEach(fn=>fn({vehicle_id:"car"})));return config(m);}
@@ -96,6 +96,8 @@ const server=http.createServer((req,res)=>{
    for(const view_id of ["mobile","tablet","energy"]){const c=document.createElement("deepal-companion-card");c.id=view_id;c.setConfig({type:"custom:deepal-companion-card",vehicle_id:"car",view_id});document.querySelector("#cards").append(c);c.hass=hass;}
   });
   await page.waitForFunction(()=>["mobile","tablet","energy"].every(id=>document.getElementById(id)._built));
+  if(process.env.ENERGY_COST_ONLY){await page.addScriptTag({url:'/deepal_companion/frontend/energy/energy.js'});await require('./test_energy_cost_regressions.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(!process.env.CHARGING_EDITS_ONLY){
   assert.equal(await page.evaluate(()=>document.getElementById("mobile")._el.nfbell.hidden),false,"Visible bell must not depend on push delivery being configured");
   await page.evaluate(()=>{const card=document.getElementById("mobile");for(let i=0;i<3;i++){card._built=false;card._force();}});
   assert.equal(await page.evaluate(()=>!!document.getElementById("mobile")._el.nfbell.querySelector("svg")),true,"Bell icon must survive rebuilds");
@@ -212,6 +214,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(async()=>{window.delayPatchMS=0;window.delayGet={mobile:150};const card=document.getElementById("race-card");card.setConfig({type:"custom:deepal-companion-card",vehicle_id:"car",view_id:"mobile"});await new Promise(r=>setTimeout(r,5));card.setConfig({type:"custom:deepal-companion-card",vehicle_id:"car",view_id:"energy"});await new Promise(r=>setTimeout(r,200));});
   assert.equal(await page.evaluate(()=>document.getElementById("race-card")._c.car_color),"silver","Late read must not replace the selected profile");
   await page.evaluate(()=>{window.delayGet={};document.getElementById("race-card").remove();});
+  }
   await page.evaluate(()=>{document.getElementById("mobile")._closeSheet();document.querySelector("#cards").style.display="none";document.querySelector("#editor").style.display="none";});
   await page.addScriptTag({url:"/deepal_companion/frontend/companion-panel.js",type:"module"});
   await page.waitForFunction(()=>!!customElements.get("deepal-companion-panel"));
@@ -305,8 +308,12 @@ const server=http.createServer((req,res)=>{
   await p.locator(".history-line-chart svg.en-ch").waitFor();
   await p.locator(".history-line-chart svg.en-ch").hover();
   assert.equal(await p.locator(".history-line-chart .en-tip").isVisible(),true);
+  await p.locator('[data-action="data-menu"]').click();await p.locator('[data-action="sync-recorder"]').click();
+  await page.waitForFunction(()=>(document.querySelector("deepal-companion-panel").dashboardSummary?.chart_rows||[]).some(r=>(r.split?.paid||0)+(r.split?.free||0)+(r.split?.unpriced||0)>0));
   const energyBar=p.locator(".energy-chart .energy-col:has(.energy-stack > b)").first(); /* a day with charging */
-  assert.equal(await energyBar.count(),1,"Energy delivered chart shows a bar for the charged day; tips: "+JSON.stringify(await p.locator(".energy-chart .energy-tip").allTextContents()));
+  const dbgSummary=await page.evaluate(()=>{const s=document.querySelector("deepal-companion-panel").dashboardSummary;return JSON.stringify({rows:(s?.chart_rows||[]).map(r=>({s:r.s,split:r.split}))});});
+  const dbgCols=await p.locator(".energy-chart .energy-col").evaluateAll(n=>n.map(c=>c.dataset.day).join(","));
+  assert.equal(await energyBar.count(),1,"Energy delivered chart shows a bar for the charged day; tips: "+JSON.stringify(await p.locator(".energy-chart .energy-tip").allTextContents())+" summary: "+dbgSummary+" column days: "+dbgCols);
   await energyBar.hover();
   assert.equal(await energyBar.locator(".energy-tip").isVisible(),true,"Energy delivered bar shows its tooltip on hover");
   assert((await energyBar.locator(".energy-tip").textContent()).includes("kWh"));

@@ -1,6 +1,7 @@
 const fs=require("fs"),vm=require("vm"),cp=require("child_process"),assert=require("assert"),z=require("zlib");
 const root="custom_components/deepal_companion",front=root+"/frontend";
 const version=JSON.parse(fs.readFileSync(root+"/manifest.json","utf8")).version;
+const revision=fs.readFileSync(root+"/const.py","utf8").match(/FRONTEND_REVISION = "([^"]+)"/)[1];
 cp.execFileSync(process.execPath,["scripts/build-notification-design.cjs"],{stdio:"inherit"});
 cp.execFileSync(process.execPath,["scripts/build-cost-design.cjs"],{stdio:"inherit"});
 const original=fs.readFileSync("source/card.js","utf8");
@@ -22,7 +23,7 @@ const hook="customElements.define(SETTINGS_TAG, DeepalS05Settings);";assert(main
 main=main.replace('name: "Deepal S05 Control Panel"','name: "Deepal Companion"');
 fs.writeFileSync(front+"/companion-card.js",main);
 let energy=fs.readFileSync("source/energy.js","utf8").replaceAll("__DEEPAL_S05_","__DEEPAL_COMPANION_");
-const modelHook="      const m = model(raw, tEnd, cap, t0, period, cur);";assert(energy.includes(modelHook));
+const modelHook="      const m = model(raw, tEnd, cap, t0, period, cur, K.haFmt(hass).timeZone);";assert(energy.includes(modelHook));
 energy=energy.replace(modelHook,modelHook+"\n"+fs.readFileSync("source/companion-energy-hook.js","utf8"));
 energy=energy.replace('this.cacheKey=this.key+"_"+(card._hass?.user?.id||"local");','this.cacheKey=this.key+"_"+(card._hass?.user?.id||"local")+"_"+(card._companion?.vehicle_id||"");');
 energy=energy.replace('  async history(m) {','  async history(m) {\n    if(this.card._hass.companionRequest){const records=this.archiveOnly?(await EN.loadChargingSessions(this.card)).rows:await this.card._hass.companionRequest("sessions",{start_time:new Date(m.t0).toISOString(),end_time:new Date(m.now).toISOString()});for(const g of m.chg){const row=records.find(r=>r.s===g.s);if(row){g.pricing=row.pricing;g.assignment=row.assignment;}}}');
@@ -30,7 +31,7 @@ energy=energy.replace('result(g){const r=this.record(g),id=r?.profile?.entity;',
 energy=energy.replace('const LOAD = () => K.loaderHtml("bolt");','EN.ChargingCosts = ChargingCosts;\nEN.styles = PCSS;\nconst LOAD = () => K.loaderHtml("bolt");');
 energy=energy.replace('  let off = 0, period = 7, reqId = 0, limitT = null;','  let off = 0, period = 7, reqId = 0, limitT = null;\n  let costView=false,lastEnergyModel=null;');
 energy=energy.replace('EN.panel = (d, card, options = {}) => {',fs.readFileSync("source/charging-history.js","utf8")+"\n"+fs.readFileSync("source/charging-chart.js","utf8")+"\n"+fs.readFileSync("source/charging-cost-view.js","utf8")+'\nEN.panel = (d, card, options = {}) => {');
-energy=energy.replace('      const t0 = wkStart(off), tEnd =',fs.readFileSync("source/charging-cost-run.js","utf8")+'\n      const t0 = wkStart(off), tEnd =');
+energy=energy.replace('      const t0 = wkStart(off,real), tEnd =',fs.readFileSync("source/charging-cost-run.js","utf8")+'\n      const t0 = wkStart(off,real), tEnd =');
 energy=energy.replace('  d.addEventListener("click", (e) => {',fs.readFileSync("source/charging-cost-tabs.js","utf8")+'\n  d.addEventListener("click", (e) => {');
 energy=energy.replace('      body().innerHTML = view(m, ctx);','      lastEnergyModel=m;\n      body().innerHTML = view(m, ctx);');
 energy=energy.replace('if (off === 0) run(false);','if (costView || off === 0) run(false);');
@@ -39,7 +40,7 @@ energy=energy.replace('this.sensorHistory={};','if(this.archiveOnly)return;\n   
 fs.writeFileSync(front+"/energy/energy.js",energy);
 for(const file of ["charging-curve.js","companion-card.js","energy/energy.js","notification-rules.js","companion-panel.js","companion-dashboard.js","companion-notifications.js","companion-health.js","companion-live.js","companion-card-panel.js","companion-notifications-design.js","notification-design.js","profile-field.js","notification-layout.js","notification-activity.js","cost-design.js","companion-cost-design.js","loader.js",...fs.readdirSync(front+"/lang").filter(x=>x.endsWith(".js")).map(x=>"lang/"+x)]){
  if(file.startsWith("lang/"))fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replaceAll("__DEEPAL_S05_","__DEEPAL_COMPANION_"));
- fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replace(/\?v=\d+\.\d+\.\d+/g,'?v='+version));
+ fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replace(/\?v=\d+\.\d+\.\d+(?:&rev=[\w.-]+)?/g,'?v='+version+'&rev='+revision).replaceAll('?v=${CARD_VERSION}', '?v=${CARD_VERSION}&rev='+revision));
  cp.execFileSync(process.execPath,["--check",front+"/"+file]);
  fs.writeFileSync(front+"/"+file+".gz",z.gzipSync(fs.readFileSync(front+"/"+file)));
 }

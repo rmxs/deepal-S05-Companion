@@ -9,14 +9,14 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "0.1.8"; // the build overwrites this with the package version
+const CARD_VERSION = "0.2.0"; // the build overwrites this with the package version
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-companion-card";
 const SETTINGS_TAG = "deepal-companion-settings";
 const EDITOR_TAG = "deepal-companion-card-editor";
 if (customElements.get(TAG)) return;
 
-const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], charge_curve_refresh: [1, 60], fuel_tank_liters: [0, 200], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
+const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], charge_curve_refresh: [1, 60], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
 const BAD = ["unknown", "unavailable", "none", "None", "null", ""];
 const TRANSITIONAL = ["locking", "unlocking", "opening", "closing"];
 const CLIMATE_TURN_OFF = 128; // ClimateEntityFeature.TURN_OFF
@@ -69,7 +69,6 @@ const DEFAULTS = { companion_design: "", companion_width: 0,
   image_aspect: null,
   powertrain: "auto", // auto (from the fuel sensors) | phev | ev (electric only)
   fuel_max: 0, // 0 = automatic hybrid full-tank range (940 km)
-  fuel_tank_liters: 0, // 0 = tank capacity sensor, otherwise 51 L fallback
   confirm: ["unlock", "trunk", "windows", "lock", "climate"],
   confirm_temp: true, // asks before changing the temperature while the climate is off (the change turns it on)
   order: SECTIONS.slice(),
@@ -91,7 +90,7 @@ const DEFAULTS = { companion_design: "", companion_width: 0,
   hero_show: ["name", "plate", "range", "cloud", "updated"], // what shows on the image: name, plate, range, cloud, updated
   info: ["odometer", "humidity"],
   info_order: ["odometer","outside_temp","inside_temp","humidity","fuel_level","fuel_volume","power_status","charge_status"],
-  info_custom: [], // [{entity, label, icon, unit}]
+  info_custom: [], // [{entity, label, icon, unit, tap_action}]; long press always opens more-info
   entities: {},
   images: {},
   climate_on_mode: null,
@@ -198,11 +197,64 @@ const resolveId = (hass, c, key) => {
   return (idx && idx[`${key.slice(0, i)}.${tkOf(key)}`]) || cand;
 };
 const hasFuel = (hass, c) => c.powertrain === "ev" ? false : c.powertrain === "phev" ? true
-  : !!hass?.states && ["fuel_range", "fuel_level"].some((k) => hass.states[resolveId(hass, c, `sensor.${k}`)]);
-/* Time/date as the user set them in Home Assistant (profile → language & region: 12/24 h, date order, time zone) */
+  : !!hass?.states && ["fuel_range", "fuel_level", "fuel_volume"].some((k) => hass.states[resolveId(hass, c, `sensor.${k}`)]);
+/* HA server time zone everywhere; user profile still supplies language, date order and 12/24-hour formatting. */
+function mountChartZoom(host,bounds,onRange,options={}) {
+  let range=options.initial||null,seed=null,pinching=false;
+  const pointers=new Map(),bar=document.createElement('div'),style=document.createElement('style');
+  style.textContent='.dc-chart-zoom{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:4px 0;color:var(--ds-muted,var(--secondary-text-color));font:inherit}.dc-chart-zoom span{font-size:11px;line-height:1.4}.dc-chart-zoom button{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;padding:6px;border:0;border-radius:50%;background:transparent;color:inherit;cursor:pointer}.dc-chart-zoom button:hover:not(:disabled){background:var(--ds-soft,var(--secondary-background-color))}.dc-chart-zoom button:disabled{opacity:.3;cursor:default}.dc-chart-zoom button:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}.dc-chart-zoom svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}';
+  bar.className='dc-chart-zoom';bar.setAttribute('role','group');bar.setAttribute('aria-label',T('Chart zoom'));
+  bar.innerHTML='<span>'+esc(T('Pinch or Ctrl/⌘ + scroll to zoom'))+'</span><button type="button" data-chart-zoom="reset" aria-label="'+esc(T('Reset zoom'))+'" title="'+esc(T('Reset zoom'))+'"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 1 1 2.6 8.4M3 4v6h6"/></svg></button>';
+  host.before(style);if(options.controlsHost){options.controlsHost.append(bar);bar.style.cssText='margin:0 0 0 auto;min-width:0';}else host.before(bar);host.style.touchAction='none';
+  const domain=()=>range||bounds();
+  const paint=()=>{const view=domain();host.dataset.zoomStart=String(view.start);host.dataset.zoomEnd=String(view.end);bar.querySelector('[data-chart-zoom=reset]').disabled=!range;};
+  const apply=(start,span)=>{const full=bounds(),total=full.end-full.start;span=Math.min(total,Math.max(Math.min(total,options.minSpan||60000),span));start=Math.max(full.start,Math.min(full.end-span,start));range=span>=total*.999999?null:{start,end:start+span};paint();onRange(range);};
+  const zoom=(factor,fraction=.5)=>{const view=domain(),span=(view.end-view.start)*factor;apply(view.start+(view.end-view.start)*fraction-span*fraction,span);};
+  bar.addEventListener('click',event=>{if(!event.target.closest('[data-chart-zoom=reset]'))return;event.preventDefault();event.stopPropagation();range=null;paint();onRange(null);});
+  const geometry=()=>{const [a,b]=[...pointers.values()];return {distance:Math.max(10,Math.hypot(a.x-b.x,a.y-b.y)),middle:(a.x+b.x)/2};};
+  const fraction=middle=>{const rect=host.getBoundingClientRect();return Math.max(0,Math.min(1,(middle-rect.left)/Math.max(1,rect.width)));};
+  host.addEventListener('pointerdown',event=>{pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});if(pointers.size!==2)return;pinching=true;seed={...geometry(),view:{...domain()}};event.preventDefault();event.stopPropagation();for(const id of pointers.keys())try{host.setPointerCapture(id);}catch(_){};},true);
+  host.addEventListener('pointermove',event=>{if(pointers.has(event.pointerId))pointers.set(event.pointerId,{x:event.clientX,y:event.clientY});if(!pinching)return;event.preventDefault();event.stopPropagation();if(pointers.size!==2||!seed)return;const current=geometry(),span=(seed.view.end-seed.view.start)*seed.distance/current.distance,anchor=seed.view.start+fraction(seed.middle)*(seed.view.end-seed.view.start);apply(anchor-fraction(current.middle)*span,span);},true);
+  const end=event=>{pointers.delete(event.pointerId);if(pinching){event.stopPropagation();if(!pointers.size){seed=null;pinching=false;}}};host.addEventListener('pointerup',end,true);host.addEventListener('pointercancel',end,true);
+  host.addEventListener('wheel',event=>{if(!event.ctrlKey&&!event.metaKey)return;event.preventDefault();zoom(event.deltaY>0?1.25:.8,fraction(event.clientX));},{passive:false});
+  paint();return {reset(){range=null;paint();onRange(null);},destroy(){bar.remove();style.remove();}};
+}
+
+function startReorder(e,g,row,list,onDrop,onEnd=()=>{}) {
+      e.preventDefault();
+      const rows = [...list.children], from = rows.indexOf(row), rc = rows.map((r) => r.getBoundingClientRect()), y0 = e.clientY;
+      const gap = rows.length > 1 ? Math.max(0, rc[1].top - rc[0].bottom) : 0, step = rc[from].height + gap, lo = rc[0].top - rc[from].top, hi = rc[rows.length - 1].top - rc[from].top;
+      let to = from;
+      try { g.setPointerCapture(e.pointerId); } catch (_) {}
+      row.classList.add("drag"); list.classList.add("dragging");
+      const move = (ev) => {
+        const dy = Math.min(hi, Math.max(lo, ev.clientY - y0)); row.style.transform = `translateY(${dy}px)`;
+        const mid = rc[from].top + rc[from].height / 2 + dy; to = from;
+        rc.forEach((r, i) => { const mc = r.top + r.height / 2; /* the drag is clamped so the row's middle can at best reach the first/last row's middle: that must count (otherwise the first and last positions are unreachable) */ if (i < from && mid < mc + 1) to = Math.min(to, i); if (i > from && mid > mc - 1) to = Math.max(to, i); });
+        rows.forEach((r, i) => { if (i === from) return; r.style.transform = to < from && i >= to && i < from ? `translateY(${step}px)` : to > from && i > from && i <= to ? `translateY(${-step}px)` : ""; });
+      };
+      const end = (ev) => {
+        g.removeEventListener("pointermove", move); g.removeEventListener("pointerup", end); g.removeEventListener("pointercancel", end);
+        try { g.releasePointerCapture(e.pointerId); } catch (_) {}
+        rows.forEach((r) => { r.style.transform = ""; }); row.classList.remove("drag"); list.classList.remove("dragging");
+        if (ev.type === "pointerup" && to !== from)onDrop(from,to);
+        onEnd();
+      };
+      g.addEventListener("pointermove", move); g.addEventListener("pointerup", end); g.addEventListener("pointercancel", end);
+}
+
+function haCalendarDay(now, timezone, offset=0) {
+  if(!timezone)return NaN;
+  const fields=(stamp,withTime=false)=>Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:timezone,...(withTime?{hourCycle:'h23',hour:'2-digit',minute:'2-digit',second:'2-digit'}:{}),year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(stamp)).map(part=>[part.type,part.value]));
+  const today=fields(now),date=new Date(Date.UTC(+today.year,+today.month-1,+today.day+offset)),target=Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate());
+  let guess=target;for(let i=0;i<3;i++){const local=fields(guess,true);guess+=target-Date.UTC(+local.year,+local.month-1,+local.day,+local.hour,+local.minute,+local.second);}
+  return guess;
+}
+
 function haFmt(hass) {
   const l = (hass && hass.locale) || {}, lang = l.language || (hass && hass.language) || "en", tf = l.time_format || "language", df = l.date_format || "language";
-  const tz = l.time_zone === "server" && hass && hass.config && hass.config.time_zone ? hass.config.time_zone : undefined, tl = tf === "system" ? undefined : lang, dl = df === "system" ? undefined : lang;
+  const tz = hass?.config?.time_zone, tl = tf === "system" ? undefined : lang, dl = df === "system" ? undefined : lang;
+  if(!tz)return {hm:()=>"—",dm:()=>"—",wdm:()=>"—",wdh:()=>"—",date:()=>"—",timeZone:undefined,dayStart:()=>NaN,hour:()=>NaN};
   const hm = (t, seconds=false) => { const o = { hour: tf === "12" ? "numeric" : "2-digit", minute: "2-digit" }; if(seconds===true)o.second="2-digit"; if (tz) o.timeZone = tz; if (tf === "12") o.hour12 = true; else if (tf === "24") { o.hourCycle = "h23"; } try { return new Date(t).toLocaleTimeString(tl, o); } catch (_) { return ""; } };
   const dm = (t, long) => { const o = { day: "numeric", month: long ? "long" : "short" }; if (tz) o.timeZone = tz;
     try { const p = new Intl.DateTimeFormat(dl, o).formatToParts(new Date(t)), d = (p.find((x) => x.type === "day") || {}).value, m = (p.find((x) => x.type === "month") || {}).value;
@@ -210,7 +262,7 @@ function haFmt(hass) {
   const wdm = (t) => { try { return `${new Intl.DateTimeFormat(dl, tz ? { weekday: "long", timeZone: tz } : { weekday: "long" }).format(new Date(t))}, ${dm(t, true)}`; } catch (_) { return dm(t, true); } };
   const wdh = (t) => { try { return `${new Intl.DateTimeFormat(dl, tz ? { weekday: "short", day: "numeric", timeZone: tz } : { weekday: "short", day: "numeric" }).format(new Date(t))} ${hm(t)}`; } catch (_) { return hm(t); } };
   const date=(t)=>{const options={day:'2-digit',month:'2-digit',year:'numeric',...(tz?{timeZone:tz}:{})};try{const formatter=new Intl.DateTimeFormat(dl,options),parts=formatter.formatToParts(new Date(t)),get=type=>parts.find(part=>part.type===type)?.value||'';return df==='DMY'?`${get('day')}/${get('month')}/${get('year')}`:df==='MDY'?`${get('month')}/${get('day')}/${get('year')}`:df==='YMD'?`${get('year')}/${get('month')}/${get('day')}`:formatter.format(new Date(t));}catch(_){return '';}};
-  return { hm, dm, wdm, wdh, date, timeZone:tz };
+  return { hm, dm, wdm, wdh, date, timeZone:tz, dayStart:(t,offset=0)=>haCalendarDay(t,tz,offset), hour:t=>Number(new Intl.DateTimeFormat("en",{hour:"numeric",hourCycle:"h23",...(tz?{timeZone:tz}:{})}).format(new Date(t))) };
 }
 const LEVEL_KEYS = ["sensor.battery_level", "sensor.fuel_level", "sensor.remaining_range", "sensor.fuel_range"]; /* levels protected from 0/unavailable values from the API */
 const BATT_KWH = { phev: 18.4, ev: 68.8 };
@@ -249,6 +301,16 @@ const BLADE = '<path d="M12 10.4C11.5 6.4 13.3 3.9 15.8 4.4 17.3 4.8 16.9 7.7 13
 const FAN = `${BLADE}<g transform="rotate(120 12 12)">${BLADE}</g><g transform="rotate(240 12 12)">${BLADE}</g><circle cx="12" cy="12" r="1.4" class="k"/>`;
 const SEAT = '<path class="k" fill-rule="evenodd" d="M4.6 5.2C4.1 3.3 5.2 1.7 7 1.7c1.7 0 2.8 1.3 2.5 2.9l1.7 7.1c1.2.5 2 .6 3 .6h4.4c1.6 0 2.9 1.2 2.9 2.8 0 1.4-1.1 2.5-2.5 2.5H9.7c-1.2 0-2.2-.8-2.5-1.9zM5.74 5.53L8.04 13.93C8.3 14.45 9.1 14.73 10.2 14.73L18.5 14.73L18.5 15.68L10.2 15.68C9.5 15.68 9.1 14.8 8.96 13.68L6.66 5.28Z"/><path class="k" d="M7.6 19.3h12.4a.9.9 0 0 1 0 1.8H7.6a.9.9 0 0 1 0-1.8z"/>';
 const ICONS = {
+  poweron: "<path d=\"M12 3v9M7 5.5a8 8 0 1 0 10 0\"/><circle class=\"k\" cx=\"19\" cy=\"19\" r=\"3\"/>",
+  poweroff: "<path d=\"M12 3v9M7 5.5a8 8 0 1 0 10 0M3 3l18 18\"/>",
+  wallbox: "<rect x=\"5\" y=\"3\" width=\"12\" height=\"18\" rx=\"2\"/><path d=\"M17 8h2l2 2v7a2 2 0 0 1-4 0M8 18h6\"/><path class=\"a\" d=\"M12 6 8 12h3l-1 4 5-7h-3z\"/>",
+  solar: "<path d=\"M5 13h14l2 8H3zM9 13l-1 8M15 13l1 8M4 17h16M12 2v2M4 5l2 2M20 5l-2 2\"/><path class=\"a\" d=\"M8 10a4 4 0 0 1 8 0z\"/>",
+  garage: "<path d=\"m2 10 10-7 10 7M4 9v12h16V9M7 21V11h10v10M7 14h10M7 17h10\"/>",
+  trip: "<circle cx=\"6\" cy=\"5\" r=\"2\"/><circle cx=\"18\" cy=\"19\" r=\"2\"/><path d=\"M8 5h8a4 4 0 0 1 0 8H8a3 3 0 0 0 0 6h8\"/>",
+  pin: "<path d=\"M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z\"/><circle class=\"a\" cx=\"12\" cy=\"10\" r=\"2.5\"/>",
+  timer: "<circle cx=\"12\" cy=\"14\" r=\"8\"/><path d=\"M9 2h6M12 2v4M18 5l2 2M12 9v5l3 2\"/>",
+  wifi: "<path d=\"M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0\"/><circle class=\"k\" cx=\"12\" cy=\"20\" r=\"1\"/>",
+  shield: "<path d=\"m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z\"/><path class=\"a\" d=\"m8 12 3 3 5-6\"/>",
   /* ── Control buttons ── */
   lock: '<g transform="translate(12 12) scale(.66) translate(-24 -24)" stroke-width="2.7" fill="none"><rect x="12" y="22" width="24" height="18" rx="4.5"/><path d="M17 22V16a7 7 0 0 1 14 0v6"/><g opacity=".5"><path d="M24 29v5"/></g></g>',
   unlock: '<g transform="translate(12 12) scale(.66) translate(-24 -24)" stroke-width="2.7" fill="none"><rect x="12" y="22" width="24" height="18" rx="4.5"/><path d="M17 22V15a7 7 0 0 1 14 0v2"/><g opacity=".5"><path d="M24 29v5"/></g></g>',
@@ -331,7 +393,21 @@ const BADGE_NATIVE = new Set(["airbag", "abs"]); /* already have their own ring 
 const icoBadge = (n, cls = "") => TT[n] ? tt(n, cls) : BADGE_NATIVE.has(n) || MDI_RE.test(n || "") ? ico(n, cls)
   : `<svg width="24" height="24" class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.6" stroke-width="1.7"/><g transform="translate(12 12) scale(.58) translate(-12 -12)" stroke-width="2.7">${ICONS[n] || ICONS.info}</g></svg>`;
 // Icons offered to the user for their own sensors
+const CUSTOM_TAPS=[['more-info','More info'],['toggle','Toggle'],['turn_on','Turn on'],['turn_off','Turn off'],['press','Press'],['navigate','Navigate'],['url','Open URL'],['none','None']];
+const customTapCode=cfg=>cfg?.action==='perform-action'?String(cfg.perform_action||cfg.service||'').split('.').at(-1):cfg?.action||'more-info';
+function buildCustomTapConfig(code,entity,target='',path=''){
+  target=target.trim();path=path.trim();if(target&&!/^[a-z_]+\.[\w]+$/.test(target))throw Error(T('Enter a valid entity_id'));
+  const id=target||entity;
+  if(['turn_on','turn_off','press'].includes(code))return {action:'perform-action',perform_action:(code==='press'?id.split('.')[0]:'homeassistant')+'.'+code,target:{entity_id:id}};
+  if(code==='toggle')return {action:'toggle',entity:id};
+  if(code==='navigate'){if(!/^\/(?!\/)/.test(path))throw Error(T('Enter a navigation path starting with /.'));return {action:code,navigation_path:path};}
+  if(code==='url'){if(!/^(https?:\/\/|\/(?!\/))/i.test(path))throw Error(T('Enter an http(s) URL or a local path.'));return {action:code,url_path:path};}
+  return {action:code==='none'?'none':'more-info'};
+}
+
+function customTapConfig(code,entity,target='',path='',confirmation=false){const cfg=buildCustomTapConfig(code,entity,target,path);if(confirmation&&['toggle','turn_on','turn_off','press'].includes(code))cfg.confirmation=true;return cfg;}
 const PICKABLE_ICONS = [
+  "poweron", "poweroff", "wallbox", "solar", "garage", "trip", "pin", "timer", "wifi", "shield",
   "info", "alert", "gauge", "thermo", "drop", "fuel", "battery", "battery12", "bolt", "plug", "leaf", "road",
   "tire", "tirealert", "brake", "fluid", "engine", "key", "airbag", "abs", "evfault", "turtle", "oil", "door", "hood", "trunk", "seat", "seatheat", "seatvent", "chat", "steering",
   "heatwave", "fan", "headlight", "lock", "cartop", "cloudcheck", "speedlimit",
@@ -449,11 +525,9 @@ const UI = {
 /* Shared header for all sheets (Settings, Notifications, Diagnostics, Energy): icon + title + close */
 const sheetHd = (icon, title, sub = "") => `<div class="hd sh"><span class="eic">${ico(icon)}</span><div class="ttl"><h3>${esc(title)}</h3>${sub ? `<small class="ver">${esc(sub)}</small>` : ""}</div><button class="x" data-close aria-label="Close">${ico("close")}</button></div>`;
 
-/* Shared "Loading…" for all sheets: the sheet's icon, a green pulse and a spinning arc */
-const LOADER_CSS = `.ldr { display:flex; flex-direction:column; align-items:center; gap:14px; padding:46px 20px; color: var(--ds-fg2); font-size:13.5px; } .ldr .ring { position:relative; width:62px; height:62px; display:grid; place-items:center; } .ldr .ring::before { content:""; position:absolute; inset:7px; border-radius:50%; background: rgba(var(--ds-ok), .24); animation: ds-pulse 1.6s ease-out infinite; } .ldr .ring .arc { position:absolute; inset:0; width:100%; height:100%; animation: ds-spin 1.1s linear infinite; } .ldr .ring .i { --is:24px; position:relative; color: rgb(var(--ds-ok)); }
-@keyframes ds-spin { to { transform: rotate(360deg); } } @keyframes ds-pulse { 0% { transform:scale(.7); opacity:.9; } 100% { transform:scale(1.4); opacity:0; } }
-`;
-const loaderHtml = (icon) => `<div class="ldr" role="status"><span class="ring" style="width:56px;height:56px"><svg class="arc" width="56" height="56" viewBox="0 0 62 62" aria-hidden="true"><circle cx="31" cy="31" r="27" fill="none" stroke="var(--ds-line)" stroke-width="3"/><circle cx="31" cy="31" r="27" fill="none" stroke="rgb(var(--ds-ok))" stroke-width="3" stroke-linecap="round" stroke-dasharray="46 124"/></svg>${ico(icon)}</span><span>${esc(T("Loading…"))}</span></div>`;
+/* One shared loading animation; the original 56px spinner is 70% larger. */
+const LOADER_CSS = `.ldr.dc-loader{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:28px 20px;color:var(--ds-fg2,var(--secondary-text-color));font-size:13.5px}.dc-loader .dc-loader-ring{position:relative;display:grid;place-items:center;flex:none;width:95.2px;height:95.2px}.dc-loader .dc-loader-ring::before{content:none}.dc-loader .dc-loader-ring .dc-loader-arc{position:absolute;inset:0;width:100%;height:100%;animation:ds-spin 1.1s linear infinite}.dc-loader .dc-loader-ring .i{--is:40.8px;width:40.8px;height:40.8px;position:relative;color:light-dark(#087f5b,#34e5a4)}.dc-loader-initials{position:relative;font-family:"Segoe Script","Brush Script MT","Apple Chancery",cursive;font-size:34px;font-weight:600;font-style:italic;letter-spacing:-5px;padding-right:5px;line-height:1;transform:rotate(-9deg);color:light-dark(#087f5b,#34e5a4)}@keyframes ds-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.dc-loader .dc-loader-ring .dc-loader-arc{animation:none}}`;
+const loaderHtml = (icon, initials=false) => `<div class="ldr dc-loader" role="status"><span class="ring dc-loader-ring"><svg class="arc dc-loader-arc" viewBox="0 0 62 62" aria-hidden="true"><circle cx="31" cy="31" r="27" fill="none" stroke="var(--ds-line,var(--divider-color))" stroke-width="3"/><circle cx="31" cy="31" r="27" fill="none" stroke="light-dark(#087f5b,#34e5a4)" stroke-width="3" stroke-linecap="round" stroke-dasharray="46 124"/></svg>${initials?'<span class="dc-loader-initials" aria-hidden="true">LK</span>':ico(icon)}</span><span>${esc(T("Loading…"))}</span></div>`;
 /* English source keys; secondary translations load from lang/<code>.js. */
 const LANGS = (window.__DEEPAL_COMPANION_LANGS = window.__DEEPAL_COMPANION_LANGS || {});
 const GL = "A-Za-z\u00C0-\u024F\u0370-\u03FF\u1F00-\u1FFF";
@@ -466,7 +540,7 @@ const I18N = {
     return new Promise((res) => {
       if (LANGS[code]) return res(true);
       const s = document.createElement("script");
-      s.src = `${SCRIPT_BASE}lang/${code}.js?v=${CARD_VERSION}`; s.async = true;
+      s.src = `${SCRIPT_BASE}lang/${code}.js?v=${CARD_VERSION}&rev=20261115-23`; s.async = true;
       s.onload = () => res(!!LANGS[code]); s.onerror = () => res(false);
       document.head.appendChild(s);
     });
@@ -684,6 +758,7 @@ const lsWrite = (k, v) => { try { v === null ? localStorage.removeItem(k) : loca
 
 /* ───────────────────────── Styles ───────────────────────── */
 const BASE_CSS = `
+@media(pointer:coarse){:host{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}input,textarea,[contenteditable=true],ha-selector,ha-textfield,ha-textarea{user-select:text!important;-webkit-user-select:text!important;-webkit-touch-callout:default}}
 [hidden], [data-off] { display:none !important; }
 button, input, select { font: inherit; color: inherit; }
 .i { width: var(--is, 20px); height: var(--is, 20px); fill: none; stroke: currentColor; stroke-width: 1.6;
@@ -1255,7 +1330,7 @@ const SETTINGS_CSS = `
 :host { display:block; ${VARS} color: var(--ds-fg); }
 ${BASE_CSS}
 .wrap { display:flex; flex-direction:column; gap:10px; }
-.settings-loading{min-height:210px;padding:14px;border:1px solid var(--ds-line);border-radius:18px}.settings-loading .ldr{padding:18px;gap:10px}.settings-loading>i{display:block;height:10px;margin:12px 0;border-radius:6px;background:var(--ds-soft);animation:settings-pulse 1s ease-in-out infinite alternate}.settings-loading>i:nth-last-child(2){width:75%}.settings-loading>i:last-child{width:50%}@keyframes settings-pulse{from{opacity:.35}to{opacity:1}}@media(prefers-reduced-motion:reduce){.settings-loading>i{animation:none}}
+.settings-loading{min-height:210px;padding:14px;border:1px solid var(--ds-line);border-radius:18px}.settings-loading .ldr{padding:18px;gap:10px}.settings-loading>i{display:block;height:10px;margin:12px 0;border-radius:6px;background:var(--ds-soft);animation:none}.settings-loading>i:nth-last-child(2){width:75%}.settings-loading>i:last-child{width:50%}@keyframes settings-pulse{from{opacity:.35}to{opacity:1}}@media(prefers-reduced-motion:reduce){.settings-loading>i{animation:none}}
 .tabbar { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:6px; padding:2px 0 8px; background: var(--ha-card-background, var(--card-background-color, #222)); }
 .tabs { position:relative; flex:1; min-width:0; display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; cursor:grab; } .tabs::-webkit-scrollbar { display:none; }
 .tn { flex:none; width:32px; height:32px; display:grid; place-items:center; padding:0; border-radius:50%; border:1px solid var(--ds-line); background: var(--ds-soft); color: var(--ds-fg); cursor:pointer; } .tn[hidden] { display:none; } .tn .i { --is:16px; } .tn.l .i { transform: scaleX(-1); }
@@ -1291,6 +1366,7 @@ input[type=number] { width:90px; }
 input[type=color] { padding:0; }
 select option { color:#000; }
 .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+.custom-action-details{margin-top:8px;border:1px solid var(--ds-line);border-radius:12px;padding:10px 12px;background:var(--ds-soft)}.custom-action-details>summary{cursor:pointer;list-style:none;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px}.custom-action-details>summary::-webkit-details-marker{display:none}.custom-action-details>summary:after{content:"+";font-size:20px;color:rgb(var(--ds-info))}.custom-action-details[open]>summary:after{content:"−"}.custom-action-fields [hidden]{display:none!important}.custom-action-fields input:not([type=checkbox]),.custom-action-fields select{border:1px solid var(--ds-line);border-radius:10px;background:var(--ds-card,var(--card-background-color));color:var(--ds-fg);font:inherit;padding:10px 12px;min-height:44px}.custom-confirm{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;min-height:36px}.custom-confirm input[type=checkbox]{width:18px!important;height:18px;min-height:18px;accent-color:rgb(var(--ds-ok))}.custom-action-fields{display:grid;gap:8px;margin-top:8px;min-width:0}.custom-action-fields .field{font-size:11px}.custom-action-fields input,.custom-action-fields select{width:100%;box-sizing:border-box;min-width:0}.row:has(.custom-action-details[open]){align-items:flex-start}.row>.grip{flex:none}.list .row.custom-entity{display:block;padding:12px;border-radius:14px}.custom-entity-header{display:grid;grid-template-columns:18px 24px minmax(0,1fr) repeat(3,32px);gap:8px;align-items:center;min-height:44px}.custom-entity-header>.i{color:var(--ds-fg2);width:24px;height:24px}.custom-entity-header .grip{margin:0;justify-self:center}.custom-entity-title{min-width:0}.custom-entity-title strong{display:block;font-size:13px;font-weight:500;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.custom-entity-title small{display:block;font-size:11px;color:var(--ds-fg2);line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.custom-entity-header .mv{width:32px;height:32px;padding:0;min-width:0}.custom-entity>.custom-action-details{margin:2px 0 0 50px}.custom-action-details{border:0;background:none;padding:0}.custom-action-details>summary{min-height:28px;font-size:11px;font-weight:400;color:var(--ds-fg2);justify-content:flex-start;gap:8px;width:fit-content;max-width:100%;border-radius:6px;outline-offset:3px}.custom-action-details>summary:after{content:'›';font-size:19px;color:var(--ds-fg2);transform:rotate(90deg);line-height:1}.custom-action-details[open]>summary:after{content:'›';transform:rotate(-90deg)}.custom-action-details[open]>.custom-action-fields{border-top:1px solid var(--ds-line);padding-top:12px;margin-top:8px}.custom-action-fields>.field{margin:0}.custom-action-fields>small{grid-column:1/-1;font-size:11px;line-height:1.5;color:var(--ds-fg2)}@container(min-width:560px){.custom-action-fields{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:14px}}@container(max-width:359px){.custom-entity-header{grid-template-columns:14px 22px minmax(0,1fr) repeat(3,28px);gap:4px}.custom-entity-header .mv{width:28px;height:28px}.custom-entity>.custom-action-details{margin-left:44px}}
 .add { padding:10px; border-radius:14px; border:1px dashed var(--ds-line); display:flex; flex-direction:column; gap:8px; }
 .icons { display:flex; flex-wrap:wrap; gap:4px; } .icons button { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; border:1px solid var(--ds-line); background:transparent; cursor:pointer; color: var(--ds-fg2); padding:0; }
 .icons button.on { border-color: rgb(var(--ds-info)); color: rgb(var(--ds-info)); background: rgba(var(--ds-info), .12); } .icons .i { --is: 18px; }
@@ -1427,6 +1503,7 @@ class DeepalS05Card extends HTMLElement {
     return null;
   }
   set hass(hass) {
+    this.style.colorScheme=hass?.themes?.darkMode===false?"light":"dark";
     this._hass = hass;
     this._syncLang();
     if (this._c && !this._remoteLoaded && hass && typeof hass.callWS === "function") { this._remoteLoaded = true; this._loadRemote(); }
@@ -1738,7 +1815,7 @@ class DeepalS05Card extends HTMLElement {
     }
     const pl = this._pending && this._pending.lock;
     if (pl) { const un = pl.before === "locked"; return { icon: un ? "unlock" : "lock", text: un ? "Unlocking…" : "Locking…", sub: "Waiting for confirmation from the vehicle", rgb: "var(--ds-warn)" }; }
-    if (this._s("binary_sensor.cloud_connection") === null && this._s("lock.doors") === null) return { icon: "alert", text: "Vehicle not found", sub: "Check the prefix in Settings → Vehicle", rgb: "var(--ds-warn)" };
+    if (this._s("binary_sensor.cloud_connection") === null && this._s("lock.doors") === null) return { icon: "alert", text: "Vehicle not found", sub: "Check the prefix in Card Settings → Advanced → Vehicle setup", rgb: "var(--ds-warn)" };
     if (!cloudOk) return { icon: "cloudoff", text: "Offline", sub: T("Last update {0}", this._age()), rgb: "var(--ds-bad)" };
     if (v.charging) return { icon: "bolt", text: "Charging", sub: "", rgb: "var(--ds-ok)" };
     const alerts = this._diagItems().filter((d) => d.on).length, warn = alerts ? T(alerts === 1 ? "{0} warning" : "{0} warnings", alerts) : "";
@@ -1758,7 +1835,7 @@ class DeepalS05Card extends HTMLElement {
     const out = [], lk = this._obj("lock.doors"), lh = this._lh && this._lh[this._id("lock.doors")];
     const lt = lh && lk && lh.state === lk.state && Number.isFinite(lh.since) ? lh.since : lk && Date.parse(lk.last_changed);
     if (st.warn) out.push({ t: st.warn, w: true });
-    const F = haFmt(this._hass), stamp = (ms) => (new Date().toDateString() === new Date(ms).toDateString() ? F.hm(ms) : F.dm(ms) + " " + F.hm(ms));
+    const F = haFmt(this._hass), stamp = (ms) => (F.dayStart(Date.now()) === F.dayStart(ms) ? F.hm(ms) : F.dm(ms) + " " + F.hm(ms));
     const en = this._obj("binary_sensor.engine"), eh = en && this._lh && this._lh[this._id("binary_sensor.engine")], eT = en && (eh && eh.state === en.state && Number.isFinite(eh.since) ? eh.since : Date.parse(en.last_changed));
     const oh = this._lh && this._lh[this._id("sensor.total_odometer")], od = oh && Number.isFinite(oh.since) ? oh.since : NaN; /* the odometer proves a drive even when the engine sensor missed it */
     const et = en && en.state === "off" ? (Number.isFinite(od) ? Math.max(eT, od) : eT) : Number.isFinite(od) && !en ? od : NaN;
@@ -2046,10 +2123,10 @@ class DeepalS05Card extends HTMLElement {
     if (h && h.user && h.user.is_admin === false) return fail("Notifications are only available to administrators.");
     try {
       const request = (op, data) => h.companionRequest(op, data);
-      const [mod, page] = await Promise.all([import(`${SCRIPT_BASE}notification-activity.js?v=${CARD_VERSION}`), request("notifications_history", { limit: 5 })]);
+      const [mod, page] = await Promise.all([import(`${SCRIPT_BASE}notification-activity.js?v=${CARD_VERSION}&rev=20261115-23`), request("notifications_history", { limit: 5 })]);
       if (gone()) return;
       d.innerHTML = ""; const host = document.createElement("div"); d.appendChild(host);
-      this._nfAct = mod.mountActivity(host, request, { loaderHtml, t: T }, (m, err) => this._toast(m, err ? "error" : undefined));
+      this._nfAct = mod.mountActivity(host, request, { loaderHtml, loaderCss:LOADER_CSS, format:haFmt, t: T }, (m, err) => this._toast(m, err ? "error" : undefined),()=>this._hass);
       this._nfAct.set(page);
     } catch (e) { fail(/Unknown.*operation/i.test((e && e.message) || "") ? "Restart Home Assistant to load notifications, then try again." : "Could not load notifications."); }
   }
@@ -2272,7 +2349,7 @@ class DeepalS05Card extends HTMLElement {
     if (m !== "auto") return "";
     const a = this._hass?.states?.["sun.sun"]?.attributes, e = a && a.elevation != null ? Number(a.elevation) : NaN;
     if (!isNaN(e)) return e < -6 ? "night" : e < 8 ? (a.rising ? "morning" : "evening") : a.rising && e < 30 ? "morning" : "afternoon";
-    const h = new Date().getHours();
+    const h = haFmt(this._hass).hour(Date.now());
     return h >= 6 && h < 11 ? "morning" : h >= 11 && h < 17 ? "afternoon" : h >= 17 && h < 20 ? "evening" : "night";
   }
   _skySet(on) {
@@ -2531,6 +2608,7 @@ class DeepalS05Card extends HTMLElement {
       if (t.dataset.sheet === "yes") {
         const cf = this._confirm, a = this._actions().find((x) => x.id === cf?.id);
         this._closeSheet(); if (cf && cf.temp !== undefined) return this._applyTemp(cf.temp);
+        if(cf?.customAction)return this._act(cf.customAction,cf.entity);
         if (a) this._run(a); return;
       }
       this._closeSheet();
@@ -2651,6 +2729,13 @@ class DeepalS05Card extends HTMLElement {
 
     /* status (over the image) */
     const st = this._status(v);
+    let connectionBanner=el.hero.querySelector('.connection-banner');
+    const missingVehicle=this._s('binary_sensor.cloud_connection')===null&&this._s('lock.doors')===null;
+    if(this._offline()||missingVehicle){
+      if(!connectionBanner){connectionBanner=document.createElement('div');connectionBanner.className='connection-banner';connectionBanner.setAttribute('role','status');connectionBanner.style.cssText='position:absolute;left:12px;right:12px;top:72px;z-index:12;padding:10px 12px;border:1px solid #ef7777;border-radius:10px;background:rgba(112,20,26,.95);color:#fff;font-size:12px;line-height:1.5;pointer-events:none';el.hero.append(connectionBanner);}
+      connectionBanner.textContent=T('Check the Deepal Alternative API connection and the entity prefix in Card Settings → Advanced → Vehicle setup.');
+    }else connectionBanner?.remove();
+
     el.status.style.cssText = `--st: ${st.rgb}`; el.status.dataset.ent = this._id("lock.doors");
     const ssm = c.status_sub === "off" || c.status_sub === "ticker" ? c.status_sub : "roll", sm = st.plain && ssm !== "off" ? this._statusMsgs(st, ssm) : [];
     let subH = st.sub ? `<div class="s">${esc(st.sub)}</div>` : "";
@@ -2727,7 +2812,7 @@ class DeepalS05Card extends HTMLElement {
     const tiles = [];
     for (const id of c.info_order.filter(id=>(c.info||[]).includes(id))) {
       const it = INFO_ITEMS[id]; if (!it) continue;
-      if (id === "fuel_level" && !hasFuel(this._hass, c)) continue;
+      if ((id === "fuel_level" || id === "fuel_volume") && !hasFuel(this._hass, c)) continue;
       const { v: n, stale } = it[3] === null ? { v: null } : this._nl(it[0]);
       const s = this._s(it[0]);
       if (s === null && n === null) continue;
@@ -2783,7 +2868,8 @@ class DeepalS05Card extends HTMLElement {
     /* sheets */
     if (this._confirm) {
       el.box.className = "box confirm lk";
-      el.box.innerHTML = this._askHtml(this._confirm.key);
+      const custom=this._confirm.customAction,target=custom?.entity||custom?.target?.entity_id||this._confirm.entity,entity=target&&this._eobj(target);
+      el.box.innerHTML = this._askHtml(this._confirm.key,custom?{text:entity?.attributes?.friendly_name||target,sub:T(CUSTOM_TAPS.find(([code])=>code===customTapCode(custom))?.[1]||"Confirm")+" · "+(entity?stateText(entity.state):T("Unavailable")),rgb:"var(--ds-warn)"}:{});
       el.sheet.classList.add("show");
     } else if (this._diagSheet) {
       el.box.className = "box wide dg";
@@ -2888,19 +2974,23 @@ class DeepalS05Card extends HTMLElement {
   }
   _cfgOf(t, k) { try { return t.dataset[k] ? JSON.parse(t.dataset[k]) : null; } catch (_) { return null; } }
   _battKwh() { const o = Number(this._c.battery_kwh); return o > 0 ? o : autoKwh(this._hass, this._c); }
+  _hasFuel() { return hasFuel(this._hass, this._c); }
   _tap(t) {
     if (t.id === "status" && !t.dataset.tap && this._s("lock.doors") !== null) { this._noClickUntil = Date.now() + 500; this._lockSheet = true; return this._force(); }
     if (t.dataset.energy && !t.dataset.tap) { this._noClickUntil = Date.now() + 500; this._enSheet = true; return this._force(); }
     if (t.dataset.open && !t.dataset.tap) { this._noClickUntil = Date.now() + 500; this._view = t.dataset.open; return this._force(); }
-    this._act(this._cfgOf(t, "tap") || { action: "more-info" }, t.dataset.ent);
+    const custom=[...(this._c.info_custom||[]),...(this._c.diag_custom||[])].find(x=>x.entity===t.dataset.ent);
+    this._act(this._cfgOf(t, "tap") || custom?.tap_action || { action: "more-info" }, t.dataset.ent);
   }
   _hold(t) {
+    if([...(this._c.info_custom||[]),...(this._c.diag_custom||[])].some(x=>x.entity===t.dataset.ent))return this._act({action:"more-info"},t.dataset.ent);
     const a = this._cfgOf(t, "hold");
     if (a) return this._act(a, t.dataset.ent);
     this._tap(t);
   }
   _act(cfg, ent) {
     const a = cfg.action || "more-info", id = cfg.entity || ent;
+    if(cfg.confirmation&&(a==="toggle"||(["perform-action","call-service"].includes(a)&&/\.(turn_on|turn_off|press)$/.test(cfg.perform_action||cfg.service||"")))){this._confirm={id:"custom",key:"custom",customAction:{...cfg,confirmation:false},entity:ent};clearTimeout(this._confirmTimer);this._confirmTimer=setTimeout(()=>{this._confirm=null;this._force();},8000);return this._force();}
     if (a === "more-info") { if (id) this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: id } })); return; }
     if (a === "toggle") return this._hass.callService("homeassistant", "toggle", { entity_id: id }).catch((err) => this._failToast(err));
     if (a === "call-service" || a === "perform-action") {
@@ -3070,7 +3160,7 @@ function loadEnergy() {
     const bad = () => { _enP = null; res(false); };
     if (Eg() && Eg().init) return ok();
     const sc = document.createElement("script");
-    sc.src = `${SCRIPT_BASE}energy/energy.js?v=${CARD_VERSION}`; sc.async = true; sc.onload = ok; sc.onerror = bad;
+    sc.src = `${SCRIPT_BASE}energy/energy.js?v=${CARD_VERSION}&rev=20261115-23`; sc.async = true; sc.onload = ok; sc.onerror = bad;
     document.head.appendChild(sc);
   }));
 }
@@ -3080,7 +3170,7 @@ class DeepalS05Settings extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" }); I18N.watch(this.shadowRoot);
-    this.mode = "card"; this.tab = "layout"; this._form = { entity: "", label: "", icon: "info", mkey: "", ment: "", mdi: "" }; this._disc = null;
+    this.mode = "card"; this.tab = "layout"; this._form = { entity: "", label: "", icon: "info", mkey: "", ment: "", mdi: "", tap: "more-info", target: "", path: "", confirm:false }; this._disc = null;
     this._sig = null; this._note = "";
   }
   set hass(h) { this._hass = h; }
@@ -3118,7 +3208,7 @@ class DeepalS05Settings extends HTMLElement {
     }).join("")}</div>`;
   }
   _sel(name, val, opts) { return `<select data-set="${name}">${opts.map(([v, l]) => `<option value="${v}" ${String(v) === String(val) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`; }
-  _num(name, val, step = "0.1") { const fallback=DEFAULTS[name],hint=name==='fuel_max'?940:name==='fuel_tank_liters'?51:fallback??0;return `<input type="number" step="${step}" data-set="${name}" data-num data-default="${esc(fallback??0)}" placeholder="${esc(hint)}" value="${val===fallback?"":esc(val)}">`; }
+  _num(name, val, step = "0.1") { const fallback=DEFAULTS[name],hint=name==='fuel_max'?940:fallback??0;return `<input type="number" step="${step}" data-set="${name}" data-num data-default="${esc(fallback??0)}" placeholder="${esc(hint)}" value="${val===fallback?"":esc(val)}">`; }
   _datalist() {
     const ids = Object.keys(this._hass?.states || {}).sort();
     return `<datalist id="ents">${ids.map((i) => `<option value="${esc(i)}" label="${esc(this._hass?.states?.[i]?.attributes?.friendly_name||i)}"></option>`).join("")}</datalist>`;
@@ -3126,11 +3216,23 @@ class DeepalS05Settings extends HTMLElement {
   _iconPick() {
     return `<div class="icons">${PICKABLE_ICONS.map((n) => `<button data-icon="${n}" class="${this._form.icon === n ? "on" : ""}" aria-label="${n}">${ico(n)}</button>`).join("")}</div>`;
   }
+  _syncTapFields(group,code){
+    group.querySelector('[data-control-options]').hidden=!['toggle','turn_on','turn_off','press'].includes(code);group.querySelector('[data-path-options]').hidden=!['navigate','url'].includes(code);
+  }
+  _tapFields(kind='',index='',item=null){
+    this._customActionsOpen ||= new Set();const key=item?kind+'|'+item.entity:'new';
+    const code=item?customTapCode(item.tap_action):this._form.tap||'more-info',target=item?(item.tap_action?.entity||item.tap_action?.target?.entity_id||''):this._form.target||'',path=item?(item.tap_action?.navigation_path||item.tap_action?.url_path||''):this._form.path||'',confirmation=item?!!item.tap_action?.confirmation:!!this._form.confirm;
+    const custom=item&&!CUSTOM_TAPS.some(([value])=>value===code),control=['toggle','turn_on','turn_off','press'].includes(code),linked=['navigate','url'].includes(code);
+    const attrs=field=>item?'data-custom-action="'+kind+'|'+index+'" data-action-field="'+field+'"':'data-f="'+field+'"';
+    const summary=CUSTOM_TAPS.find(([value])=>value===code)?.[1]||'Custom action';
+    return '<details class="custom-action-details" data-action-editor="'+esc(key)+'"'+(this._customActionsOpen.has(key)?' open':'')+'><summary>'+esc(T('Tap action'))+' · '+esc(T(summary))+'</summary><div class="custom-action-fields"><label class="field">'+esc(T('Tap action'))+'<select '+attrs('tap')+'>'+(custom?'<option value="'+esc(code)+'" selected>'+esc(T('Custom action'))+'</option>':'')+CUSTOM_TAPS.map(([value,label])=>'<option value="'+value+'"'+(value===code?' selected':'')+'>'+esc(T(label))+'</option>').join('')+'</select></label><div data-control-options'+(control?'':' hidden')+'><label class="field">'+esc(T('Action target (optional)'))+'<input list="ents" '+attrs('target')+' value="'+esc(target)+'" placeholder="switch.my_switch"></label><label class="custom-confirm"><input type="checkbox" '+attrs('confirm')+(confirmation?' checked':'')+'>'+esc(T('Ask for confirmation'))+'</label></div><label class="field" data-path-options'+(linked?'':' hidden')+'>'+esc(T('Navigation path or URL'))+'<input '+attrs('path')+' value="'+esc(path)+'" placeholder="/deepal-companion-card"></label><small>'+esc(T('Long press always opens entity info. Read-only sensors need a controllable action target.'))+'</small></div></details>';
+  }
   _addForm(kind) {
     return `<div class="add"><label class="field">Entity<input type="text" list="ents" data-f="entity" placeholder="e.g. sensor.my_value" value="${esc(this._form.entity)}"></label>
       <label class="field">Label (optional)<input type="text" data-f="label" value="${esc(this._form.label)}"></label>
       <div class="field">Icon${this._iconPick()}</div>
       <label class="field">Or a Home Assistant icon (optional)<input type="text" data-f="mdi" placeholder="e.g. mdi:car-brake-abs" value="${esc(this._form.mdi)}"></label>
+      ${this._tapFields()}
       <button class="btn sm" data-add="${kind}">${ico("plus")} Add</button></div>`;
   }
   _discHtml(c) {
@@ -3140,15 +3242,13 @@ class DeepalS05Settings extends HTMLElement {
     return `<div id="sensors-disc"><div class="btnrow"><button class="btn sm" data-discover>${ico("refresh")} ${esc(T("Search for new sensors"))}</button>${ign ? `<button class="btn sm" data-dreset>${esc(T("Show the ones I ignored again"))} (${ign})</button>` : ""}</div>${rows}</div>`;
   }
   _customRows(arr, kind) {
-    return arr.length ? `<div class="list">${arr.map((x, i) => `<div class="row" data-dk="${kind}"><i class="grip" aria-hidden="true" title="${T("Drag to reorder")}"></i>${ico(x.icon || "info")}<span>${esc(x.label || x.entity)}<small>${esc(x.entity)}</small></span>
-      <button class="mv" data-mv="${kind}|${i}|-1" ${i===0?"disabled":""} aria-label="Up">${ico("up")}</button><button class="mv" data-mv="${kind}|${i}|1" ${i===arr.length-1?"disabled":""} aria-label="Down">${ico("down")}</button>
-      <button class="mv" data-del="${kind}|${i}" aria-label="Delete">${ico("trash")}</button></div>`).join("")}</div>` : "";
+    return arr.length?'<div class="list">'+arr.map((x,i)=>`<div class="row custom-entity" data-dk="${kind}"><div class="custom-entity-header"><i class="grip" aria-hidden="true" title="${T('Drag to reorder')}"></i>${ico(x.icon||'info')}<div class="custom-entity-title"><strong>${esc(x.label||x.entity)}</strong><small>${esc(x.entity)}</small></div><button class="mv" data-mv="${kind}|${i}|-1" ${i===0?'disabled':''} aria-label="Up">${ico('up')}</button><button class="mv" data-mv="${kind}|${i}|1" ${i===arr.length-1?'disabled':''} aria-label="Down">${ico('down')}</button><button class="mv" data-del="${kind}|${i}" aria-label="Delete">${ico('trash')}</button></div>${this._tapFields(kind,i,x)}</div>`).join('')+'</div>':'';
   }
 
   _infoHtml(c) {
     const has = (k) => this._hass?.states?.[resolveId(this._hass, c, k)];
     const nod = (k) => { const st = has(k)?.state; return st === "unknown" || st === "unavailable" ? ` <small class="nod">No data</small>` : ""; };
-    const order=c.info_order.filter(i=>has(INFO_ITEMS[i][0])&&(i!=="fuel_level"||hasFuel(this._hass,c)));
+    const order=c.info_order.filter(i=>has(INFO_ITEMS[i][0])&&((i!=="fuel_level"&&i!=="fuel_volume")||hasFuel(this._hass,c)));
     const iRows=order.map((id,i)=>`<div class="row" data-dk="info"><i class="grip" aria-hidden="true" title="${T('Drag to reorder')}"></i>${ico(INFO_ITEMS[id][2])}<span>${esc(INFO_ITEMS[id][1])}${nod(INFO_ITEMS[id][0])}</span>
       <button class="mv" data-mv="info|${id}|-1" ${i===0?'disabled':''} aria-label="Up">${ico('up')}</button><button class="mv" data-mv="info|${id}|1" ${i===order.length-1?'disabled':''} aria-label="Down">${ico('down')}</button>
       <button class="swb" data-info="${id}" aria-label="Show ${esc(INFO_ITEMS[id][1])}" aria-pressed="${c.info.includes(id)}"><i class="sw ${c.info.includes(id)?'on':''}"></i></button></div>`).join('');
@@ -3283,7 +3383,7 @@ class DeepalS05Settings extends HTMLElement {
   _tabTank(c) {
     return hasFuel(this._hass, c) ? `<h4>Tank</h4>
       ${this._orow("Full-tank fuel range (km)", this._num("fuel_max", c.fuel_max, "1"), "0 = automatic (940 km for the hybrid). Enter a positive value to override.")}
-      ${this._orow("Tank capacity (L)", this._num("fuel_tank_liters", c.fuel_tank_liters, "0.1"), "0 = automatic from the tank capacity sensor, or 51 L. Used for estimated petrol consumption.")}` : "";
+` : "";
   }
   _tabLook(c) {
     const cc = CAR_COLORS.some((x) => x[0] === c.car_color) ? c.car_color : "black";
@@ -3343,7 +3443,7 @@ class DeepalS05Settings extends HTMLElement {
     const sw = (k, l) => `<label class="sw-c"><input type="color" data-set="${k}" data-text value="${esc(hc(k))}"><span>${l}</span></label>`;
     const a = Number(c.air_t1) || 22, b = Number(c.air_t2) || 24, lo = 16, hi = 30, pc = (v) => Math.min(100, Math.max(0, ((v - lo) / (hi - lo)) * 100));
     const lv = (t1, t2, t3, top = "lvl_green") => { const a = Number(t1) || 0, b = Number(t2) || 0, d = Number(t3) || 0; return `background:linear-gradient(90deg, ${hc("lvl_red")} 0 ${a}%, ${hc("lvl_orange")} ${a}% ${b}%, ${hc("lvl_yellow")} ${b}% ${d}%, ${hc(top)} ${d}% 100%)`; };
-    const rowL = (k, l, bk, fk) => `<div class="lvrow">${sw(k, l)}${bk ? this._num(bk, c[bk], "1") : `<i class="dash">—</i>`}${fk ? this._num(fk, c[fk], "1") : `<i class="dash">—</i>`}</div>`;
+    const rowL = (k, l, bk, fk) => `<div class="lvrow"${fu ? "" : ' style="grid-template-columns:1fr 86px"'}>${sw(k, l)}${bk ? this._num(bk, c[bk], "1") : `<i class="dash">—</i>`}${fu ? (fk ? this._num(fk, c[fk], "1") : `<i class="dash">—</i>`) : ""}</div>`;
     const fu = hasFuel(this._hass,c);
     return `<h4>Tiles</h4>
       ${this._opt("Icon colour of the bottom tiles", this._seg("tile_icons", ["blue", "neutral", "custom"].includes(c.tile_icons) ? c.tile_icons : "accent", [["accent", "Green"], ["neutral", "Grey"], ["blue", "Blue"], ["custom", "Custom"]]), "Odometer, fuel, charging, etc.")}
@@ -3356,8 +3456,8 @@ class DeepalS05Settings extends HTMLElement {
       <div class="lvrow">${sw("air_c3", "Warm")}<i class="dash">—</i><i class="dash"></i></div>
       <div class="lvbar" style="background:linear-gradient(90deg, ${hc("air_c1")} 0 ${pc(a)}%, ${hc("air_c2")} ${pc(a)}% ${pc(b)}%, ${hc("air_c3")} ${pc(b)}% 100%)"></div>
       <h4>Level colors</h4>
-      <p class="hint">The battery and fuel bars change color with the percentage. Set the thresholds (below each value) and the colors.</p>
-      <div class="lvhead"><span></span><span>Battery (%)</span><span>Fuel (%)</span></div>
+      <p class="hint">${fu ? "The battery and fuel bars change color with the percentage. Set the thresholds (below each value) and the colors." : "The battery bar changes color with the percentage. Set the thresholds (below each value) and the colors."}</p>
+      <div class="lvhead"${fu ? "" : ' style="grid-template-columns:1fr 86px"'}><span></span><span>Battery (%)</span>${fu ? "<span>Fuel (%)</span>" : ""}</div>
       ${rowL("lvl_red", "Red", "bat_t1", "fuel_t1")}${rowL("lvl_orange", "Orange", "bat_t2", "fuel_t2")}${rowL("lvl_yellow", "Yellow", "bat_t3", "fuel_t3")}${rowL("lvl_green", "Green", null, null)}
       <div class="lvbar" style="${lv(c.bat_t1, c.bat_t2, c.bat_t3)}"></div>
       ${fu ? `<div class="lvbar" style="${lv(c.fuel_t1, c.fuel_t2, c.fuel_t3)}"></div>` : ""}`;
@@ -3423,32 +3523,13 @@ class DeepalS05Settings extends HTMLElement {
     const c = new Proxy({}, { get: (_, k) => (this._cfg ? this._cfg[k] : undefined) });
     /* drag-and-drop reordering (sections / buttons): you grab the handle on the left; the arrows stay as an alternative */
     sr.addEventListener("pointerdown", (e) => {
-      const g = e.target.closest && e.target.closest(".grip"); if (!g || (e.pointerType === "mouse" && e.button !== 0)) return;
-      const row = g.closest(".row"), list = row && row.parentElement; if (!list) return;
-      e.preventDefault();
-      const rows = [...list.children], from = rows.indexOf(row), rc = rows.map((r) => r.getBoundingClientRect()), y0 = e.clientY;
-      const gap = rows.length > 1 ? Math.max(0, rc[1].top - rc[0].bottom) : 0, step = rc[from].height + gap, lo = rc[0].top - rc[from].top, hi = rc[rows.length - 1].top - rc[from].top;
-      let to = from;
-      try { g.setPointerCapture(e.pointerId); } catch (_) {}
-      row.classList.add("drag"); list.classList.add("dragging");
-      const move = (ev) => {
-        const dy = Math.min(hi, Math.max(lo, ev.clientY - y0)); row.style.transform = `translateY(${dy}px)`;
-        const mid = rc[from].top + rc[from].height / 2 + dy; to = from;
-        rc.forEach((r, i) => { const mc = r.top + r.height / 2; /* the drag is clamped so the row's middle can at best reach the first/last row's middle: that must count (otherwise the first and last positions are unreachable) */ if (i < from && mid < mc + 1) to = Math.min(to, i); if (i > from && mid > mc - 1) to = Math.max(to, i); });
-        rows.forEach((r, i) => { if (i === from) return; r.style.transform = to < from && i >= to && i < from ? `translateY(${step}px)` : to > from && i > from && i <= to ? `translateY(${-step}px)` : ""; });
-      };
-      const end = (ev) => {
-        g.removeEventListener("pointermove", move); g.removeEventListener("pointerup", end); g.removeEventListener("pointercancel", end);
-        try { g.releasePointerCapture(e.pointerId); } catch (_) {}
-        rows.forEach((r) => { r.style.transform = ""; }); row.classList.remove("drag"); list.classList.remove("dragging");
-        if (ev.type === "pointerup" && to !== from) {
-          const kind=row.dataset.dk,key=this._sortKey(kind),arr=[...c[key]];
-          const indices=kind==='info'?rows.map(r=>arr.indexOf(r.querySelector('[data-mv]').dataset.mv.split('|')[1])):rows.map((_,i)=>i);
-          const values=indices.map(i=>arr[i]),[m]=values.splice(from,1);values.splice(to,0,m);indices.forEach((index,i)=>arr[index]=values[i]);
-          this._emit({ [key]: arr });
-        }
-      };
-      g.addEventListener("pointermove", move); g.addEventListener("pointerup", end); g.addEventListener("pointercancel", end);
+      const g=e.target.closest?.('.grip');if(!g||(e.pointerType==='mouse'&&e.button!==0))return;
+      const row=g.closest('.row'),list=row?.parentElement;if(!list)return;
+      startReorder(e,g,row,list,(from,to)=>{
+        const rows=[...list.children],kind=row.dataset.dk,key=this._sortKey(kind),arr=[...c[key]];
+        const indices=kind==='info'?rows.map(r=>arr.indexOf(r.querySelector('[data-mv]').dataset.mv.split('|')[1])):rows.map((_,i)=>i);
+        const values=indices.map(i=>arr[i]),[m]=values.splice(from,1);values.splice(to,0,m);indices.forEach((index,i)=>arr[index]=values[i]);this._emit({[key]:arr});
+      });
     });
     sr.addEventListener("click", (e) => {
       const t = e.target.closest("button,[data-tab]");
@@ -3496,8 +3577,9 @@ class DeepalS05Settings extends HTMLElement {
       if (d.add !== undefined) {
         const f = this._form, ent = f.entity.trim();
         if (!/^[a-z_]+\.[\w]+$/.test(ent)) { this._note = T("Enter a valid entity_id"); return this._render(); }
-        const item = { entity: ent, label: f.label.trim(), icon: MDI_RE.test(f.mdi.trim()) ? f.mdi.trim() : f.icon };
-        this._form = { ...this._form, entity: "", label: "", mdi: "" };
+        let tap;try{tap=customTapConfig(f.tap||'more-info',ent,f.target||'',f.path||'',!!f.confirm);}catch(error){this._note=error.message;return this._render();}
+        const item = { entity: ent, label: f.label.trim(), icon: MDI_RE.test(f.mdi.trim()) ? f.mdi.trim() : f.icon, tap_action:tap };
+        this._form = { ...this._form, entity: "", label: "", mdi: "",target:"",path:"",tap:"more-info",confirm:false };
         return this._emit({ [d.add]: [...c[d.add], item] });
       }
       if (d.del) { const [k, i] = d.del.split("|"); const a = [...c[k]]; a.splice(Number(i), 1); return this._emit({ [k]: a }); }
@@ -3509,8 +3591,11 @@ class DeepalS05Settings extends HTMLElement {
       }
       if (d.delent) { const m = { ...c.entities }; delete m[d.delent]; return this._emit({ entities: m }); }
     });
+    sr.addEventListener("toggle",e=>{const d=e.target;if(d.matches?.('.custom-action-details')&&d.isConnected){this._customActionsOpen ||= new Set();d.open?this._customActionsOpen.add(d.dataset.actionEditor):this._customActionsOpen.delete(d.dataset.actionEditor);}},true);
     sr.addEventListener("change", (e) => {
       const t = e.target, d = t.dataset;
+      if(d.f){this._form[d.f]=t.type==='checkbox'?t.checked:t.value;if(d.f==='tap')this._syncTapFields(t.closest('.custom-action-fields'),t.value);return;}
+      if(d.customAction){const [kind,index]=d.customAction.split('|'),items=[...c[kind]],item=items[Number(index)],group=t.closest('.custom-action-fields'),value=key=>{const input=group.querySelector('[data-action-field="'+key+'"]');return input.type==='checkbox'?input.checked:input.value;};this._syncTapFields(group,value('tap'));if(['navigate','url'].includes(value('tap'))&&!value('path').trim())return;try{if(!CUSTOM_TAPS.some(([code])=>code===value('tap')))return;items[Number(index)]={...item,tap_action:customTapConfig(value('tap'),item.entity,value('target'),value('path'),value('confirm'))};return this._emit({[kind]:items});}catch(error){this._note=error.message;return this._render();}}
       if (d.set === "_mkey") return;
       if (d.set) {
         let v = t.value;
@@ -3523,7 +3608,7 @@ class DeepalS05Settings extends HTMLElement {
     });
     sr.addEventListener("input", (e) => {
       const t = e.target;
-      if (t.dataset.f) this._form[t.dataset.f] = t.value;
+      if (t.dataset.f) this._form[t.dataset.f] = t.type==='checkbox'?t.checked:t.value;
     });
   }
 }
@@ -3881,7 +3966,7 @@ DeepalS05CardEditor.prototype._draw = function() {
   if(this._s)this._s.style.pointerEvents=this._editorLoaded?"":"none";
 };
 
-const companionSettingsAppCss='.tabbar{position:static}.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible;cursor:default;gap:6px}@media(min-width:1500px){.tabs{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:999px){.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}.tabs .vpill,.tn{display:none!important}.tabs button{min-width:0;white-space:normal;min-height:46px;justify-content:flex-start;border-radius:10px;padding:9px 10px;text-align:left;font-size:12px}.tabs button .i{flex:none}.tabs.hp>button.on{background:rgba(var(--ds-info),.18);border-color:rgba(var(--ds-info),.45)}input:not([type=checkbox]):not([type=color]),select{height:44px;min-height:44px;max-height:44px;box-sizing:border-box}input:not([type=checkbox]):not([type=color]),select{font-size:14px}.opt{flex-wrap:wrap;gap:10px}.opt .ol{min-width:0}.seg{flex-wrap:wrap}.sw-c{min-height:44px}.sw-c input[type=color]{min-height:30px;max-height:30px;width:40px;height:30px;border-radius:6px}.lvhead,.lvrow{grid-template-columns:minmax(0,1fr) 76px 76px;gap:8px}@media(max-width:420px){.tabs{grid-template-columns:minmax(0,1fr)}.lvhead,.lvrow{grid-template-columns:minmax(0,1fr) 62px 62px}.lvrow input[type=number]{padding:8px 4px}.sw-c{gap:8px;font-size:12px}.sw-c input[type=color]{flex-basis:34px;width:34px}}';
+const companionSettingsAppCss=':host{container-type:inline-size}.tabbar{position:static}.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible;cursor:default;gap:6px}@container(max-width:639px){.tabs{grid-template-columns:repeat(3,minmax(0,1fr))}}@container(max-width:499px){.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}}@container(max-width:299px){.tabs{grid-template-columns:1fr}}.tabs .vpill,.tn{display:none!important}.tabs button{min-width:0;white-space:normal;min-height:46px;justify-content:flex-start;border-radius:10px;padding:9px 10px;text-align:left;font-size:12px}.tabs button .i{flex:none}.tabs.hp>button.on{background:rgba(var(--ds-info),.18);border-color:rgba(var(--ds-info),.45)}input:not([type=checkbox]):not([type=color]),select{height:44px;min-height:44px;max-height:44px;box-sizing:border-box}input:not([type=checkbox]):not([type=color]),select{font-size:14px}.opt{flex-wrap:wrap;gap:10px}.opt .ol{min-width:0}.seg{flex-wrap:wrap}.sw-c{min-height:44px}.sw-c input[type=color]{min-height:30px;max-height:30px;width:40px;height:30px;border-radius:6px}.lvhead,.lvrow{grid-template-columns:minmax(0,1fr) 76px 76px;gap:8px}@media(max-width:420px){.tabs{grid-template-columns:minmax(0,1fr)}.lvhead,.lvrow{grid-template-columns:minmax(0,1fr) 62px 62px}.lvrow input[type=number]{padding:8px 4px}.sw-c{gap:8px;font-size:12px}.sw-c input[type=color]{flex-basis:34px;width:34px}}';
 /* Use HA names/selectors while keeping the stable mapping keys in storage. */
 const settingsConnected=DeepalS05Settings.prototype.connectedCallback;
 const settingsDisconnected=DeepalS05Settings.prototype.disconnectedCallback;
@@ -4005,6 +4090,7 @@ window.__DEEPAL_COMPANION_UI = {
   settingsAppCss: companionSettingsAppCss,
   loaderCss: LOADER_CSS,
   loaderHtml,
+  startReorder, mountChartZoom,
   applyPalette(element,config={}){
     const colors={ok:UI.hex2rgb(config.lvl_green||DEFAULTS.lvl_green,'52,211,153'),warn:UI.hex2rgb(config.lvl_yellow||DEFAULTS.lvl_yellow,'250,204,21'),bad:UI.hex2rgb(config.lvl_red||DEFAULTS.lvl_red,'248,113,113'),info:'121,173,255'};
     for(const [key,value]of Object.entries(colors)){element.style.setProperty('--companion-'+key,value);element.style.setProperty('--ds-'+key,value);}
@@ -4297,7 +4383,7 @@ const dzRing=(pct,rgb,icon,label,kind)=>{const p=pct===null||pct===undefined?nul
   return '<div class="dz-ring '+kind+'" role="img" style="--rg:'+rgb+'" aria-label="'+esc(label+": "+(p===null?T("unavailable"):Math.round(p)+"%"))+'"><span class="rw"><svg viewBox="0 0 64 64" aria-hidden="true"><circle class="rt" cx="32" cy="32" r="26"/><circle class="rv" cx="32" cy="32" r="26" stroke-dasharray="'+((p||0)*C/100).toFixed(1)+' '+C+'" transform="rotate(-90 32 32)"/></svg><b>'+(p===null?"--":Math.round(p)+"<small>%</small>")+'</b></span><span class="rl">'+ico(icon)+esc(label)+'</span></div>';};
 const dzChip=(icon,label,value)=>'<div class="dz-chip">'+ico(icon)+'<span class="k">'+esc(label)+'</span><b>'+esc(value)+'</b></div>';
 const dzInfo=card=>{const c=card._c,out=[];if(c.hidden.includes("info"))return out;
-  for(const id of (c.info_order||[]).filter(id=>(c.info||[]).includes(id))){const it=INFO_ITEMS[id];if(!it)continue;if(id==="fuel_level"&&!hasFuel(card._hass,c))continue;
+  for(const id of (c.info_order||[]).filter(id=>(c.info||[]).includes(id))){const it=INFO_ITEMS[id];if(!it)continue;if((id==="fuel_level"||id==="fuel_volume")&&!hasFuel(card._hass,c))continue;
     const n=it[3]===null?null:card._nl(it[0]).v,raw=card._s(it[0]);if(raw===null&&n===null)continue;
     out.push({ent:card._id(it[0]),icon:it[2],label:T(it[1]),val:it[3]===null?(raw===null?"--":stateText(raw)):n===null?"--":(card._fmtNum(n,it[3])+" "+card._unit(it[0])).trim()});}
   for(const x of c.info_custom||[]){const o=card._eobj(x.entity),n=o?parseFloat(o.state):NaN;
@@ -4449,7 +4535,7 @@ DeepalS05Card.prototype._render=function(...args){
   if(this._chargingCurve){this._chargingCurve.update();return result;}
   if(!this._curveLoad){
     const token={};this._curveLoad=token;
-    import('/deepal_companion/frontend/charging-curve.js?v=0.1.8').then(module=>{
+    import('/deepal_companion/frontend/charging-curve.js?v=0.2.0&rev=20261115-23').then(module=>{
       if(this._curveLoad!==token||!this.isConnected)return;
       this._curveLoad=null;this._chargingCurve=module.mountCurve(this);this._chargingCurve.update();
     }).catch(()=>{if(this._curveLoad===token){this._curveLoad=null;this._toast('Charging curve could not be loaded.','error');}});

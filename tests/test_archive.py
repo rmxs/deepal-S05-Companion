@@ -369,6 +369,29 @@ class PricingTests(unittest.TestCase):
         self.assertAlmostEqual(value["energy"], 2)
         self.assertAlmostEqual(value["cost"], .4)
 
+    def test_all_power_and_energy_units_are_converted(self):
+        for unit, source, reading, expected in (("W", "power", 2000, 2), ("kW", "power", 2, 2),
+                                                ("Wh", "total", 2000, 2), ("kWh", "total", 2, 2)):
+            rows = [[i * 600000, reading * i / 6] for i in range(7)] if source == "total" else [[i * 600000, reading] for i in range(7)]
+            result = calculate(self.g, {"profile": {**self.profile, "source": source}}, rows, unit)
+            self.assertAlmostEqual(result["energy"], expected, msg=str((unit, result)))
+            self.assertEqual(result["source"], "power" if source == "power" else "meter")
+            self.assertEqual(result["estimated"], source == "power")
+
+    def test_efficiency_only_applies_to_battery_estimates(self):
+        for source, unit, rows in (("battery", "", []), ("power", "kW", [[i * 600000, 2] for i in range(7)]),
+                                   ("total", "kWh", [[i * 600000, 2 * i / 6] for i in range(7)])):
+            result = calculate(self.g, {"profile": {**self.profile, "source": source, "efficiency": 50}}, rows, unit)
+            self.assertAlmostEqual(result["energy"], 18 if source == "battery" else 2)
+        receipt = calculate(self.g, {"profile": {**self.profile, "efficiency": 50}, "energy": 7}, [], "")
+        self.assertEqual((receipt["energy"], receipt["source"], receipt["estimated"]), (7, "receipt", False))
+
+    def test_invalid_units_fall_back_to_battery_estimate(self):
+        for source, unit in (("power", "Wh"), ("total", "W"), ("session", "")):
+            rows = [[0, 100], [3600000, 200]]
+            result = calculate(self.g, {"profile": {**self.profile, "source": source}}, rows, unit)
+            self.assertEqual((result["source"], result["energy"]), ("fallback", 10))
+
     def test_extreme_meter_values_fall_back_to_battery(self):
         rows = [[i * 600000, i * 1e300] for i in range(7)]
         value = calculate(self.g, {"profile": {**self.profile, "source": "total"}}, rows, "kWh")

@@ -30,7 +30,7 @@ The **Profile** box starts closed. Use the arrow next to the connection badge to
 | Remaining buttons | Hidden under More or always visible |
 | Button size | Small, Medium or Large |
 | Info | Show/hide and reorder odometer, outside/inside temperature, humidity, fuel level, petrol volume, power status and charging status, when available |
-| Custom info tiles | Reorder, add or remove a sensor; set its label and icon, including a Home Assistant icon |
+| Custom info tiles | Add, reorder or remove entities; choose a label, built-in/HA icon and tap action. Optional action targets let a read-only sensor control a switch or button. Long press always opens the original entity’s info |
 
 **Defaults:** the separate Charging and Charging costs sections are off. Charging curve is on and is displayed while charging. Use the Charging curve switch here to control its visibility.
 
@@ -88,7 +88,7 @@ The image’s charging details remain visible when the separate Charging section
 | Warm airflow | Colour above the mild limit |
 | Level colours | Red, Orange, Yellow and Green |
 | Battery thresholds | Three percentage boundaries for the four level colours |
-| Fuel thresholds | Three percentage boundaries for the four level colours, on hybrids |
+| Fuel thresholds | Three percentage boundaries for the four level colours, on plug-in hybrids only; electric cars show only the battery thresholds |
 
 ## Card Settings → Diagnostics & tyres
 
@@ -111,23 +111,22 @@ New warning sensors and custom diagnostic indicators are managed in Advanced.
 | Card name | Name shown on the card |
 | Show “Deepal Card” in the sidebar | Lists the **Deepal Card** page (just the card) in the sidebar. Off by default; an administrator changes it, then reloads the browser. The page keeps working from its address (`/deepal-companion-card`) and from notifications while hidden |
 | Entity prefix | Vehicle entity prefix |
-| Vehicle type | Automatic, Plug-in hybrid or Electric |
+| Vehicle type | Automatic, Plug-in hybrid or Electric. Automatic treats the car as a hybrid when it has a fuel level, fuel range or fuel volume sensor, and as electric otherwise. Electric hides fuel tiles, fuel colour settings, fuel history and fuel health checks. See [Vehicle type](#vehicle-type) |
 | Paint colour | Black, blue, grey, silver or white |
 | Wheels | 20-inch with covers, 20-inch without covers or 18-inch Pro |
-| Battery capacity | Automatic capacity or a kWh override, when Energy history is enabled |
+| Battery capacity | Automatic capacity (18.4 kWh for plug-in hybrids, 68.8 kWh for electric cars) or a kWh override, when Energy history is enabled |
 | Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
 | Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
 | Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
 | Refresh the charging curve every (min) | While charging, the curve's line follows the latest car report. When the car reports nothing new, the line still moves to the current time this often. 1–60, default 5 |
 | Full-tank fuel range | Automatic 940 km for hybrids, or a positive override |
-| Tank capacity | Automatic sensor value/51 L fallback, or a litres override |
 | Hero photos folder | Automatic image folder or a custom folder |
 | State-specific photos | Replace individual available vehicle-state images and check their previews |
 | New sensors | Discover, add, add all, ignore or restore ignored diagnostic suggestions |
-| My diagnostics | Reorder, add or remove custom entities; choose their labels and icons |
+| My diagnostics | Add, reorder or remove custom entities; choose labels, icons and tap actions. Long press always opens entity info |
 | Entity mapping | Choose a sensor role, select its HA entity and add/remove the mapping |
 
-Empty numeric fields display the default as a hint. Enter your own value to override it. Clearing an override restores the default. For hybrid range and tank capacity, 0 selects automatic values.
+Empty numeric fields display the default as a hint. Enter your own value to override it. Clearing an override restores the default. For hybrid range, 0 selects the automatic value. Fuel litres are read from the fuel-volume sensor; there is no tank-capacity setting.
 
 ## Card Settings → Live preview
 
@@ -212,3 +211,29 @@ In **Charging Profiles**, start typing a network name to see suggestions, or ent
 To test the on-card cost reminder, choose **Charging detected** under **Card Settings → Live preview**, enable **Charging costs** in Layout and turn on **Allow clicks**. The scenario uses sample data and never saves real assignments.
 
 **Independent card blocks:** In Layout → Sections, Charging costs (saved as `charging_cost`) controls the cost block, which disappears from the card when it is off; saved prices, receipts and the Costs dashboard are kept and Charging reminder controls charging-detected assignment reminders. These choices are saved per card profile and do not remove charging history.
+
+Custom tap actions include More info, Toggle, Turn on, Turn off, Press, Navigate, Open URL and None. For Navigate or Open URL, fill in the path/URL. Toggle and on/off need a controllable entity; for a binary sensor, choose the corresponding switch in Action target. Existing advanced actions are preserved and shown as Custom action.
+
+Custom entity action options start collapsed. Expand Tap action to edit them; only the relevant target or path fields appear. Enable Ask for confirmation for Toggle, Turn on, Turn off or Press to use the same Cancel/Confirm dialog as vehicle commands. Cancelling sends no command.
+
+### Vehicle type
+
+The vehicle type is chosen at setup from the vehicle’s registered entities and can be changed under **Card Settings → Advanced**.
+
+- **Automatic** follows the vehicle: with a fuel level, fuel range or fuel volume sensor it is a plug-in hybrid, otherwise it is electric. It re-checks whenever the sensors change.
+- **Plug-in hybrid** always shows battery and fuel items.
+- **Electric** hides every fuel item: fuel and petrol tiles, fuel colours and thresholds, the fuel range, petrol history in Energy and the fuel checks in Health. The default battery capacity also switches to the electric value (68.8 kWh instead of 18.4 kWh); a capacity you entered is kept.
+
+The choice only changes what is shown. A hybrid set to Electric still records fuel readings and keeps its data, so switching back restores everything.
+
+### Language of phone notifications
+
+Alert titles and messages, the Live charging, Live climate and Left open or unlocked notifications, their buttons and the dates in them use the Home Assistant language (**Settings → System → General**): English, Italian, Spanish, German or Greek. Other languages stay English. An alert is stored in the language that was active when it was saved; edited titles and messages are sent exactly as you typed them. Times use the Home Assistant time zone.
+
+### Chart navigation
+
+Pinch with two fingers to zoom the Energy history, energy-delivery and charging-curve time axes. Move both fingers together to pan while zoomed, and use the small reset icon to show the full range. Ctrl/Command + mouse wheel also zooms. One finger inspects readings; zooming changes the view without changing saved data or period totals.
+
+Live notification activity combines each start/end lifecycle into one entry. Expand its details to inspect triggering openings/unlocked state, captured sensor values and report times, and the end reason. “Only when parked” currently infers stationary status from an odometer report older than two minutes; it does not confirm gear P. A long stop or delayed API reports may therefore qualify. Without an odometer, engine/power status is used. Historical entries cannot recover trigger evidence that was never recorded.
+
+For live left-open/unlocked alerts, **Wait before showing** is the full continuous delay (5 min = 300 seconds) after the condition first qualifies. Before delivery, clearing the condition, detected movement (when parking filtering is enabled), disconnection, stale or unknown evidence resets the timer. HA restart also restarts a pending wait. A zero-minute setting skips this delay, but still requires a qualifying fresh condition. The separate two-minute odometer-report heuristic only decides moving versus stationary; it is not subtracted from your delay. Existing live activities keep their end-delay behavior.

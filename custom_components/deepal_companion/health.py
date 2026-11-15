@@ -10,27 +10,45 @@ BACKLOG_LIMIT = 500        # queued readings waiting for the archive worker
 WAL_LIMIT = 100 * 1024 * 1024
 LABELS = {"batt": "Battery level", "ac": "AC charge current", "dc": "DC charge current", "odo": "Odometer",
           "pow": "Power status", "fuel": "Fuel level", "charging": "Charging", "plug": "Charger plugged",
-          "tank": "Fuel tank capacity", "cloud": "Cloud connection"}
+          "volume": "Fuel volume", "cloud": "Cloud connection"}
+FUEL_ROLES = {"fuel", "volume"}
 RANK = {"ok": 0, "warning": 1, "error": 2}
 
 
+class Msg(str):
+    """English text for API users, plus the template and values so the panel can translate it."""
+    def __new__(cls, template, *args):
+        obj = super().__new__(cls, template.format(*args))
+        obj.key, obj.args = template, [str(a) for a in args]
+        return obj
+
+
 def item(ident, status, title, detail="", fix=""):
-    return {"id": ident, "status": status, "title": title, "detail": detail, "fix": fix}
+    row = {"id": ident, "status": status, "title": title, "detail": detail, "fix": fix}
+    if isinstance(detail, Msg):
+        row["detail_key"], row["args"] = detail.key, detail.args
+    return row
 
 
 def sensor_checks(runtime, now):
     rows = []
+    # An electric-only car has no fuel sensors, so they are not checked or reported as missing.
+    fuel = getattr(runtime, "has_fuel", lambda: True)()
     for role, entity in sorted(runtime.entities.items()):
+        if role in FUEL_ROLES and not fuel:
+            continue
         label = LABELS.get(role, role)
         state = runtime.hass.states.get(entity)
+        if role == "volume" and state is None:
+            continue
         required = role in REQUIRED_ROLES
         bad = "error" if required else "warning"
         ident = "sensor_" + role
         if state is None:
-            rows.append(item(ident, bad, label, entity + " was not found in Home Assistant.",
+            rows.append(item(ident, bad, label, Msg("{0} was not found in Home Assistant.", entity),
                              "Choose the correct sensor in Card Settings, or check the Deepal Alternative integration."))
         elif state.state in BAD_STATES:
-            rows.append(item(ident, bad, label, entity + " is " + state.state + ".",
+            rows.append(item(ident, bad, label, Msg("{0} is {1}.", entity, state.state),
                              "Check that the vehicle is connected to Deepal Alternative."))
         elif role == "cloud" and state.state == "off":
             rows.append(item(ident, "warning", label, "The vehicle cloud connection is off, so readings may be out of date.",
@@ -50,13 +68,13 @@ def backend_checks(runtime):
                      "Reload the integration or restart Home Assistant, then check the Home Assistant log.")]
     backlog = runtime.queue.qsize()
     if backlog > BACKLOG_LIMIT:
-        return [item("archive", "warning", "Charging recorder", str(backlog) + " readings are waiting to be saved.",
+        return [item("archive", "warning", "Charging recorder", Msg("{0} readings are waiting to be saved.", backlog),
                      "The recorder is running behind. Check disk speed and the Home Assistant log.")]
-    return [item("archive", "ok", "Charging recorder", "Running, " + str(backlog) + " readings waiting.")]
+    return [item("archive", "ok", "Charging recorder", Msg("Running, {0} readings waiting.", backlog))]
 
 
 def storage_checks(stats, schema):
-    rows = [item("schema", "ok", "Database", "Schema version " + str(schema) + ".")]
+    rows = [item("schema", "ok", "Database", Msg("Schema version {0}.", schema))]
     if stats.get("wal_bytes", 0) > WAL_LIMIT:
         rows.append(item("wal", "warning", "Database journal", "The journal file is unusually large.",
                          "Restart Home Assistant so the database can tidy itself."))
@@ -78,16 +96,16 @@ def notification_checks(engine, recipients):
         rows.append(item("recipients", "warning", "Notification devices", "No Mobile App device is available to receive alerts.",
                          "Install the Home Assistant app on a phone and sign in."))
     elif missing:
-        rows.append(item("recipients", "warning", "Notification devices", str(len(missing)) + " active alert(s) have no available device.",
+        rows.append(item("recipients", "warning", "Notification devices", Msg("{0} active alert(s) have no available device.", len(missing)),
                          "Open Notifications and choose a device for each alert."))
     else:
-        rows.append(item("recipients", "ok", "Notification devices", str(len(recipients)) + " device(s) available."))
+        rows.append(item("recipients", "ok", "Notification devices", Msg("{0} device(s) available.", len(recipients))))
     last = max((h for h in engine.history if h.get("status") not in {"test", "test_ended"}), key=lambda h: h.get("time", 0), default=None)
     if last and last.get("status") == "error":
         rows.append(item("delivery", "warning", "Last notification", "The most recent alert could not be delivered.",
                          "Open Notifications, Recent activity, for the device and reason."))
     elif last:
-        rows.append(item("delivery", "ok", "Last notification", "Last alert status: " + str(last.get("status")) + "."))
+        rows.append(item("delivery", "ok", "Last notification", Msg("Last alert status: {0}.", last.get("status"))))
     return rows
 
 
@@ -95,7 +113,7 @@ def pricing_checks(costs):
     unpriced = [p.get("name", p.get("id")) for p in costs.get("profiles", [])
                 if not p.get("free") and p.get("price") is None and p.get("source") == "battery"]
     if unpriced:
-        return [item("pricing", "warning", "Charging prices", "No price set for: " + ", ".join(sorted(map(str, unpriced))[:5]) + ".",
+        return [item("pricing", "warning", "Charging prices", Msg("No price set for: {0}.", ", ".join(sorted(map(str, unpriced))[:5])),
                      "Open Charging Profiles and enter a price per kWh.")]
     return [item("pricing", "ok", "Charging prices", "Every paid profile has a price.")]
 

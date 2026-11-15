@@ -2,9 +2,26 @@
    Charging, climate and left-open/unlocked share this code; the saved settings live in the notification settings. */
 const OPEN_ITEMS = ['front_left_door', 'front_right_door', 'rear_left_door', 'rear_right_door', 'front_left_window', 'front_right_window', 'rear_left_window', 'rear_right_window', 'hood', 'trunk'];
 const LOOK = {title: '', icon: '', color: '', url: ''};
+
+// Match the adjacent old-data control while keeping both selected text lines visible.
+export async function alignNavigationField(picker){
+  const visit=async(node,depth=0)=>{
+    if(depth>10||!picker.isConnected)return;
+    if(node.localName.includes("-"))await customElements.whenDefined(node.localName);
+    await node.updateComplete;
+    const root=node.shadowRoot;if(!root)return;
+    if(!root.querySelector('[data-navigation-alignment]')){
+      const style=document.createElement('style');style.dataset.navigationAlignment='';
+      style.textContent='.field,.trigger,.mdc-text-field,.mdc-text-field__affix{align-items:center!important}.field,.mdc-text-field{box-sizing:border-box;height:var(--notification-navigation-height,60px)!important;min-height:var(--notification-navigation-height,60px)!important;max-height:none!important}.trigger{display:flex!important;align-items:center!important;height:100%!important;box-sizing:border-box}.content,.text{justify-content:center!important;min-width:0}.primary,.secondary{line-height:18px!important}.content{padding-top:0!important;padding-bottom:0!important}ha-combo-box-item{align-self:center;--ha-combo-box-item-min-height:var(--notification-navigation-height,60px);--ha-combo-box-item-two-line-min-height:var(--notification-navigation-height,60px)}ha-icon,ha-svg-icon,ha-icon-button,.clear-button,.toggle-button{align-self:center!important;margin-top:0!important;margin-bottom:0!important}.mdc-text-field__input{padding-top:0!important}';
+      root.append(style);
+    }
+    await Promise.all([...root.querySelectorAll('*')].filter(child=>child.localName.includes('-')).map(child=>visit(child,depth+1)));
+  };
+  await visit(picker);
+}
 export const LIVE_DEFAULTS = {
   climate: {enabled: false, devices: [], min_interval: 120, max_age: 1800, start_delay: 0, end_delay: 30, temp_step: 1, ready_margin: 1, show_target: true, show_outside: false, show_progress: true, show_timer: true, show_updated: false, turn_off_button: true, max_run: 0, ...LOOK},
-  open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 300, end_delay: 10, items: OPEN_ITEMS, include_unlocked: true, only_parked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
+  open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 300, end_delay: 10, parked_after: 360, items: OPEN_ITEMS, include_unlocked: true, only_parked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
 };
 const GROUPS = {doors: OPEN_ITEMS.slice(0, 4), windows: OPEN_ITEMS.slice(4, 8), hood: ['hood'], trunk: ['trunk']};
 const KINDS = {
@@ -15,7 +32,7 @@ const KINDS = {
       ['switch', 'turn_off_button', '“Turn off” button', 'Android only'], ['number', 'min_interval', 'Update at most every', 'min', 60, 1, 60], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 10]]},
   open: {name: 'Left open or unlocked', icon: 'mdi:car-door-lock-open', sub: 'Open doors, windows and an unlocked car', info: 'One notification lists what is open or unlocked. Items drop off as they are closed, and it disappears when everything is secure.',
     rows: [['group', 'doors', 'Doors'], ['group', 'windows', 'Windows'], ['group', 'hood', 'Bonnet'], ['group', 'trunk', 'Trunk'], ['switch', 'include_unlocked', 'Unlocked car'], ['switch', 'only_parked', 'Only when the car is parked', 'Nothing while driving'], ['switch', 'show_count', 'Show item count'], ['switch', 'show_timer', 'Show time open'],
-      ['switch', 'lock_button', '“Lock vehicle” button', 'Android only'], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 60]]},
+      ['switch', 'lock_button', '“Lock vehicle” button', 'Android only'], ['number', 'parked_after', 'Count as parked after', 'min', 60, 1, 60], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 60]]},
 };
 // Phones only show Material Design icons, so the choices are mdi: names (others are refused).
 const ICONS = ['mdi:ev-station', 'mdi:battery-charging', 'mdi:battery-charging-high', 'mdi:battery-charging-medium', 'mdi:battery-charging-low', 'mdi:battery-high', 'mdi:battery-alert', 'mdi:flash', 'mdi:flash-outline', 'mdi:lightning-bolt', 'mdi:power-plug', 'mdi:power-plug-outline', 'mdi:ev-plug-type2', 'mdi:fan', 'mdi:air-conditioner', 'mdi:thermometer', 'mdi:thermometer-lines', 'mdi:snowflake', 'mdi:weather-sunny', 'mdi:sun-thermometer', 'mdi:radiator', 'mdi:hvac', 'mdi:car', 'mdi:car-electric', 'mdi:car-side', 'mdi:car-door', 'mdi:car-door-lock', 'mdi:car-door-lock-open', 'mdi:car-key', 'mdi:car-off', 'mdi:car-battery', 'mdi:car-seat-heater', 'mdi:car-seat-cooler', 'mdi:car-emergency', 'mdi:lock', 'mdi:lock-open', 'mdi:lock-open-variant-outline', 'mdi:lock-alert', 'mdi:shield-car', 'mdi:shield-lock', 'mdi:garage-open', 'mdi:window-open', 'mdi:window-closed', 'mdi:alert', 'mdi:alert-circle', 'mdi:bell', 'mdi:bell-ring', 'mdi:information', 'mdi:check-circle', 'mdi:timer-outline', 'mdi:clock-outline', 'mdi:gauge', 'mdi:speedometer', 'mdi:engine', 'mdi:steering', 'mdi:wiper', 'mdi:car-wireless', 'mdi:broadcast', 'mdi:fire'];
@@ -81,7 +98,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
     const state = getState();
     for (const [id, page] of Object.entries(pages)) {
       const cfg = state[id], toggleInput = rows[id].querySelector('[data-live-toggle]');
-      toggleInput.checked = page.power.checked = !!cfg.enabled; rows[id].querySelector('p').textContent = summary(id, cfg);
+      toggleInput.checked = page.power.checked = !!cfg.enabled; rows[id].dataset.enabled=String(!!cfg.enabled); rows[id].querySelector('p').textContent = summary(id, cfg);
       for (const input of page.wrap.querySelectorAll('[data-live-switch]')) input.checked = !!cfg[input.dataset.liveSwitch];
       for (const input of page.wrap.querySelectorAll('[data-live-group]')) input.checked = group(cfg, input.dataset.liveGroup);
       for (const input of page.wrap.querySelectorAll('[data-live-number]')) input.value = Math.round(cfg[input.dataset.liveNumber] / Number(input.dataset.scale));
@@ -90,6 +107,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
     }
     for (const node of tags) { const on = node.dataset.liveTag ? state[node.dataset.liveTag].enabled : Object.keys(KINDS).some((id) => state[id].enabled), tone = on ? '--design-warn' : '--design-muted'; node.style.background = `rgb(var(${tone})/.15)`; node.style.color = `rgb(var(${tone}))`; }
     tapPicker.value = getUrl() || '';
+    requestAnimationFrame(()=>{const reference=q('#input-fresh')?.closest('.compact-control-row, .flex.items-center.justify-between');const height=reference?.getBoundingClientRect().height;if(height>0)tapPicker.style.setProperty('--notification-navigation-height',height+'px');alignNavigationField(tapPicker);});
     syncCardTap();
   };
   const run = async (id, stop) => {
@@ -106,7 +124,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
   };
   // Where the phone opens when a notification is tapped: next to "Old data protection", in the same box.
   const tapPicker = document.createElement('ha-selector'), tapPanel = el('div', 'space-y-3');
-  tapPicker.hass = getHass(); tapPicker.selector = {navigation: {}}; tapPicker.label = ''; tapPicker.required = false; tapPicker.className = 'design-icon-picker';
+  tapPicker.hass = getHass(); tapPicker.selector = {navigation: {}}; tapPicker.label = ''; tapPicker.required = false; tapPicker.className = 'design-navigation-picker'; tapPicker.style.cssText='display:block;width:100%;min-width:0;height:var(--notification-navigation-height,60px);min-height:var(--notification-navigation-height,60px);--ha-select-height:var(--notification-navigation-height,60px);--ha-color-form-background:var(--design-inner)';
   tapPicker.addEventListener('value-changed', (event) => { event.stopPropagation(); if (busy() || typeof event.detail?.value !== 'string' && event.detail?.value != null) return; setUrl(event.detail.value || ''); changed(); });
   tapPanel.append(el('div', 'font-bold text-[11px] text-gray-300', 'When you tap a notification'), el('p', 'text-[11px] text-gray-400 leading-relaxed', 'The dashboard page the phone opens. Empty opens the page the Home Assistant app shows by default. Alerts and live notifications use the same page.'), tapPicker);
   // The page that shows only the card: one button to choose it as the tap target.
@@ -119,7 +137,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
     cardTap.setAttribute('aria-pressed', on ? 'true' : 'false'); cardTap.disabled = !!busy();
   };
   cardTap.addEventListener('click', () => { if (busy()) return; const on = (getUrl() || '') === CARD_PAGE; setUrl(on ? '' : CARD_PAGE); tapPicker.value = on ? '' : CARD_PAGE; syncCardTap(); changed(); });
-  tapPicker.addEventListener('value-changed', () => queueMicrotask(syncCardTap));
+  tapPicker.addEventListener('value-changed', () => {queueMicrotask(syncCardTap);requestAnimationFrame(()=>alignNavigationField(tapPicker));});
   tapPanel.append(cardTap); syncCardTap();
   const old = q('#input-fresh')?.closest('.ha-card');
   if (old) { const first = el('div', 'space-y-3'); first.append(...old.childNodes); old.classList.remove('space-y-3'); old.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;align-items:start'; old.append(first, tapPanel); }

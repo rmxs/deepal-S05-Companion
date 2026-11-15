@@ -23,11 +23,11 @@ const TITLES={
   sensor_dc:'DC charge current',sensor_odo:'Odometer',
   sensor_pow:'Power status',sensor_fuel:'Fuel level',
   sensor_charging:'Charging',sensor_plug:'Charger plugged',
-  sensor_tank:'Fuel tank capacity',sensor_cloud:'Cloud connection',
+  sensor_volume:'Fuel volume',sensor_cloud:'Cloud connection',
   archive:'Charging recorder',schema:'Database',
   wal:'Database journal',notifications:'Notifications',
   recipients:'Notification devices',delivery:'Last notification',
-  pricing:'Charging prices'
+  pricing:'Charging prices',sensors:'Sensors',recorder:'Recorder',storage:'Storage'
 };
 export async function mountHealth(panel,stage){
   const t=(...args)=>panel.t(...args);
@@ -39,18 +39,19 @@ export async function mountHealth(panel,stage){
   q('h2').textContent=t('Health & Diagnostics');
   q('.health-refresh').textContent=t('Check again');
   function draw(result){
+    panel.setHealthResult?.(result);
     const word={ok:t('All good'),warning:t('Needs attention'),error:t('Problem found')};
     const chip=q('.health-chip');chip.className='health-chip health-'+result.status;chip.innerHTML='<ha-icon icon="'+ICON[result.status]+'" aria-hidden="true"></ha-icon>'+escape(word[result.status]);
     const c=result.counts||{};
-    q('.health-meta').textContent=t('Checked ')+new Date(result.checked*1000).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'})+' · '+(c.error||0)+' '+t('problems')+', '+(c.warning||0)+' '+t('warnings')+' · v'+escape(result.version);
+    q('.health-meta').textContent=t('Checked ')+window.__DEEPAL_COMPANION_UI.format(panel._hass).hm(result.checked*1000)+' · '+(c.error||0)+' '+t('problems')+', '+(c.warning||0)+' '+t('warnings')+' · v'+escape(result.version);
     const list=q('.health-list');list.replaceChildren();
     for(const check of [...result.checks].sort((a,b)=>({error:0,warning:1,ok:2}[a.status]-{error:0,warning:1,ok:2}[b.status]))){
       const row=document.createElement('article');row.className='health-row health-'+check.status;
       const icon=document.createElement('ha-icon');icon.setAttribute('icon',ICON[check.status]||ICON.warning);icon.setAttribute('aria-hidden','true');
       const body=document.createElement('div'),title=document.createElement('strong');
       const names=TITLES[check.id];title.textContent=names?t(names):check.title;body.append(title);
-      if(check.detail){const p=document.createElement('p');p.textContent=check.detail;body.append(p);}
-      if(check.fix&&check.status!=='ok'){const p=document.createElement('p');p.className='health-fix';p.textContent=check.fix;body.append(p);}
+      if(check.detail){const p=document.createElement('p');p.textContent=check.detail_key?t(check.detail_key,...(check.args||[]).map(a=>a==='unavailable'||a==='unknown'?t(a):a)):t(check.detail);body.append(p);}
+      if(check.fix&&check.status!=='ok'){const p=document.createElement('p');p.className='health-fix';p.textContent=t(check.fix);body.append(p);}
       row.append(icon,body);list.append(row);
     }
   }

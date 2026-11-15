@@ -107,6 +107,20 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 2. Review enabled rules and their repeat intervals.
 3. Check other Home Assistant notification rules if the same event is reported more than once.
 
+## Fuel items are shown on an electric car, or missing on a hybrid
+
+1. Open **Card Settings → Advanced → Vehicle type**.
+2. **Automatic** treats the car as a hybrid when a fuel level, fuel range or fuel volume sensor exists for the vehicle prefix. If an electric car still shows fuel, check whether Deepal Alternative creates a fuel sensor for it; otherwise choose **Electric**.
+3. If a hybrid shows no fuel, make sure its fuel sensors exist and the prefix is correct, or choose **Plug-in hybrid**.
+4. Reload the page after changing the type. Choosing Electric only hides fuel items; no data is deleted.
+
+## Phone notification text or times are not what I expect
+
+1. Texts follow the Home Assistant language (**Settings → System → General**): English, Italian, Spanish, German or Greek. Other languages stay English.
+2. Alerts you saved earlier keep the language they had when saved. Re-save or reset the alert to use the new language.
+3. Titles and messages you wrote yourself are sent exactly as typed.
+4. Times use the Home Assistant time zone. Restart Home Assistant after an update, because the notification code runs in the backend.
+
 ## Before reporting an issue
 
 Include the Companion version, Home Assistant version, phone/browser, steps to reproduce and relevant log messages. Remove tokens, personal details and private vehicle information before sharing logs.

@@ -1,0 +1,83 @@
+const assert=require('assert');
+
+
+module.exports=async page=>{
+  await page.evaluate(async()=>{const {mountActivity}=await import('/deepal_companion/frontend/notification-activity.js'),host=document.createElement('div');document.body.append(host);const UI=window.__DEEPAL_COMPANION_UI,activity=mountActivity(host,async()=>({}),UI,()=>{},()=>window.testHass);activity.set({rows:[{id:'a',time:1700000300,start_time:1700000000,end_time:1700000300,status:'live_ended',trigger:{items:['Trunk'],unlocked:true,only_parked:true,moving:false,sensors:[{entity:'sensor.s05_total_odometer',value:'1000',reported:1700000000}]},end_trigger:{reason:'Condition cleared'}}],total:1});if(host.querySelectorAll('.activity-times span').length!==2||!host.textContent.includes('Trunk')||!host.textContent.includes('1000')||!host.textContent.includes('Condition cleared'))throw new Error('Combined activity badges and trigger details missing');activity.destroy();host.remove();});
+  const zoom=await page.evaluate(async()=>{
+    const UI=window.__DEEPAL_COMPANION_UI,host=document.createElement('div');host.style.cssText='width:600px;height:240px';document.body.append(host);let current;const full={start:0,end:30*86400000},control=UI.mountChartZoom(host,()=>full,range=>current=range);host.dispatchEvent(new WheelEvent('wheel',{deltaY:-1,ctrlKey:true,cancelable:true}));const half=current.end-current.start;control.reset();const box=host.getBoundingClientRect(),send=(type,id,x)=>host.dispatchEvent(new PointerEvent(type,{pointerId:id,pointerType:'touch',clientX:box.x+x,clientY:box.y+100,bubbles:true,cancelable:true}));send('pointerdown',1,250);send('pointerdown',2,350);send('pointermove',1,150);send('pointermove',2,450);const pinched=current.end-current.start;send('pointerup',1,150);send('pointerup',2,450);control.reset();const reset=current===null;control.destroy();host.remove();
+    const {energyChartMarkup,bindEnergyChartZoom}=await import('/deepal_companion/frontend/companion-cost-design.js'),graph=document.createElement('div'),ha=UI.format(window.testHass),panel={costGraph:graph,_hass:window.testHass,sessionFormat:()=>({number:{format:String},money:{format:String},date:{format:ha.date},time:{format:ha.hm}})};graph.innerHTML=energyChartMarkup(panel,{}, {period:30,end:Date.now()});document.body.append(graph);bindEnergyChartZoom(panel);const count=()=>graph.querySelectorAll('.energy-col').length,before=count();graph.querySelector('.energy-plot').dispatchEvent(new WheelEvent('wheel',{deltaY:-1,ctrlKey:true,cancelable:true}));const after=count();graph.querySelector('[data-chart-zoom=reset]').click();const restored=count();graph.remove();return {half,pinched,reset,before,after,restored};
+  });
+  assert.equal(zoom.half,24*86400000);assert(Math.abs(zoom.pinched-10*86400000)<1);assert(zoom.reset);assert.equal(zoom.before,30);assert(zoom.after<30);assert.equal(zoom.restored,30);
+  const actions=await page.evaluate(()=>{
+    const UI=window.__DEEPAL_COMPANION_UI,widget=document.createElement(UI.settingsTag),legacy={entity:'sensor.legacy',label:'Legacy',icon:'info'};widget.hass=window.testHass;widget.mode='app';widget.cfg=UI.normalize({info_custom:[legacy]});widget.onPatch=patch=>widget.cfg={...widget.cfg,...patch};document.body.append(widget);widget._setTab('layout');
+    Object.assign(widget._form,{entity:'binary_sensor.custom_action_test',label:'Charger',icon:'poweron',tap:'toggle',target:'switch.test_charger',path:''});widget._render();widget.shadowRoot.querySelector('[data-add=info_custom]').click();const saved=structuredClone(widget.cfg.info_custom[1]),untouched=JSON.stringify(widget.cfg.info_custom[0])===JSON.stringify(legacy);
+    const select=widget.shadowRoot.querySelector('[data-custom-action="info_custom|1"][data-action-field=tap]');select.value='none';select.dispatchEvent(new Event('change',{bubbles:true}));const edited=widget.cfg.info_custom[1].tap_action.action;
+    const icons=['poweron','poweroff','wallbox','solar','garage','trip','pin','timer','wifi','shield'];const available=icons.every(name=>widget.shadowRoot.querySelector('[data-icon="'+name+'"]'));widget.remove();
+    const card=document.getElementById('mobile'),before=card._c.info_custom;card._c.info_custom=[{...saved,hold_action:{action:'toggle'}}];card._force();const tile=card.shadowRoot.querySelector('.tile[data-ent="binary_sensor.custom_action_test"]');let info;const listener=event=>info=event.detail.entityId;card.addEventListener('hass-more-info',listener);card._tap(tile);card._hold(tile);card.removeEventListener('hass-more-info',listener);card._c.info_custom=before;card._force();return {saved,untouched,edited,available,info,service:window.serviceCalls.at(-1)};
+  });
+  assert.equal(actions.saved.tap_action.action,'toggle');assert.equal(actions.saved.tap_action.entity,'switch.test_charger');assert(actions.untouched&&actions.available);assert.equal(actions.edited,'none');assert.equal(actions.info,'binary_sensor.custom_action_test');assert.deepEqual(actions.service,['homeassistant','toggle',{entity_id:'switch.test_charger'}]);
+  const approval=await page.evaluate(async()=>{
+    const UI=window.__DEEPAL_COMPANION_UI,widget=document.createElement(UI.settingsTag);widget.hass=window.testHass;widget.mode='app';widget.cfg=UI.normalize({});widget.onPatch=patch=>widget.cfg={...widget.cfg,...patch};document.body.append(widget);widget._setTab('layout');Object.assign(widget._form,{entity:'binary_sensor.approval_test',label:'Test',icon:'poweron',tap:'toggle',target:'switch.test_charger',confirm:true});widget._render();widget.shadowRoot.querySelector('[data-add=info_custom]').click();const cfg=structuredClone(widget.cfg.info_custom[0].tap_action),details=widget.shadowRoot.querySelector('[data-action-editor="info_custom|binary_sensor.approval_test"]'),collapsed=!details.open,pathHidden=details.querySelector('[data-path-options]').hidden;const positions=()=>[...details.closest('.custom-entity').querySelector('.custom-entity-header').children].map(node=>{const r=node.getBoundingClientRect();return [r.x,r.y,r.width,r.height];});let stable=true;for(const width of [720,360]){widget.style.width=width+'px';details.open=false;const before=positions();details.open=true;const after=positions();stable&&=before.every((r,i)=>r.every((v,j)=>Math.abs(v-after[i][j])<.1));}details.open=true;await new Promise(resolve=>setTimeout(resolve,0));const checkbox=details.querySelector('[data-action-field=confirm]');checkbox.checked=false;checkbox.dispatchEvent(new Event('change',{bubbles:true}));const editPreserved=widget.shadowRoot.querySelector('[data-action-editor="info_custom|binary_sensor.approval_test"]').open&&widget.cfg.info_custom[0].tap_action.confirmation!==true;widget.remove();
+    const card=document.getElementById('mobile'),before=window.serviceCalls.length;card._act(cfg,'binary_sensor.approval_test');const asked=!!card._confirm&&window.serviceCalls.length===before;card.shadowRoot.querySelector('.lksw [data-close]').click();const cancelled=window.serviceCalls.length===before;card._act(cfg,'binary_sensor.approval_test');card.shadowRoot.querySelector('[data-sheet=yes]').click();return {saved:cfg.confirmation,collapsed,pathHidden,editPreserved,stable,asked,cancelled,sent:window.serviceCalls.length-before,closed:!card._confirm};
+  });
+  assert.deepEqual(approval,{saved:true,collapsed:true,pathHidden:true,editPreserved:true,stable:true,asked:true,cancelled:true,sent:1,closed:true},'Custom actions must stay collapsed and execute exactly once after approval');
+  const fuel=await page.evaluate(()=>{const t=Date.UTC(2026,0,1,12),raw={batt:[[t,50],[t+3600000,49]],odo:[[t,100],[t+3600000,110]],pow:[[t,'on'],[t+3600000,'off']],ac:[],dc:[],fuel:[[t,50],[t+3540000,48]],volume:[[t,25],[t+600000,0],[t+660000,25],[t+3540000,24]]},model=window.__DEEPAL_COMPANION_ENERGY.model;const measured=model(raw,t+3600000,18.4,Date.UTC(2026,0,1),1,true,'UTC'),missing=model({...raw,volume:[]},t+3600000,18.4,Date.UTC(2026,0,1),1,true,'UTC');return {litres:measured.days[0].fuel,missing:missing.fuelUsed};});
+  assert.equal(fuel.litres,1,'Fuel usage comes from volume decreases, ignoring a transient zero');assert.equal(fuel.missing,false,'Fuel percentages alone must not invent litres');
+  const loader=await page.evaluate(()=>{const UI=window.__DEEPAL_COMPANION_UI,host=document.createElement('div');host.className='enpanel';host.innerHTML='<style>'+UI.loaderCss+window.__DEEPAL_COMPANION_ENERGY.styles+'</style>'+UI.loaderHtml('bolt');document.body.append(host);const ring=host.querySelector('.ring'),arc=host.querySelector('.arc'),icon=ring.querySelector('.i'),r=ring.getBoundingClientRect(),a=arc.getBoundingClientRect(),i=icon.getBoundingClientRect();const result={ring:r.width,arc:a.width,animations:host.getAnimations({subtree:true}).length,pulse:getComputedStyle(ring,'::before').content,centred:Math.abs((i.x+i.width/2)-(r.x+r.width/2))<1&&Math.abs((i.y+i.height/2)-(r.y+r.height/2))<1};host.remove();return result;});
+  assert(Math.abs(loader.ring-95.2)<.1);assert.equal(loader.ring,loader.arc);assert.equal(loader.animations,1);assert.equal(loader.pulse,'none');assert(loader.centred,'Shared loader icon and arc stay centred in Energy sheets');
+  const chartColors=await page.evaluate(()=>{const host=document.createElement('div');host.className='enpanel';host.innerHTML='<style>'+window.__DEEPAL_COMPANION_ENERGY.styles+'</style><svg><path stroke="var(--energy-charge)"/></svg>';document.body.append(host);const read=scheme=>{host.style.colorScheme=scheme;return getComputedStyle(host.querySelector('path')).stroke;};const result={light:read('light'),dark:read('dark')};host.remove();return result;});
+  assert.equal(chartColors.light,'rgb(8, 127, 91)');assert.equal(chartColors.dark,'rgb(52, 229, 164)');
+  const nativeHeight=await page.evaluate(async()=>{
+    const {alignNavigationField}=await import('/deepal_companion/frontend/companion-live.js');
+    const host=document.createElement('div');host.style.setProperty('--notification-navigation-height','72px');host.attachShadow({mode:'open'}).innerHTML='<ha-delayed-navigation-test></ha-delayed-navigation-test>';document.body.append(host);
+    setTimeout(()=>customElements.define('ha-delayed-navigation-test',class extends HTMLElement{constructor(){super();this.attachShadow({mode:'open'}).innerHTML='<ha-picker-field></ha-picker-field>';}}),20);
+    await alignNavigationField(host);const field=host.shadowRoot.querySelector('ha-delayed-navigation-test').shadowRoot.querySelector('ha-picker-field').shadowRoot.querySelector('.field');const height=field.getBoundingClientRect().height;host.remove();return height;
+  });
+  assert.equal(nativeHeight,72,'Navigation field must wait for native components and use the full reference height');
+  const connection=await page.evaluate(()=>{const card=document.getElementById('mobile'),id=card._id('binary_sensor.cloud_connection'),before=card._hass.states[id];card._hass.states[id]={...before,state:'off'};card._force();const message=card.shadowRoot.querySelector('.connection-banner')?.textContent;card._hass.states[id]=before;card._force();return {message,cleared:!card.shadowRoot.querySelector('.connection-banner')};});
+  assert(connection.message?.includes('Deepal Alternative API')&&connection.message.includes('Advanced'),'Offline banner must explain connection and prefix checks');assert(connection.cleared,'Connection warning clears when the API reconnects');
+  const calendar=await page.evaluate(()=>{
+    const f=window.__DEEPAL_COMPANION_UI.format({locale:{language:'en',time_zone:'local',time_format:'24'},config:{time_zone:'America/New_York'}}),now=Date.UTC(2024,2,11,2);
+    const model=window.__DEEPAL_COMPANION_ENERGY.model({batt:[],ac:[],dc:[],odo:[],pow:[],fuel:[]},now,18.4,f.dayStart(now,-1),2,true,f.timeZone);
+    return {hour:f.hm(now),today:f.dayStart(now),days:model.days.map(d=>d.t),next:f.dayStart(now,1)};
+  });
+  assert.equal(calendar.hour,'22:00');assert.equal(calendar.today,Date.UTC(2024,2,10,5));
+  assert.deepEqual(calendar.days,[Date.UTC(2024,2,9,5),Date.UTC(2024,2,10,5)]);
+  assert.equal(calendar.next-calendar.today,23*3600000,'Shared calendar formatter follows HA DST');
+  const checks=await page.evaluate(()=>{
+    const format=window.__DEEPAL_COMPANION_UI.format,hass={locale:{language:'en',time_format:'24',time_zone:'local'},config:{time_zone:'Europe/Athens'}},f=format(hass),fall=Date.UTC(2024,9,27,12);
+    return {browser:Intl.DateTimeFormat().resolvedOptions().timeZone,winter:f.hm(Date.UTC(2024,0,15,12)),summer:f.hm(Date.UTC(2024,6,15,12)),fallHours:(f.dayStart(fall,1)-f.dayStart(fall))/3600000,missing:format({locale:{}}).hm(Date.now())};
+  });
+  assert.equal(checks.winter,'14:00');assert.equal(checks.summer,'15:00');assert.equal(checks.fallHours,25);assert.equal(checks.missing,'—');
+  const zone=await page.evaluate(()=>Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const result=await page.evaluate(()=>{
+    const energy=window.__DEEPAL_COMPANION_ENERGY;
+    const march=Date.UTC(2024,2,11,16),start=energy.periodDayStart(-1,'America/New_York',march),today=energy.periodDayStart(0,'America/New_York',march);
+    const local=energy.periodDayStart(0,undefined,march),expectedLocal=new Date(march);expectedLocal.setHours(0,0,0,0);
+    return {start,today,local,expectedLocal:expectedLocal.getTime(),dayHours:(today-start)/3600000};
+  });
+  assert.notEqual(zone,'America/New_York','Regression needs browser and HA zones to differ');
+  assert.equal(new Date(result.today).toISOString(),'2024-03-11T04:00:00.000Z');
+  assert.equal(new Date(result.start).toISOString(),'2024-03-10T05:00:00.000Z');
+  assert.equal(result.dayHours,23,'HA calendar days must follow DST');
+  assert(Number.isNaN(result.local),'Missing HA timezone must not fall back to browser time');
+  const pricing=await page.evaluate(()=>{
+    const {chargingEnergy,chargingCost}=window.__DEEPAL_COMPANION_ENERGY.costMath,g={s:0,e:3600000,from:0,to:50,kwh:9},profile={id:'manual',price:.5,free:false,efficiency:50};
+    const measured=(source,unit,reading)=>chargingEnergy(g,{profile:{...profile,source}},Array.from({length:7},(_,i)=>[i*600000,source==='power'?reading:reading*i/6]),unit);
+    return {units:[measured('power','W',2000),measured('power','kW',2),measured('total','Wh',2000),measured('session','kWh',2)],battery:chargingEnergy(g,{profile:{...profile,source:'battery'}}),receipt:chargingEnergy(g,{profile,energy:7}),total:chargingCost(g,{profile,energy:7,total:3},[],'').cost,invalid:chargingEnergy(g,{profile:{...profile,source:'power'}},Array.from({length:7},(_,i)=>[i*600000,2000]),'Wh')};
+  });
+  pricing.units.forEach(row=>assert(Math.abs(row.energy-2)<1e-9));assert.deepEqual(pricing.units.map(row=>row.estimated),[true,true,false,false]);
+  assert.equal(pricing.battery.energy,18,'Efficiency should scale battery energy');assert.equal(pricing.receipt.energy,7,'Receipt energy bypasses efficiency');assert.equal(pricing.total,3,'Entered total takes precedence');assert.equal(pricing.invalid.source,'fallback','Invalid units cannot be treated as measured energy');
+
+  const header=await page.evaluate(async()=>{
+    const {updateCostHeader}=await import('/deepal_companion/frontend/companion-cost-design.js');
+    const nodes={'[data-energy-total]':{textContent:''},'[data-cost-total]':{textContent:'',title:''}};
+    const root={querySelector:selector=>selector==='.cost-kpis'?null:nodes[selector]};
+    const panel={shadowRoot:{querySelector:()=>root},dashboardSummary:{energy:12.5,cost:3,total:2,priced:2,battery_estimated:1},sessionFormat:()=>({number:{format:value=>String(value)},money:{format:value=>'€'+value}})};
+    updateCostHeader(panel);const estimated=nodes['[data-energy-total]'].textContent;
+    panel.dashboardSummary={...panel.dashboardSummary,battery_estimated:0};updateCostHeader(panel);
+    return {estimated,measured:nodes['[data-energy-total]'].textContent};
+  });
+  assert.equal(header.estimated,'≈ 12.5 kWh');assert.equal(header.measured,'12.5 kWh');
+  console.log('PASS: HA-zone day boundaries across DST, no browser-time fallback, and aggregate estimate marker.');
+};

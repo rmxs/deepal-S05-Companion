@@ -17,7 +17,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from .charging import ChargingEngine, number
+from .charging import ChargingEngine, OFFLINE_LIMIT, number
 from .const import DEFAULT_PROFILES, DEFAULT_SPIKE_JUMP, DOMAIN, ENERGY_KEYS, RANGES, SIGNAL
 from .pricing import calculate
 from .health import BACKLOG_LIMIT
@@ -68,6 +68,8 @@ class VehicleRuntime:
         self.queue = BoundedQueue(QUEUE_SOFT_LIMIT, QUEUE_HARD_LIMIT, self._critical_entities)
         self._reported_drops = 0
         self._seen = {}  # role -> last state a sensor reported; lets a good value survive a temporary 'unavailable'
+        self._lost = {}  # role -> time its sensor became unavailable; a carried-over value expires after OFFLINE_LIMIT
+        self._expired_since = None  # start of the outage when a carried-over value has expired
         self.worker = None
         self.stop_timeout = 4  # seconds the archive worker gets to finish before unload cancels it
         self.engine = None
@@ -76,9 +78,11 @@ class VehicleRuntime:
         self.charger_entities = set()
         self.price_cache = {}
         self._pricing_lock = asyncio.Lock()
-        self._summary_lock = asyncio.Lock()
         self._summary_revision = 0
         self._summary_cache = None
+        self._summary_flight = None  # the one summary calculation that may be running
+        self._priced_flights = {}
+        self._summary_failure_logged = False
         self._last_signal = 0
         self._next_maintenance = 0
         self._stopped = False
@@ -218,20 +222,30 @@ class VehicleRuntime:
     def _critical_entities(self):
         return {self.entities.get(role) for role in ENGINE_ROLES} | self.charger_entities
 
-    def snapshot(self) -> dict:
-        values = {}
+    def snapshot(self, now=None) -> dict:
+        now = time.time() if now is None else now
+        values, expired = {}, []
         for role, entity in self.entities.items():
             state = self.hass.states.get(entity)
             raw = state.state if state and not state.attributes.get("restored") else None
             previous = self._seen.get(role)
             if raw == "unavailable" and usable(previous):
                 # A sensor that was fine and became unavailable (for example after a restart, until the car wakes up)
-                # keeps its last good value. Any other state, or a sensor that never had a value, is passed on as is.
-                values[role] = previous
+                # keeps its last good value, but only for OFFLINE_LIMIT. After that the outage is reported as it is, so
+                # a charge cannot stay live for as long as the car stays unreachable.
+                lost = self._lost.setdefault(role, now)
+                if now - lost < OFFLINE_LIMIT:
+                    values[role] = previous
+                else:
+                    values[role] = raw
+                    if role in ENGINE_ROLES:  # only readings the charging engine decides on can end a charge
+                        expired.append(lost)
                 continue
+            self._lost.pop(role, None)
             values[role] = raw
             if raw is not None:
                 self._seen[role] = raw
+        self._expired_since = min(expired) if expired else None
         return values
 
     def spike_jump(self):
@@ -243,13 +257,17 @@ class VehicleRuntime:
         explicit = number(self.config.get("battery_kwh"))
         if explicit and explicit > 0:
             return explicit
-        ev = self.config.get("powertrain") == "ev"
-        if self.config.get("powertrain", "auto") == "auto":
-            # At startup a fuel sensor can be registered but not loaded yet: it still means plug-in hybrid.
-            registry = er.async_get(self.hass)
-            ev = not any(self.hass.states.get(entity) or registry.async_get(entity)
-                         for entity in (self.entities["fuel"], "sensor." + self.config["prefix"] + "_fuel_range"))
-        return 68.8 if ev else 18.4
+        return 18.4 if self.has_fuel() else 68.8
+
+    def has_fuel(self):
+        """True for a plug-in hybrid. An explicit Vehicle type wins; Automatic looks for the fuel sensors."""
+        mode = self.config.get("powertrain", "auto")
+        if mode != "auto":
+            return mode != "ev"
+        # At startup a fuel sensor can be registered but not loaded yet: it still means plug-in hybrid.
+        registry = er.async_get(self.hass)
+        return any(self.hass.states.get(entity) or registry.async_get(entity)
+                   for entity in (self.entities["fuel"], "sensor." + self.config["prefix"] + "_fuel_range"))
 
     def _sample(self, entity, now, state, unit, samples, pending):
         previous = self.last_states.get(entity)
@@ -337,6 +355,10 @@ class VehicleRuntime:
                     True if values.get("charging") == "on" else False if values.get("charging") == "off" else None)
                 if values.get("cloud") in {"off", "unknown", "unavailable"}:
                     charging = None
+                if charging is None and self._expired_since is not None and self.engine.state.get("session"):
+                    # The outage has already lasted OFFLINE_LIMIT: let the engine close the open charge now,
+                    # instead of starting its own unreachable timer again.
+                    self.engine.state.setdefault("unknown_since", self._expired_since)
                 sessions = self.engine.feed(now, values.get("batt"), charging, self.capacity(), dc is not None and dc > .5, self.spike_jump())
                 curve_entities = {key: self.entities.get(role) for key, role in (("ac", "ac"), ("dc", "dc"), ("battery", "batt"))}
                 for session in sessions:
@@ -453,22 +475,55 @@ class VehicleRuntime:
         self._summary_cache = self._dashboard_cache = None
 
     async def priced_sessions(self, start=None, end=None):
-        async with self._pricing_lock:
-            return await self._priced_sessions(start, end)
+        """Priced rows for a period. Concurrent calls for the same period share one snapshot read and pricing pass."""
+        return await self._shared_priced(("period", start, end), start, end)
+
+    async def _shared_priced(self, key, start, end):
+        """Concurrent callers with the same key and revision share one pricing pass. A joining caller receives its own
+        copy, so no caller can change what another one sees. Summaries and dashboards use different keys, so a slow
+        summary read never holds up a dashboard request."""
+        revision = self._summary_revision
+        shared = self._priced_flights.get(key)
+        if shared is not None and shared["revision"] == revision and not shared["task"].done():
+            shared["joined"] = True
+            await asyncio.shield(shared["task"])
+            return deepcopy(shared["pristine"])
+        holder = {"revision": revision, "task": None, "joined": False, "pristine": None}
+        holder["task"] = asyncio.ensure_future(self._priced_period(holder, start, end))
+        self._priced_flights[key] = holder
+        holder["task"].add_done_callback(lambda task: self._forget_priced(key, holder, task))
+        return await asyncio.shield(holder["task"])
+
+    async def _priced_period(self, holder, start, end):
+        _, rows = await self._priced(lambda store: (None, store.sessions(self.vehicle, start, end)))
+        if holder["joined"]:  # taken before this task finishes, so no caller has changed the rows yet
+            holder["pristine"] = deepcopy(rows)
+        return rows
+
+    def _forget_priced(self, key, holder, task):
+        if self._priced_flights.get(key) is holder:
+            del self._priced_flights[key]
+        if not task.cancelled():
+            task.exception()  # reading it marks a failure as handled
 
     async def session_page(self, before=None, limit=5, location="", sort="newest"):
-        async with self._pricing_lock:
-            if sort in {"highest", "lowest"}:
-                # Every cost, setting or session change bumps the revision, so the whole archive is only re-priced
-                # when something changed, or at most every 15 minutes for readings that arrive late.
+        if sort in {"highest", "lowest"}:
+            # Every cost, setting or session change bumps the revision, so the whole archive is only re-priced
+            # when something changed, or at most every 15 minutes for readings that arrive late.
+            # The lock only stops two index rebuilds from overlapping; page reads never wait for it.
+            async with self._pricing_lock:
                 key = (self._summary_revision, int(time.time() // 900))
                 if getattr(self, "_cost_index_key", None) != key:
-                    rows = await self._priced_sessions()
+                    rows = await self.priced_sessions()
                     await self.hub.db("index_session_costs", self.vehicle, rows)
                     self._cost_index_key = key
-            result = await self.hub.db("session_page", self.vehicle, before, limit, location, sort)
-            result["rows"] = await self._priced_sessions(rows=result["rows"])
-            return result
+
+        def fetch(store):
+            result = store.session_page(self.vehicle, before, limit, location, sort)
+            return result, result["rows"]
+
+        result, _ = await self._priced(fetch)
+        return result
 
     async def charging_dashboard(self, start=None, end=None):
         key = (self._summary_revision, int(time.time() // 60), start, end)
@@ -516,13 +571,30 @@ class VehicleRuntime:
         self._dashboard_cache = (key, deepcopy(result))
         return result
 
-    async def _priced_sessions(self, start=None, end=None, rows=None):
-        if rows is None:
-            rows = await self.hub.db("sessions", self.vehicle, start, end)
-        settings = await self.hub.db("get", self.vehicle, "costs", {})
+    async def _priced(self, fetch):
+        """Read rows, cost settings and meter readings from one SQLite snapshot, then price them on the event loop.
+
+        fetch(store) returns (result, rows). Nothing is held while the snapshot is read, so archive writes and other
+        readers are not delayed. Planning runs in the executor against a copy of the price cache, so the readings it
+        asks for match the prices applied afterwards."""
+        cache = dict(self.price_cache)
+
+        def load(store):
+            result, rows = fetch(store)
+            settings = store.get(self.vehicle, "costs", {})
+            pending, requests = self._plan(rows, settings, cache)
+            inputs = store.pricing_inputs(self.vehicle, requests) if requests else {}
+            return result, rows, pending, inputs
+
+        result, rows, pending, inputs = await self.hub.read_db(load)
+        self._apply(rows, pending, inputs)
+        return result, rows
+
+    @staticmethod
+    def _plan(rows, settings, cache):
+        """Pure step: sets the markers and cached prices, and lists rows that still need calculating and their readings."""
         assignments = settings.get("sessions", {})
         pending, requests = [], []
-        cache_ids = {row["id"] for row in rows[-1000:]}
         for row in rows:
             record = assignments.get(str(int(row["s"] / 1000 + .5)))
             profile_id = (record.get("profile") or {}).get("id") if record else None
@@ -532,7 +604,7 @@ class VehicleRuntime:
                 row["pricing"], row["assignment"] = row["recovered_pricing"], record
                 continue
             fingerprint = json.dumps([row, record], sort_keys=True)
-            cached = self.price_cache.get(row["id"])
+            cached = cache.get(row["id"])
             if not row["live"] and cached and cached[0] == fingerprint:
                 row["pricing"], row["assignment"] = cached[1], record
                 continue
@@ -541,7 +613,10 @@ class VehicleRuntime:
             pending.append((row, record, fingerprint, entity))
             if entity:
                 requests.append((row["id"], entity, row["s"] / 1000 - 1200, row["e"] / 1000))
-        inputs = await self.hub.db("pricing_inputs", self.vehicle, requests) if requests else {}
+        return pending, requests
+
+    def _apply(self, rows, pending, inputs):
+        cache_ids = {row["id"] for row in rows[-1000:]}
         for row, record, fingerprint, entity in pending:
             data = inputs.get(row["id"], {})
             readings, unit = data.get("readings", []), data.get("unit", "")
@@ -554,18 +629,46 @@ class VehicleRuntime:
                 self.price_cache[row["id"]] = (fingerprint, row["pricing"])
                 if len(self.price_cache) > 1000:
                     del self.price_cache[next(iter(self.price_cache))]
-        return rows
 
     async def summary_values(self) -> dict:
-        """The four sensors share one calculation per completed-data revision."""
-        async with self._summary_lock:
+        """The four sensors share one calculation per completed-data revision.
+
+        Callers join the single calculation in flight. A caller that is cancelled or times out only stops waiting:
+        the calculation keeps running, and a second one never starts while it is active.
+        """
+        while True:
             revision = self._summary_revision
             if self._summary_cache and self._summary_cache[0] == revision:
                 return dict(self._summary_cache[1])
-            rows = [row for row in await self.priced_sessions() if not row["live"]]
-            values = {"sessions": len(rows), "battery_kwh": round(sum(row.get("kwh") or 0 for row in rows), 4),
-                      "cost": round(sum(row["pricing"]["cost"] or 0 for row in rows), 4),
-                      "unpriced": sum(row["pricing"]["cost"] is None for row in rows)}
-            if revision == self._summary_revision:
-                self._summary_cache = (revision, values)
-            return dict(values)
+            flight = self._summary_flight
+            if flight is None or flight.done():
+                flight = asyncio.ensure_future(self._calculate_summary())
+                flight.add_done_callback(self._summary_flight_done)
+                self._summary_flight = flight
+            # shield: cancelling this caller must not cancel the shared calculation.
+            calculated_for, values = await asyncio.shield(flight)
+            if calculated_for == self._summary_revision:
+                return dict(values)
+            # Completed data changed while the calculation ran; wait for it to finish, then calculate again.
+
+    async def _calculate_summary(self):
+        revision = self._summary_revision
+        rows = [row for row in await self._shared_priced(("summary",), None, None) if not row["live"]]
+        values = {"sessions": len(rows), "battery_kwh": round(sum(row.get("kwh") or 0 for row in rows), 4),
+                  "cost": round(sum(row["pricing"]["cost"] or 0 for row in rows), 4),
+                  "unpriced": sum(row["pricing"]["cost"] is None for row in rows)}
+        if revision == self._summary_revision:  # only a successful, current calculation is cached
+            self._summary_cache = (revision, values)
+        return revision, values
+
+    def _summary_flight_done(self, flight):
+        if self._summary_flight is flight:
+            self._summary_flight = None
+        if flight.cancelled():
+            return
+        error = flight.exception()  # reading it marks the failure as handled, so asyncio does not report it again
+        if error is None:
+            self._summary_failure_logged = False
+        elif not self._summary_failure_logged:
+            self._summary_failure_logged = True
+            _LOGGER.error("Companion summary for %s could not be calculated: %s", self.vehicle, error)
