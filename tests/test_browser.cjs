@@ -1,5 +1,8 @@
 const fs=require("fs"),path=require("path"),http=require("http"),assert=require("assert");
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE || "playwright-core");
+/* Run a test module and name it in the failure, so a red run points at the module that broke. */
+function runStandalone(name){require('child_process').execFileSync(process.execPath,[require('path').join(__dirname,name)],{stdio:'inherit'});}
+async function runModule(page,name){try{await require("./"+name)(page);}catch(error){error.message="["+name+"] "+error.message;throw error;}}
 const base=path.resolve(__dirname,"../custom_components/deepal_companion/frontend");
 const original=fs.readFileSync(path.resolve(__dirname,"../source/card.js"),"utf8"),built=fs.readFileSync(base+"/companion-card.js","utf8");
 // The retained rendering/settings code must be byte-identical after namespace substitution.
@@ -14,7 +17,7 @@ const server=http.createServer((req,res)=>{
 });
 (async()=>{
  await new Promise(r=>server.listen(0,"127.0.0.1",r));
- const browser=await chromium.launch({headless:true,...(fs.existsSync("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe")?{executablePath:"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"}:{})});
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME||undefined,...(fs.existsSync("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe")?{executablePath:"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"}:{})});
  try {
   const page=await browser.newPage({viewport:{width:1440,height:1050},...(process.env.ENERGY_COST_ONLY?{timezoneId:"Pacific/Honolulu"}:{})}),errors=[];page.on("pageerror",e=>{errors.push(e.message);console.error("BROWSER:",e.stack);});
   await page.goto("http://127.0.0.1:"+server.address().port);
@@ -63,6 +66,8 @@ const server=http.createServer((req,res)=>{
      const activityPage=(limit=5,before=null)=>{const start=before?window.activityRows.findIndex(row=>row.id===before)+1:0,rows=structuredClone(window.activityRows.slice(start,start+limit)),has_more=start+rows.length<window.activityRows.length;return {rows,total:window.activityRows.length,has_more,next_before:has_more?rows.at(-1)?.id:null};};
      if(m.op==='notifications_unread'){(window.unreadCalls??=[]).push(m.data||{});if(m.data?.mark)window.unread=0;return {unread:window.unread??2};}
      if(m.op==='notifications_explain'){(window.explainCalls??=[]).push(m.data);return {rule_id:m.data.rule_id,name:'Unlocked vehicle',verdict:'waiting',summary:'Not sent yet: a condition is not true.',retry_in:null,checked:1,steps:[{id:'check0',status:'pass',title:'Doors are unlocked',detail:'Now: unlocked (changed 3 min ago)',help:'Help for the doors line.'},{id:'check1',status:'block',title:'Power status is off',detail:'Now: on (changed 12 min ago)',help:'Help for the power line.'},{id:'delay',status:'wait',title:'Delay',detail:'2 min left'}]};}
+     if(m.op==="notification_language_get")return {language:window.notificationLanguage||"auto"};
+     if(m.op==="notification_language_set"){if(!window.testHass.user.is_admin)throw Error("Administrator access is required to change the notification language");const allowed=["auto","en","el","de","es","it"];if(!allowed.includes(m.data?.language))throw Error("Unknown language");window.notificationLanguage=m.data.language;return {language:window.notificationLanguage};}
      if(m.op==="notifications_get"){const activity=activityPage();return {live_supported:true,value:structuredClone(window.localNotifications||{enabled:false,rules:[]}),history:activity.rows,activity,recipients:[{svc:'notify.replacement_phone',name:'Current iPhone',tracker:'device_tracker.current_phone',legacy_service:'mobile_app_phone'},{svc:'notify.another_users_android',name:'Another user’s Android',tracker:'',legacy_service:'mobile_app_android'}]};}
      if(m.op==='notifications_history'){window.activityRequests=(window.activityRequests||0)+1;return activityPage(m.data.limit,m.data.before);}
      if(m.op==='notifications_history_delete'){window.activityRows=m.data.all?[]:window.activityRows.filter(row=>row.id!==m.data.id);return activityPage();}
@@ -72,7 +77,7 @@ const server=http.createServer((req,res)=>{
      if(m.op==='sessions_import'){if(m.data.sync_complete)window.forceRecorderSync=false;window.importedRows=window.importedRows||[];for(const row of m.data.rows)if(!window.importedRows.some(r=>r.s===row.s))window.importedRows.push({...row,live:false});return {imported:m.data.rows.length};}
      if(m.op==='sessions_page'){
        const sort=m.data.sort||'newest',compare=(a,b)=>{if(sort==='oldest')return a.s-b.s;if(sort==='newest')return b.s-a.s;const ac=a.pricing?.cost,bc=b.pricing?.cost;if(ac==null||bc==null)return (ac==null)-(bc==null)||b.s-a.s;return (sort==='highest'?bc-ac:ac-bc)||b.s-a.s;};
-       const rows=(window.pageRows||await hass.callWS({...m,op:'sessions',data:{}})).map(r=>{const assignment=window.costs.sessions[String(Math.round(r.s/1000))]||r.assignment,id=assignment?.profile?.id;return {...r,assignment,profile_removed:!!id&&id!=='manual'&&!window.costs.profiles.some(p=>p.id===id)};}).filter(r=>!m.data.location||(m.data.location==='__unset__'?!r.assignment?.profile?.id:r.assignment?.profile?.id===m.data.location)).sort(compare);
+       const rows=(window.pageRows||await hass.callWS({...m,op:'sessions',data:{}})).map(r=>{const assignment=window.costs.sessions[String(Math.round(r.s/1000))]||r.assignment,id=assignment?.profile?.id;const liveCost=(row,a)=>{if(!a?.profile)return {energy:null,cost:null,source:'battery',estimated:true,cost_estimated:false};const eff=(a.profile.efficiency||100)/100,energy=a.energy??(Math.max(0,row.to-row.from)*(a.capacity||row.capacity||18.4)/100/eff),cost=a.total!=null?a.total:a.profile.free?0:a.profile.price!=null?a.profile.price*energy:null;return {energy,cost,source:'battery',estimated:a.energy==null,cost_estimated:a.total==null&&!a.profile.free&&cost!==null};};return {...r,assignment,...(r.live?{pricing:liveCost(r,assignment)}:{}),profile_removed:!!id&&id!=='manual'&&!window.costs.profiles.some(p=>p.id===id)};}).filter(r=>!m.data.location||(m.data.location==='__unset__'?!r.assignment?.profile?.id:r.assignment?.profile?.id===m.data.location)).sort(compare);
        const cursor=m.data.before==null?null:typeof m.data.before==='object'?{s:m.data.before.start,pricing:{cost:m.data.before.cost}}:{s:m.data.before};
        const filtered=cursor?rows.filter(row=>compare(row,cursor)>0):rows,items=filtered.slice(0,m.data.limit),hasMore=filtered.length>items.length,last=items.at(-1);
        return {sort,curves_synced:1,recorder_synced:window.forceRecorderSync?0:Date.now()/1000,rows:structuredClone(items),total:rows.length,locations:window.costs.profiles.map(p=>({id:p.id,name:p.name})),has_more:hasMore,next_before:hasMore?(['highest','lowest'].includes(sort)?{start:last.s,cost:last.pricing?.cost??null}:last.s):null};
@@ -83,9 +88,9 @@ const server=http.createServer((req,res)=>{
      if(m.op==="config_get"){const value=structuredClone(config(m));if(window.delayGet?.[m.view_id])await new Promise(r=>setTimeout(r,window.delayGet[m.view_id]));return value;}
      if(m.op==="config_patch"){if(window.delayPatchMS)await new Promise(r=>setTimeout(r,window.delayPatchMS));if(m.data.reset)window.views[m.view_id]={};for(const[k,v]of Object.entries(m.data.patch||{}))(shared.has(k)?window.common:window.views[m.view_id])[k]=v;revision++;queueMicrotask(()=>window.subscribers.forEach(fn=>fn({vehicle_id:"car"})));return config(m);}
      if(m.op==="costs_get")return {value:structuredClone(window.costs)};
-     if(m.op==="costs_set"){if(window.failCostSave)throw Error("Simulated storage failure");if(m.data.changes){if(m.data.changes.profiles)window.costs.profiles=structuredClone(m.data.changes.profiles);Object.assign(window.costs.sessions,structuredClone(m.data.changes.sessions||{}));}else window.costs=structuredClone(m.data.value);publish();return {};}
+     if(m.op==="costs_set"){if(window.failCostSave)throw Error("Simulated storage failure");if(window.costsConflict)throw Error("This charging receipt changed elsewhere. Reload before saving.");if(m.data.changes){if(m.data.changes.profiles)window.costs.profiles=structuredClone(m.data.changes.profiles);Object.assign(window.costs.sessions,structuredClone(m.data.changes.sessions||{}));}else window.costs=structuredClone(m.data.value);publish();return {};}
      if(m.op==='charge_prompt_dismiss'){window.dismissedPrompts=[...(window.dismissedPrompts||[]),m.data.session_id];publish();return {};}
-     if(m.op==='charge_profile_assign'){const p=window.promptFixture,profile=window.costs.profiles.find(p=>p.id===m.data.profile_id);if(!p||p.id!==m.data.session_id||!profile)throw Error('Unknown charge/profile');window.costs.sessions[String(Math.round(p.s/1000))]={start:p.s,capacity:18.4,profile:structuredClone(profile)};publish();return {};}
+     if(m.op==='charge_profile_assign'){const p=window.promptFixture?.id===m.data.session_id?window.promptFixture:(window.pageRows||[]).find(r=>r.id===m.data.session_id),profile=window.costs.profiles.find(p=>p.id===m.data.profile_id);if(!p||!profile)throw Error('Unknown charge/profile');window.costs.sessions[String(Math.round(p.s/1000))]={start:p.s,capacity:18.4,profile:structuredClone(profile)};publish();return {};}
      if(m.op==="history"){if(window.historyDelayMS)await new Promise(r=>setTimeout(r,window.historyDelayMS));const t=window.sessionStart??=Date.now()-4*36e5,out={};for(const id of m.data.entity_ids||[]){if(id==="sensor.s05_battery_level")out[id]=[{lu:t/1000,s:"20"},{lu:(t+18e5)/1000,s:"50"},{lu:(t+36e5)/1000,s:"79"}];else if(id==="sensor.s05_ac_charge_current")out[id]=[{lu:t/1000,s:"8"},{lu:(t+36e5)/1000,s:"0"}];else out[id]=[];}return out;}
      if(m.op==="sessions"){if(window.archiveEmpty)return window.importedRows||[];let t=window.sessionStart??=Date.now()-4*36e5;if(window.archiveUsesNative)t-=2*864e5;return [{id:"session",s:t,e:t+36e5,live:false,from:20,to:79,kwh:10.856,dc:false,capacity:18.4,pricing:window.__DEEPAL_COMPANION_ENERGY?.costMath.chargingCost?.({s:t,e:t+36e5,kwh:10.856},window.costs.sessions[String(Math.round(t/1000))],[],"")||{energy:null,cost:null,estimated:true},assignment:window.costs.sessions[String(Math.round(t/1000))]||null}];}
      if(m.op==="view"){const action=m.data.action;if(action==="create"){const id="new"+Date.now();window.views[id]={...(window.views[m.data.source]||{})};return {view_id:id};}if(action==="rename")window.viewNames[m.view_id]=m.data.name;if(action==="delete")delete window.views[m.view_id];return {};}
@@ -227,6 +232,10 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>!!document.querySelector("deepal-companion-panel").shadowRoot.querySelector(".profile-setup.ps-closed")),true,"The Profile box starts closed");
   await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelector("[data-profile-toggle]").click());
   await page.waitForFunction(()=>!document.querySelector("deepal-companion-panel").shadowRoot.querySelector(".profile-setup.ps-closed"));
+  if(process.env.CHARGE_COST_ONLY){await require('./test_charge_cost_live.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.PRECOND_UI_ONLY){runStandalone('test_preconditioning_ui.cjs');return;}
+  if(process.env.CHARGE_TARGET_ONLY){await require('./test_charge_target.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.NOTIFY_LANGUAGE_ONLY){await require('./test_notification_language.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_MOBILE_ONLY){await require('./test_notification_mobile.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_PERSISTENCE_ONLY){await require('./test_notification_persistence.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGING_BLOCKS_ONLY){await require('./test_charging_blocks.cjs')(page);await require('./test_charge_reminder.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
@@ -236,16 +245,17 @@ const server=http.createServer((req,res)=>{
   if(process.env.MEMORY_ONLY){await require('./test_memory.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.MOBILE_SHELL_ONLY){await require('./test_mobile_shell.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.FEATURE_ONLY){await require('./test_feature_updates.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
-  if(process.env.QA_ONLY){await require("./test_field_choices.cjs")(page);await require("./test_end_user_qa.cjs")(page);return;}
-  if(process.env.NAV_ONLY){await require("./test_boot_loading.cjs")(page);await require("./test_preview_controls.cjs")(page);await require("./test_tab_navigation.cjs")(page);await require("./test_local_notifications.cjs")(page);await require("./layout_validation.cjs")(page);return;}
+  if(process.env.QA_ONLY){await runModule(page,"test_field_choices.cjs");await runModule(page,"test_end_user_qa.cjs");return;}
+  if(process.env.LANG_ONLY){await require('./test_language_sweep.cjs')(page);return;}
+  if(process.env.NAV_ONLY){await runModule(page,"test_boot_loading.cjs");await runModule(page,"test_preview_controls.cjs");await runModule(page,"test_tab_navigation.cjs");await runModule(page,"test_local_notifications.cjs");await require("./layout_validation.cjs")(page);return;}
   if(process.env.NOTIFY_FEATURES_ONLY){await require('./test_notification_features.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
-  if(process.env.NOTIFY_ONLY){await require("./test_local_notifications.cjs")(page);return;}
-  if(process.env.CHART_ONLY){await require("./test_charging_dashboard.cjs")(page);return;}
-  if(process.env.FILTER_ONLY){await require("./test_session_filters.cjs")(page);return;}
-  if(process.env.FIELD_ONLY){await require("./test_field_choices.cjs")(page);return;}
+  if(process.env.NOTIFY_ONLY){await runModule(page,"test_local_notifications.cjs");return;}
+  if(process.env.CHART_ONLY){await runModule(page,"test_charging_dashboard.cjs");return;}
+  if(process.env.FILTER_ONLY){await runModule(page,"test_session_filters.cjs");return;}
+  if(process.env.FIELD_ONLY){await runModule(page,"test_field_choices.cjs");return;}
   await require("./settings_menus.cjs")(page);
-  await require("./test_tile_settings.cjs")(page);
-  await require("./test_preview_controls.cjs")(page);
+  await runModule(page,"test_tile_settings.cjs");
+  await runModule(page,"test_preview_controls.cjs");
   const controls=await p.locator(".profile-controls").evaluate(row=>({fields:[...row.querySelectorAll('input')].filter(n=>n.getClientRects().length).length,name:row.querySelector('.profile-name').getBoundingClientRect().bottom,actions:row.querySelector('.actions').getBoundingClientRect().top}));
   assert(controls.fields===1&&controls.actions>=controls.name,"One editable profile field sits above its actions");
   assert.equal(await p.locator('.profile-controls [data-action="rename"]').count(),0);
@@ -273,7 +283,7 @@ const server=http.createServer((req,res)=>{
   await p.locator(".cc-profile").first().waitFor({state:"attached"});
   assert.equal(await p.locator(".cc-profile").count(),5);
   assert.equal(await p.locator(".cc-location-details[open]").count(),0,"Locations initially collapsed");
-  await require("./test_charger_cancel.cjs")(page);
+  await runModule(page,"test_charger_cancel.cjs");
   const work=p.locator('.cc-profile[data-index="1"]');
   await work.locator('..').locator('summary').click();
   assert.equal(await work.locator(".cc-paid").isVisible(),false);
@@ -298,6 +308,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await p.locator(".status").evaluate(n=>getComputedStyle(n).position),"fixed");
   await page.waitForTimeout(1100);assert.equal(await p.locator(".status").isVisible(),true,"Save pill must remain readable");
   await page.waitForFunction(()=>!document.querySelector("deepal-companion-panel").message);
+  await page.evaluate(()=>{window.costs.profiles[0].price=.22;});  /* the later modules expect the fixture tariff, not the one typed above */
   await page.evaluate(()=>{window.archiveEmpty=true;window.recorderOnly=true;});
   await p.locator('[data-mode="chargers"]').click();
   await p.locator(".cc-profile").first().waitFor({state:"attached"});
@@ -376,25 +387,28 @@ const server=http.createServer((req,res)=>{
   await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.stage').classList.contains('is-loading'));
   assert.deepEqual(await page.evaluate(()=>[...document.querySelector("deepal-companion-panel").shadowRoot.querySelector("main").children].map(n=>n.className)),["box profile-setup","box live-preview","stage"]);
   assert.equal(await page.evaluate(()=>window.serviceCalls.length),0);
-  await require("./test_charging_dashboard.cjs")(page);
-  await require("./test_charging_edits.cjs")(page);
-  await require("./test_charging_blocks.cjs")(page);
-  await require("./test_first_run.cjs")(page);
-  await require("./test_image_loading.cjs")(page);
-  await require("./test_charge_reminder.cjs")(page);
-  await require("./test_dashboard_add.cjs")(page);
-  await require("./test_local_notifications.cjs")(page);
-  await require("./test_notification_persistence.cjs")(page);
-  await require("./test_notification_mobile.cjs")(page);
-  await require("./test_field_choices.cjs")(page);
-  await require("./test_energy_loading.cjs")(page);
-  await require("./test_end_user_qa.cjs")(page);
-  await require("./test_feature_updates.cjs")(page);
-  await require("./test_session_filters.cjs")(page);
+  await runModule(page,"test_charging_dashboard.cjs");
+  await runModule(page,"test_charging_edits.cjs");
+  await runModule(page,"test_charging_blocks.cjs");
+  await runModule(page,"test_first_run.cjs");
+  await runModule(page,"test_image_loading.cjs");
+  await runModule(page,"test_charge_reminder.cjs");
+  await runModule(page,"test_charge_cost_live.cjs");
+  await runModule(page,"test_dashboard_add.cjs");
+  await runModule(page,"test_local_notifications.cjs");
+  await runModule(page,"test_notification_persistence.cjs");
+  await runModule(page,"test_notification_mobile.cjs");
+  await runModule(page,"test_notification_language.cjs");
+  await runModule(page,"test_field_choices.cjs");
+  await runModule(page,"test_energy_loading.cjs");
+  await runModule(page,"test_end_user_qa.cjs");
+  await runModule(page,"test_feature_updates.cjs");
+  await runModule(page,"test_session_filters.cjs");
   await require("./settings_roundtrip.cjs")(page);
   await require("./layout_validation.cjs")(page);
-  await require("./test_mobile_shell.cjs")(page);
-  await require("./test_tab_navigation.cjs")(page);
+  await runModule(page,"test_mobile_shell.cjs");
+  await runModule(page,"test_tab_navigation.cjs");
+  runStandalone("test_preconditioning_ui.cjs");
   const before=await page.evaluate(()=>window.subscribers.length);
   await page.evaluate(()=>document.querySelector("deepal-companion-panel").remove());
   await page.waitForTimeout(100);

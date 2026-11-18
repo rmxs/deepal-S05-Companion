@@ -429,10 +429,10 @@ class LiveStatus:
             return
         spec = KINDS[kind]
         async with self.owner.lock:
-            service = ("climate", "turn_off", self.entity("climate.cabin_climate")) if kind == "climate" else ("lock", "lock", self.entity("lock.doors"))
+            service = ("climate", "set_hvac_mode", self.entity("climate.cabin_climate")) if kind == "climate" else ("lock", "lock", self.entity("lock.doors"))
             try:
                 async with asyncio.timeout(15):
-                    await self.hass.services.async_call(service[0], service[1], {"entity_id": service[2]}, blocking=True)
+                    await self.hass.services.async_call(service[0], service[1], {"entity_id": service[2], **({"hvac_mode": "off"} if kind == "climate" else {})}, blocking=True)  # Deepal climate has no TURN_OFF feature
             except Exception as error:
                 await self.owner.record({"id": spec["key"], "name": spec["name"]}, "error", error=str(error)[:300] or type(error).__name__)
             else:

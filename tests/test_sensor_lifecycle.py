@@ -252,7 +252,7 @@ class SensorLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 return {"more": False}
             return None
         runtime, _ = make_runtime(db=db)
-        runtime.entry.title = "Car"
+        runtime.entry.title = "Stall Test Car"  # unique, so warnings from other tests' leftover tasks are not counted
         entity = Sensor(runtime, "sessions")
         entity.hass = types.SimpleNamespace(async_create_task=asyncio.create_task)
         entity.SUMMARY_TIMEOUT = 0.05
@@ -263,7 +263,7 @@ class SensorLifecycleTests(unittest.IsolatedAsyncioTestCase):
                     await wait_until(lambda: entity._update_task.done(), timeout=2)
             self.assertEqual(sessions_calls, 1)
             self.assertEqual(threads_max, 1)
-            self.assertEqual(len([line for line in logs.output if "stalled" in line]), 1)
+            self.assertEqual(len([line for line in logs.output if "stalled" in line and "Stall Test Car" in line]), 1)
         finally:
             release.set()
         await wait_until(lambda: runtime._summary_flight is None, timeout=5)
@@ -271,3 +271,12 @@ class SensorLifecycleTests(unittest.IsolatedAsyncioTestCase):
         await wait_until(lambda: getattr(entity, "writes", 0) >= 1, timeout=2)
         self.assertEqual(sessions_calls, 1)  # the recovered calculation is cached and reused
         self.assertEqual(entity._attr_native_value, 0)
+
+
+class CostUnitTests(unittest.TestCase):
+    def test_cost_sensor_uses_the_home_assistant_currency(self):
+        hass = types.SimpleNamespace(config=types.SimpleNamespace(currency="USD"))
+        runtime = types.SimpleNamespace(vehicle="car", entry=types.SimpleNamespace(title="Car"), hass=hass, summary_values={})
+        self.assertEqual(Sensor(runtime, "cost")._attr_native_unit_of_measurement, "USD")
+        self.assertEqual(Sensor(runtime, "battery_kwh")._attr_native_unit_of_measurement, "kWh")
+        self.assertIsNone(Sensor(runtime, "sessions")._attr_native_unit_of_measurement)

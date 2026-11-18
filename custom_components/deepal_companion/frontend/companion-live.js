@@ -25,7 +25,7 @@ export const LIVE_DEFAULTS = {
 };
 const GROUPS = {doors: OPEN_ITEMS.slice(0, 4), windows: OPEN_ITEMS.slice(4, 8), hood: ['hood'], trunk: ['trunk']};
 const KINDS = {
-  charging: {name: 'Live charging', icon: 'mdi:ev-station', sub: 'Battery and time left while charging', info: 'Shows the battery level and time left on the Lock Screen while the car charges.',
+  charging: {name: 'Live charging', icon: 'mdi:lightning-bolt-circle', sub: 'Battery and time left while charging', info: 'Shows the battery level and time left on the Lock Screen while the car charges.',
     rows: [['switch', 'show_timer', 'Show time remaining'], ['number', 'min_interval', 'Update at most every', 'min', 60, 1, 60], ['number', 'battery_step', 'Update every', '%', 1, 1, 20]]},
   climate: {name: 'Live climate', icon: 'mdi:fan', sub: 'Cabin temperature while the climate is on', info: 'Appears when the climate turns on and shows the cabin temperature against the target. It disappears when the climate stops.',
     rows: [['switch', 'show_target', 'Show target temperature'], ['switch', 'show_outside', 'Show outside temperature'], ['switch', 'show_progress', 'Show progress bar'], ['switch', 'show_timer', 'Show running time'],
@@ -35,9 +35,10 @@ const KINDS = {
       ['switch', 'lock_button', '“Lock vehicle” button', 'Android only'], ['number', 'parked_after', 'Count as parked after', 'min', 60, 1, 60], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 60]]},
 };
 // Phones only show Material Design icons, so the choices are mdi: names (others are refused).
-const ICONS = ['mdi:ev-station', 'mdi:battery-charging', 'mdi:battery-charging-high', 'mdi:battery-charging-medium', 'mdi:battery-charging-low', 'mdi:battery-high', 'mdi:battery-alert', 'mdi:flash', 'mdi:flash-outline', 'mdi:lightning-bolt', 'mdi:power-plug', 'mdi:power-plug-outline', 'mdi:ev-plug-type2', 'mdi:fan', 'mdi:air-conditioner', 'mdi:thermometer', 'mdi:thermometer-lines', 'mdi:snowflake', 'mdi:weather-sunny', 'mdi:sun-thermometer', 'mdi:radiator', 'mdi:hvac', 'mdi:car', 'mdi:car-electric', 'mdi:car-side', 'mdi:car-door', 'mdi:car-door-lock', 'mdi:car-door-lock-open', 'mdi:car-key', 'mdi:car-off', 'mdi:car-battery', 'mdi:car-seat-heater', 'mdi:car-seat-cooler', 'mdi:car-emergency', 'mdi:lock', 'mdi:lock-open', 'mdi:lock-open-variant-outline', 'mdi:lock-alert', 'mdi:shield-car', 'mdi:shield-lock', 'mdi:garage-open', 'mdi:window-open', 'mdi:window-closed', 'mdi:alert', 'mdi:alert-circle', 'mdi:bell', 'mdi:bell-ring', 'mdi:information', 'mdi:check-circle', 'mdi:timer-outline', 'mdi:clock-outline', 'mdi:gauge', 'mdi:speedometer', 'mdi:engine', 'mdi:steering', 'mdi:wiper', 'mdi:car-wireless', 'mdi:broadcast', 'mdi:fire'];
+const ICONS = ['mdi:lightning-bolt-circle', 'mdi:ev-station', 'mdi:battery-charging', 'mdi:battery-charging-high', 'mdi:battery-charging-medium', 'mdi:battery-charging-low', 'mdi:battery-high', 'mdi:battery-alert', 'mdi:flash', 'mdi:flash-outline', 'mdi:lightning-bolt', 'mdi:power-plug', 'mdi:power-plug-outline', 'mdi:ev-plug-type2', 'mdi:fan', 'mdi:air-conditioner', 'mdi:thermometer', 'mdi:thermometer-lines', 'mdi:snowflake', 'mdi:weather-sunny', 'mdi:sun-thermometer', 'mdi:radiator', 'mdi:hvac', 'mdi:car', 'mdi:car-electric', 'mdi:car-side', 'mdi:car-door', 'mdi:car-door-lock', 'mdi:car-door-lock-open', 'mdi:car-key', 'mdi:car-off', 'mdi:car-battery', 'mdi:car-seat-heater', 'mdi:car-seat-cooler', 'mdi:car-emergency', 'mdi:lock', 'mdi:lock-open', 'mdi:lock-open-variant-outline', 'mdi:lock-alert', 'mdi:shield-car', 'mdi:shield-lock', 'mdi:garage-open', 'mdi:window-open', 'mdi:window-closed', 'mdi:alert', 'mdi:alert-circle', 'mdi:bell', 'mdi:bell-ring', 'mdi:information', 'mdi:check-circle', 'mdi:timer-outline', 'mdi:clock-outline', 'mdi:gauge', 'mdi:speedometer', 'mdi:engine', 'mdi:steering', 'mdi:wiper', 'mdi:car-wireless', 'mdi:broadcast', 'mdi:fire'];
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text != null) node.textContent = text; return node; };
 
+const T = (text, ...a) => { const u = window.__DEEPAL_COMPANION_UI; return u && u.t ? u.t(text, ...a) : a.reduce((r, v, i) => r.replace('{' + i + '}', v), text); };
 export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, request, toast, changed, setInvalid, busy, response}) {
   const template = q('.alert-row'), firstGrid = template.parentElement, firstCategory = firstGrid.parentElement, overview = q('#view-overview');
   let syncCardTap = () => {};
@@ -67,7 +68,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
     text.firstElementChild.children[1]?.remove(); const status = text.querySelector('p'); status.children[1].textContent = 'Live notification'; status.children[2].textContent = '• Lock Screen';
     const power = right.querySelector('input'), pill = power.closest('label').parentElement; pill.classList.add('design-alert-switch'); pill.querySelector('span').textContent = 'Alert enabled'; power.dataset.liveToggle = id; right.querySelectorAll('button').forEach((button) => button.remove());
     const body = el('div', 'p-4 space-y-4'), info = el('aside', 'notification-info'), infoText = el('div'); info.setAttribute('role', 'note');
-    infoText.append(el('p', '', spec.info), el('p', '', supported ? 'Needs iOS 17.2+ or Android 16+ with Live Activities / Live Updates enabled in the Companion app.' : 'Needs Home Assistant 2026.7 or newer and a restart of Home Assistant.'));
+    infoText.append(el('p', '', spec.info), el('p', '', supported ? 'Needs iOS 17.2+ or Android 16+ with Live Activities / Live Updates enabled in the Companion app.' : T('Needs Home Assistant 2026.7 or newer and a restart of Home Assistant.')));
     info.append(icon('mdi:information-outline'), infoText);
     // Rows are copies of the alert pages' own rows (label left, switch or stepper right), three to a line.
     const options = el('div', 'ha-inner-box p-3.5'); options.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(max(220px,30%),1fr));gap:8px';
@@ -78,7 +79,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
         const input = item.querySelector('input'); Object.assign(input, {min: low, max: high, required: true}); input.dataset.liveNumber = key; input.dataset.scale = scale; input.nextElementSibling.textContent = extra;
         const [minus, plus] = holder.querySelectorAll('button'); minus.dataset.liveStep = '-1'; plus.dataset.liveStep = '1'; minus.type = plus.type = 'button';
       } else {
-        if (extra) { const chip = el('span', 'text-[9px] font-semibold', extra); chip.style.cssText = 'margin-left:8px;color:rgb(var(--design-warn));background:rgb(var(--design-warn)/.12);border-radius:999px;padding:1px 6px;white-space:nowrap'; words.append(chip); }
+        if (extra) { const chip = el('span', 'text-[9px] font-semibold', extra); chip.style.cssText = 'margin-left:8px;color:rgb(var(--design-warn,250 204 21));background:rgb(var(--design-warn,250 204 21)/.12);border-radius:999px;padding:1px 6px;white-space:nowrap'; words.append(chip); }
         holder.replaceChildren(toggle(kind === 'group' ? {liveGroup: key} : {liveSwitch: key}));
       }
       options.append(item);
@@ -118,7 +119,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
       const sent = result.deliveries || [], failures = sent.filter((row) => row.status === 'error');
       if (stop && !failures.length) active[id] = false; else if (!stop && sent.some((row) => row.status === 'accepted')) active[id] = true;
       page.feedback.hidden = false; page.feedback.dataset.kind = failures.length ? 'error' : 'success';
-      page.feedback.textContent = failures.length ? failures.map((row) => row.error).join('; ') : stop ? (sent.length ? 'Test ended. Your real notification is unchanged.' : 'No test is running.') : 'Test sent to ' + sent.length + ' device(s). Phone delivery is not confirmed.';
+      page.feedback.textContent = failures.length ? failures.map((row) => row.error).join('; ') : stop ? (sent.length ? T('Test ended. Your real notification is unchanged.') : T('No test is running.')) : T('Test sent to {0} device(s). Phone delivery is not confirmed.', sent.length);
       toast(failures.length ? 'Test could not be delivered.' : stop ? 'Test ended.' : 'Test sent. Check your phone.', !!failures.length);
     } catch (error) { page.feedback.hidden = false; page.feedback.dataset.kind = 'error'; page.feedback.textContent = error.message || String(error); toast(page.feedback.textContent, true); } finally { busy(false); refresh(); }
   };

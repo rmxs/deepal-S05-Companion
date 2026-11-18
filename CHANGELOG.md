@@ -1,5 +1,114 @@
 # Changelog
 
+## 1.0.0 — Remote preconditioning, complete translations, button layouts and a fuller gallery
+
+### Updating
+- Restart Home Assistant after updating (backend files changed), then hard-refresh the browser (Ctrl+F5); in the Companion app, reset the frontend cache if the old text stays.
+- Saved profiles, session prices, receipts, settings and notification choices are preserved.
+- Preconditioning is new and starts switched off: no schedule runs until you turn on **Scheduled preconditioning**, and no preconditioning notification is sent until you turn on its switch and choose a phone.
+- The **Sessions** header totals (energy, cost, priced and unpriced sessions) now follow the chosen period. With no period selected they cover the **last 31 days**; choose a period to see other ranges.
+- **One row with scroll** and **One row (everything fits)** are removed. Profiles that used them now show **Main buttons + “More”**. Choose another layout in Card Settings → Controls → Button style if you prefer.
+
+### New features
+- **Remote climate preconditioning:** start or stop the cabin climate from a new **Preconditioning** button on the card (a quick panel with temperature and duration bars and a link to the full page) or from **Companion → Preconditioning**. The button is coloured while Companion’s own session runs and shows a pulsing dot when a schedule is set.
+- **Preconditioning schedules:** once, daily, Mon–Fri or custom days, either **Start at** a time or **Ready by** a time (the climate starts earlier by the preparation time). Schedules follow the Home Assistant time zone, daylight-saving changes and midnight crossings, can be paused one by one, and never replay an old start after a restart. A schedule more than five minutes late is recorded as missed. Scheduling is off by default.
+- **Checked commands:** the car’s data is refreshed before every start and stop and once more afterwards. A command counts as done only when the car’s fresh report confirms it, with up to three attempts (**Advanced: retries and checks** sets attempts, the wait between them and the wait for an answer). If the climate is already on, nothing is changed.
+- **Plain explanations:** failures say why in simple words, for example when the car is switched on or being driven (Deepal code 1036), when the sign-in has expired, when too many commands were sent or when the car did not answer. When someone drives the car, the climate is handed over to the driver and no more commands are sent.
+- **Battery protection:** choose your own minimum battery level (10–50 %, in 5 % steps), block a start at or below it, stop a running session when the battery drops to it, and choose whether it also applies while charging. The battery reading is refreshed before every start, so a car that was asleep is not blocked by an old reading.
+- **Preconditioning notifications:** one switch, one set of events and one phone list, the same on the vehicle card, **Preconditioning → Notifications** and **Notifications → Preconditioning**. The phones are shared with **Live climate**. A message with a **Stop** button appears while the climate runs, and **Send test notification** checks your phone.
+- **Notification language:** one setting at the top of the Notifications page sets the language of every notification Companion sends (preconditioning, alerts, charging and live updates). Automatic follows the Home Assistant language; you can also choose English, Greek, German, Spanish or Italian.
+- **Your setup in short:** a plain-language summary at the top of the Preconditioning page explains the current choices, including schedules, retries, battery protection and notifications.
+- **Activity and diagnostics:** every preconditioning action appears under **Notifications → Recent activity** and in the Home Assistant log, and a diagnostics box shows the current operation, last confirmed state, last successful start and stop, last failure and history.
+- **Preconditioning session history:** a **Clear history** button (administrators, with confirmation), automatic removal of entries older than 30 days, and a scrolling box when the list is long.
+- **Button layout “Main buttons + “More” on the image”:** the main row stays as before. A small button next to the Settings gear (inside the car image) shows how many buttons are hidden. Tapping it opens the rest in a panel directly under the image. When the main row has a free slot, the “More” button sits in that slot instead.
+- **Button layout “All buttons in “More” on the image”:** no button row under the image. Every control opens from the button on the image, five per row.
+- **Button layout “Swipe pages”:** swipe the control buttons left and right. Dots under the labels show the page; tap a dot to jump to it. The page you were on stays put when the card refreshes.
+- **Rows of fewer than five buttons are centred** in the More panel and on swipe pages, with the same spacing as full rows.
+- **Live charging cost:** while the car charges, the cost of this charge is shown as a chip in the charging block (≈ while it is an estimate, **Free** for a free location, **Not priced** until a location is chosen). Choose or change the charging location right from the card; the amount updates at once and a typed receipt is never changed. With the curve on, the location selector is a slim bar with icon-only buttons at the foot of the (now shorter) curve. With the curve off, a small selector appears during the charge and fades away once you save; **Card Settings → Charging → Cost selector while charging (curve off)** turns it off, and tapping the cost chip opens it again. Preview mode shows demo values only.
+- **Redesigned charging block:** a header with the charging state, charging type and cost, and a row of figures below (current, remaining time, target). The target also rolls into the Energy tile text.
+- **Status stays with the vehicle image:** in Layout settings, Status is a line of the Vehicle image row (with its own on/off switch, no arrows), because status is always drawn on the image.
+- **Charging target:** set a goal under the charging settings, **Charging target (%)** (50–100 % in 5 % steps; 0 = off). The card shows the goal and an estimated time in the charging block, marks the goal on the battery ring, and rolls the target into the Energy tile text. At 100 % it shows **Full at** the estimated time. To get a phone alert when the target is reached, use the charging notification together with this setting. This is advisory only: Companion cannot stop charging, and the estimated time is approximate because charging slows near the top.
+
+### Improvements
+- **New preconditioning popup on the card:** a compact layout with a live strip (status, cabin, target and battery), temperature slider, Cool, Comfort and Warm quick choices, 5, 10 and 15 minute buttons, a countdown with Stop while it runs, and rows for schedules and phone notifications.
+- **Faster, steadier confirmation:** after sending Start or Stop, Companion now asks the vehicle for a fresh report a few seconds later and again while waiting, accepts a report from the same second as the command, and refreshes before any retry so a command that already worked is not sent twice.
+- **Stop reasons in plain words:** the stop message and the session history say "Planned duration reached", "Stopped by battery protection", "Stopped by you" and so on instead of a short code, in your language.
+- **Confirmations are popups:** deleting a schedule and clearing the session history now ask in a centred popup instead of an inline row.
+- **Faster panel reads:** vehicle list, settings and summary requests no longer wait behind saves or archive maintenance.
+- **Lighter session export:** exporting a long charging archive reads the data in one pass instead of opening many database connections.
+- **Long charging history:** very long history requests return a reduced number of points, so large periods load with less work for Home Assistant.
+- **No file read in the main loop:** the notification texts for every language are loaded at startup, which removes a Home Assistant slow-code warning.
+- **Easier taps:** navigation tabs, session footer buttons and profile action buttons are 44 px tall.
+- **Readable text:** small text in the panel is at least 11 px.
+- **Consistent success colour:** the success green in the Sessions and cost areas follows your chosen level colour.
+- **Energy tile:** the range figures (km) use the card’s standard text sizes, with bold numbers and smaller units. The energy rings are slightly thicker.
+
+- **Master switch greys out what depends on it:** on the Notifications page, turning the main **Notifications** switch off greys out and locks the devices, quiet hours, live notifications, alerts and the Preconditioning box until you turn it on again. Recent activity stays usable.
+- **Preconditioning notifications follow the switches:** when **Preconditioning notifications** is off, the phones, event switches and test button below it are greyed out. When the global Notifications switch is off, the whole section is greyed out with a short message that global notifications are off.
+- **One switch style:** the Preconditioning switches now use the same size and blue colour as the card's switches.
+- **Charging target mark:** the goal on the battery ring is now a short green line sticking out of the ring instead of a dot.
+
+### Bug fixes
+- The refresh button on the card and the health chip now keep their green, amber and red tints, and the notification colours match between the card and Settings.
+- Choosing a warm or cool temperature in the preconditioning popup now colours only the temperature number; Start and the active indicator keep their normal colours.
+- The Sessions, Notifications and live-climate screens keep their colours when shown outside the area that defines the colour palette (every colour now has a default).
+- A rejected authorization is no longer reported as an expired Deepal sign-in; only a real expired sign-in stops retrying.
+- Fonts in Settings and the notification page now come from one place, and the blue, red, green and amber accents in Settings and the Energy panel (duplicate and delete profile buttons, the selected navigation tab, info boxes, period buttons and the Save button and unsaved-changes note in local notification settings) now follow your colour palette.
+- **Preconditioning is limited to people allowed to control the car:** Start and Stop need control permission on the climate entity, and the buttons are disabled for non-administrators in the card.
+- **Preconditioning stays reliable on unload and odd stored data:** background recovery and refresh stop with the integration, a stored session without an end time no longer breaks the status page, and phone delivery results are attached to the right activity entry.
+- **Current frontend after updates:** the browser loads the new panel and card scripts after an update, instead of older cached versions.
+- **Translated delete and restore dialog:** the deleted-charges dialog and the notification “old data” setting follow your chosen language.
+- **Notifications page:** the Preconditioning box sits above Old data protection and uses the same width, padding and margin as the other boxes. On phones the side margins now match the other pages.
+- **Narrow phones:** the five main control buttons keep at least 10 px between them and no longer touch at 360 px wide.
+- **Popups from the More panel:** a button that opens a popup (for example Dashboard or Tyres) closes the panel behind it, and one tap on the popup’s X is enough.
+- **Read-only info tiles:** a tap action set to Toggle on a sensor or binary sensor opens its details, instead of asking for confirmation and then failing. Switches and lights still toggle.
+- **Climate “Turn off” on the Live climate notification** now uses the vehicle’s own off command, so the button works.
+- **Correct auto-off time:** the start notification shows the planned stop time (for example 5 minutes), not the Ready-by time.
+- **Charging cost shows “Free charging”** instead of €0.00 when every priced session is free. Days with only free sessions show “Free” in the Energy history table.
+- **Diagnostics headline:** when sensors are unavailable but none are faulty, the headline shows the number of unavailable sensors instead of “All OK”.
+- **Curve edits keep your costs:** removing a noisy part of a charging curve no longer changes the saved cost or deletes the meter readings behind it. The curve view still hides the removed part.
+- **Imported charging curves use the right unit:** curves restored from the recorder keep the unit your car sensor reports, so power- and energy-priced sessions are costed correctly instead of falling back to the battery estimate.
+- **Cost sensor currency:** the cost sensor uses the currency set in Home Assistant instead of always showing EUR.
+- **Clear message for unsupported Home Assistant versions:** if Home Assistant changes the Mobile App internals this integration uses, notifications show a clear message asking you to update Deepal Companion.
+- **Setup survives a language store failure:** if the saved notification language cannot be read, the integration still loads and follows the Home Assistant language.
+- **Saved settings are not reported as failed:** if the reload after a successful save fails, the save is kept and the next update applies the new settings.
+- **Deleting a missing display profile reports an error** instead of success, so the card no longer shows a profile as deleted when nothing changed.
+- **Summary sensors do not stall setup:** the four Sessions summary sensors are added straight away and fill in when the archive responds; a slow archive is logged.
+- **Settings reload in order:** two reloads for the same vehicle run one after the other, so an older reload cannot overwrite newer settings.
+- The charging curve of a charge you stopped and restarted now shows the whole charge instead of only the last part, as one continuous line.
+- The charging curve is drawn as a step line: each reported current is held until the next change, so no slope is shown between readings the car never reported. Current changes smaller than 0.2 A are not drawn.
+- Stretches where the car sent no battery progress for longer than the **A stop longer than this starts a new charge** time are joined by a lighter grey line and shaded area. Hovering or touching one explains that data is missing, with its start, end and duration. Intervals where the battery kept rising are never marked as missing, and a real 0 A reading stays visible. Turn this off with **Highlight Missing Data** in Card Settings → Advanced → Charging curve (on by default).
+- A charge that had short "unavailable" moments from the car (for example on 3 November) no longer shows a blank stretch in the middle of its curve.
+- The charging Live Activity now has a white title, shows the time left as text (for example "Est. 2h 40m remaining") without seconds, and keeps the green progress bar.
+- Card Settings → Advanced now groups the charging options under their own headings: Charging reminder, Charge detection and Charging curve; the battery capacity sits with the vehicle setup.
+- **A second Start never reaches the car while a session is running:** if the car's state could not be read at that moment, a second start could send another climate command and move the session deadline. It is now refused with a clear message and nothing changes.
+- **Colours follow your palette everywhere:** chip fills, info boxes, the countdown bar, the spinner and focus rings in the preconditioning popup were not tinted on some screens. The Companion dashboard's navigation, workflow badges and status banners now use the same success and warning colours as the card instead of fixed greens and yellows, and the cost and notification pages have built-in fallbacks.
+- **Minimum Home Assistant version is now 2026.7.0** (HACS and README), so users on older versions are told before installing instead of getting a broken screen.
+- **Show/hide switches in the card settings tell screen readers whether they are on or off**, and name the item they control.
+- **Warning yellow is the same everywhere:** the health badge and the notification page use the palette's warning colour. The loading screen of the dashboard now uses the same font as the loaded dashboard.
+- **One button and box style across the card, dashboard, cost page and popup:** buttons now share three shapes (round for filters and navigation, 12 px for normal buttons, 16 px for the large action in popups) and session boxes share one radius and padding. The cost page no longer forces its own radius and padding over the dashboard's.
+- **Start is always solid green and Stop is always red**, on the card as well as in the preconditioning popup.
+- **Quick links from the card's preconditioning popup to the settings:** a small sliders button at the top opens Companion dashboard → Preconditioning, and tapping the notifications text opens the same page scrolled to the notification settings (administrators only).
+- **The Companion dashboard's navigation tabs fit on tablets and desktop:** the tab labels (including Preconditioning) no longer run out of space between 761 and 1020 px wide, and the bar is a little wider on large screens.
+- **The hover and missing-data bubble on the charging curve always stays inside the graph**, also in a small Sessions popup.
+- **Data options menu fits on phones:** Export JSON, Database backup, Import older Recorder charges and Deleted charges now wrap into two columns inside the screen instead of running off the left edge.
+- **Preconditioning popup on small phones:** tighter spacing, a stacked duration row, a fitting live strip and a single-column schedule editor on narrow screens.
+
+### Translations
+- **Preconditioning is fully translated** into Greek, Spanish, German and Italian: the dashboard page, the card panel, every option and explanation, and the phone messages, activity entries and error explanations, which follow the Home Assistant language.
+- **Sessions page in your language:** the page heading, session counts, daily energy chart, tooltips, period tiles (energy, cost, paid price, free share), card labels and the Edit button are now fully translated in Spanish, Greek, German and Italian.
+- **Last updated** is translated in the setup lists.
+- **Remaining English-only texts translated:** the entity-mapping list in card settings, the Add to dashboard dialog, notification test results, preview and demo messages, setup errors and the Greek names of the charging archive sensors now follow your language, using the same terms as the rest of the integration.
+- The new layout names and labels are translated into Greek, Spanish, German and Italian.
+- **Session list, Deleted charges and charge dialogs translated:** the filter and sort options, Load more, the export and backup buttons, table headings, the delete confirmation, the status messages and the days-left text now follow your language, including the Delete and Change type prompts in the charging curve.
+
+### Documentation
+- The README now opens with the slogan "Know it. Control it. Own it." in English, Greek, Spanish, German and Italian.
+- New preconditioning picture in the README and the Preconditioning guide, showing the current popup. The old links to pictures that no longer existed were removed.
+- New [Preconditioning guide](docs/PRECONDITIONING.md), with matching updates to the README, the user guide, the settings reference, the notifications guide and troubleshooting.
+- The README gallery now shows the settings pages, charging locations, charging profiles on the card and the health checks, with refreshed screenshots of the car view, confirmation window, Notifications page and Sessions page.
+- The preconditioning guide now shows the card sheet and the Preconditioning settings page with screenshots.
+
 ## 0.2.0 — Charging profile order, Energy history and electric-car clean-up
 
 ### Updating

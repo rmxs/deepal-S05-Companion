@@ -63,6 +63,16 @@ function watchConnection(getHass, onResume) {
   return () => { clearTimeout(timer); clearInterval(poll); document.removeEventListener("visibilitychange", onVisible); window.removeEventListener("online", onOnline); window.removeEventListener("pageshow", onShow); conn?.removeEventListener?.("ready", onReady); conn = null; };
 }
 /* The application mounts the complete existing settings UI directly, without a card/modal. */
+/* SETTINGS-APPLY CONTRACT (one model for every surface; it changes only WHEN something is stored, never WHAT).
+ *  1. Preferences and switches (card toggles, Settings, Preconditioning, Notifications) apply immediately: the change shows
+ *     at once and is saved quietly (debounced), with "Saved" feedback. There is no Save button for them. Where a surface
+ *     can offer it, a mistaken change is reversible with Undo (the notification board does today).
+ *  2. Records that are created or edited as a whole (charging profiles, tariffs, receipts, schedules) keep an explicit
+ *     Save / Cancel, because a half-typed price or time must never be stored or recalculate costs. Leaving such a form
+ *     with unsaved changes asks first ("Save or cancel your changes first.").
+ *  3. Commands that act on the car are never applied by a settings change; they run from their own button and honour
+ *     config.confirm.
+ * A new setting follows rule 1 unless it edits a record (rule 2). */
 window.__DEEPAL_COMPANION_UI = {
   readableError,
   watchConnection,
@@ -132,7 +142,7 @@ window.__DEEPAL_COMPANION_UI = {
     return new Proxy(hass,{get(target,key){
       if(key==='states')return states;
       if(key==='callService')return async(domain,service,data={},targetData={})=>{
-        if(!interactive)throw new Error('Enable preview clicks first.');
+        if(!interactive)throw new Error(I18N.t('Enable preview clicks first.',[]));
         if(mode==='live')return target.callService(domain,service,data,targetData);
         const ids=targetData.entity_id||data.entity_id||[],list=Array.isArray(ids)?ids:[ids];
         for(const id of list){
@@ -146,10 +156,10 @@ window.__DEEPAL_COMPANION_UI = {
         card?._force();
       };
       if(key==='callWS')return message=>{
-        if(!interactive&&!message.type?.startsWith('history/'))return Promise.reject(new Error('The preview is read-only.')); /* reading the recorded history is allowed: the card uses it for the real lock and engine times */
+        if(!interactive&&!message.type?.startsWith('history/'))return Promise.reject(new Error(I18N.t('The preview is read-only.',[]))); /* reading the recorded history is allowed: the card uses it for the real lock and engine times */
         if(mode==='live')return target.callWS(message);
         const read=message.type?.startsWith('history/')||message.type?.endsWith('/list')||message.type==='frontend/get_user_data'||(message.type==='deepal_companion/request'&&['list','config_get','costs_get','history','sessions','summary','charge_prompt','session_curve'].includes(message.op));
-        return read?target.callWS(message):Promise.reject(new Error('Demo mode does not save vehicle or charging data.'));
+        return read?target.callWS(message):Promise.reject(new Error(I18N.t('Demo mode does not save vehicle or charging data.',[])));
       };
       const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;
     }});

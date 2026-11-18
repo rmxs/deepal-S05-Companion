@@ -193,7 +193,7 @@ class Climate(Base):
         self.assertEqual(self.services, [])
         await self.live.tick()
         await self.live.action("DEEPAL_COMPANION_LIVE_CLIMATE_OFF")
-        self.assertEqual(self.services, [("climate", "turn_off", "climate.s05_cabin_climate")])
+        self.assertEqual(self.services, [("climate", "set_hvac_mode", "climate.s05_cabin_climate")])
         self.assertEqual(self.history[-1][1], "turned_off")
         await self.live.action("DEEPAL_COMPANION_LIVE_OTHER")
         self.assertEqual(len(self.services), 1)

@@ -9,7 +9,7 @@ import re
 import time
 
 import voluptuous as vol
-from homeassistant.auth.permissions.const import POLICY_READ
+from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.components import websocket_api
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -90,11 +90,21 @@ def validate_costs(data):
     return data
 
 
+async def _refresh_after_write(runtime):
+    """The write is already committed; a failed refresh must not be reported to the user as a failed save."""
+    try:
+        await runtime.refresh()
+    except Exception:
+        _LOGGER.warning("Saved, but Companion could not reload the vehicle settings yet; they apply on the next update", exc_info=True)
+
+
 def authorize(connection, runtime):
     # Every sensor the vehicle's data is built from must be readable, not only the battery sensor.
     anchor = getattr(runtime, "entities", {}).get("batt") or runtime.entry.options.get("battery_entity", runtime.entry.data["battery_entity"])
     states = getattr(getattr(runtime, "hass", None), "states", None)
     # Optional sensors that do not exist in Home Assistant are skipped, so they cannot lock a user out of the vehicle.
+    # Trade-off: an optional sensor that is registered but has no state yet (for example, not loaded after a restart) is
+    # also skipped, so its permission is not checked until the state exists. The anchor sensor is always checked.
     optional = {*getattr(runtime, "entities", {}).values(), *getattr(runtime, "live_entities", {}).values(),
                 *getattr(runtime, "charger_entities", set())}
     optional = {e for e in optional if e and e != anchor and (states is None or states.get(e) is not None)}
@@ -117,7 +127,7 @@ async def request(hass, connection, msg):
         check_json(data)
         if op == "list":
             result = []
-            for item in await hub.db("list_vehicles"):
+            for item in await hub.read_db(lambda snap: snap.list_vehicles()):
                 runtime = hub.vehicles.get(item["id"])
                 if runtime:
                     try:
@@ -126,6 +136,14 @@ async def request(hass, connection, msg):
                     except PermissionError:
                         pass
             connection.send_result(msg["id"], result)
+            return
+        if op in {"notification_language_get", "notification_language_set"}:
+            from .phone_text import language_choice
+            if op == "notification_language_set":
+                if not connection.user.is_admin:
+                    raise PermissionError("Administrator access is required to change the notification language")
+                await hub.set_language(data.get("language"))
+            connection.send_result(msg["id"], {"language": language_choice(hass)})
             return
         runtime = hub.vehicles.get(vehicle)
         if runtime is None:
@@ -182,11 +200,42 @@ async def request(hass, connection, msg):
                 result = await (engine.test(rule, samples) if op == "notifications_test" else engine.preview(rule, samples=samples))
             else:
                 raise ValueError("Unknown notification operation")
+        elif op.startswith("precondition_"):
+            ctl = getattr(runtime, "preconditioning", None)
+            if ctl is None:
+                raise ValueError("Companion is still starting. Try again in a moment.")
+            if op == "precondition_get":
+                result = ctl.snapshot()
+            elif op in ("precondition_start", "precondition_stop", "precondition_refresh") and not connection.user.permissions.check_entity(ctl.entity("climate.cabin_climate"), POLICY_CONTROL):
+                raise PermissionError("You do not have permission to control this vehicle's climate")
+            elif op == "precondition_refresh":
+                result = await ctl.refresh_now()
+            elif op == "precondition_start":
+                result = await ctl.request_start(data.get("temperature"), data.get("duration"), source="manual")
+            elif op == "precondition_stop":
+                result = await ctl.request_stop(source="manual")
+            elif op == "precondition_test":
+                if not connection.user.is_admin:
+                    raise PermissionError("Administrator access is required to send a test notification")
+                result = await ctl.test_notification()
+            elif op == "precondition_clear_history":
+                if not connection.user.is_admin:
+                    raise PermissionError("Administrator access is required to clear the session history")
+                result = await ctl.clear_history()
+            elif op == "precondition_set":
+                if not connection.user.is_admin:
+                    raise PermissionError("Administrator access is required to change preconditioning settings")
+                result = await ctl.save(data.get("value", {}))
+            else:
+                raise ValueError("Unknown preconditioning operation")
+            if connection.user.is_admin and getattr(runtime, "notifications", None) is not None:
+                # every answer carries the phone list, so the page never loses it after a save or command
+                result["recipients"] = [{"svc": r["svc"], "name": r["name"]} for r in runtime.notifications.recipients()]
         elif op == "health_get":
             from .health import build_health
             result = await build_health(runtime)
         elif op == "config_get":
-            result = await hub.db("config", vehicle, msg.get("view_id"))
+            result = await hub.read_db(lambda snap: snap.config(vehicle, msg.get("view_id")))
             result["charge_prompt"] = await hub.db("charge_prompt", vehicle, str(connection.user.id))
         elif op == "charge_prompt_dismiss":
             session = data.get("session_id")
@@ -225,7 +274,7 @@ async def request(hass, connection, msg):
             if "entities" in patch and (not isinstance(patch["entities"], dict) or any(not ENTITY.fullmatch(v) for v in patch["entities"].values())):
                 raise ValueError("Invalid entity mapping")
             result = await hub.db("patch_config", vehicle, msg.get("view_id"), patch, bool(data.get("reset")), expected_revision)
-            await runtime.refresh()
+            await _refresh_after_write(runtime)
         elif op == "view":
             name = str(data.get("name", ""))[:100].strip()
             result = await hub.db("view", vehicle, data.get("action"), msg.get("view_id"), name, data.get("source"))
@@ -242,7 +291,7 @@ async def request(hass, connection, msg):
             else:
                 value = validate_costs(data.get("value"))
                 await hub.db("save_costs", vehicle, value, data.get("expected"))
-            await runtime.refresh()
+            await _refresh_after_write(runtime)
             result = {}
         elif op == "history":
             ids = data.get("entity_ids", [])
@@ -377,7 +426,7 @@ async def request(hass, connection, msg):
             if len(json.dumps(result, allow_nan=False).encode()) > EXPORT_LIMIT_BYTES:
                 raise ValueError("This export is too large for the browser. Use Database backup, which saves a complete file.")
         elif op == "summary":
-            result = await hub.db("summary", vehicle)
+            result = await hub.read_db(lambda snap: snap.summary(vehicle))
         elif op == "backup":
             target = hass.config.path(".storage", "deepal_companion.backup.sqlite")
             await hub.db("backup", target)

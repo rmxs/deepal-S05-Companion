@@ -40,7 +40,10 @@ class CompanionSensor(SensorEntity):
             model="Vehicle companion",
             configuration_url="homeassistant://deepal-companion",
         )
-        self._attr_native_unit_of_measurement = {"battery_kwh": "kWh", "cost": "EUR"}.get(key)
+        units = {"battery_kwh": "kWh"}
+        if key == "cost":  # cost is in the Home Assistant currency; EUR only if none is configured
+            units["cost"] = runtime.hass.config.currency or "EUR"
+        self._attr_native_unit_of_measurement = units.get(key)
         if key == "battery_kwh":
             self._attr_device_class = SensorDeviceClass.ENERGY
             self._attr_state_class = SensorStateClass.TOTAL
@@ -56,7 +59,15 @@ class CompanionSensor(SensorEntity):
     async def async_added_to_hass(self):
         self._removed = False
         self.async_on_remove(async_dispatcher_connect(self.hass, SIGNAL, self._changed))
-        await self.async_update()
+        try:
+            await asyncio.wait_for(self.async_update(), self.SUMMARY_TIMEOUT)
+        except asyncio.TimeoutError:
+            # Do not block platform setup on a locked archive: the sensor is added now and fills in once the database responds.
+            if not self._stall_logged:
+                self._stall_logged = True
+                _LOGGER.warning("Companion summary %s for %s is stalled waiting for the database; "
+                                "it will update when the database responds", self.key, getattr(self.runtime.entry, "title", None) or self.runtime.vehicle)
+            self._update_task = self.hass.async_create_task(self._update())
 
     async def async_will_remove_from_hass(self):
         self._removed = True
@@ -88,8 +99,8 @@ class CompanionSensor(SensorEntity):
                     # Stop waiting only: the shared calculation keeps running and is not restarted here.
                     if not self._stall_logged:
                         self._stall_logged = True
-                        _LOGGER.warning("Companion summary %s is stalled waiting for the database; "
-                                        "it will update when the database responds", self.key)
+                        _LOGGER.warning("Companion summary %s for %s is stalled waiting for the database; "
+                                        "it will update when the database responds", self.key, getattr(self.runtime.entry, "title", None) or self.runtime.vehicle)
                     if self._queued and not self._removed:
                         continue  # a change arrived while waiting: retry, one timeout window per attempt
                     break  # the next change or minute tick starts a new update

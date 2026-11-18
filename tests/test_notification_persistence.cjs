@@ -4,8 +4,10 @@ module.exports=async page=>{
  try{
   await page.evaluate(()=>{window.localNotifications=null;});
   await panel.evaluate(p=>p.navigateMode('notifications'));const board=panel.locator('.supplied-notification-design');await board.waitFor();
-  await board.locator('.device-pill[data-recipient="notify.replacement_phone"]').click();
+  assert.equal(await board.evaluate(n=>{const m=n.shadowRoot.querySelector('#master-panel-toggle').closest('.ha-card'),x=[];for(let e=m.nextElementSibling;e;e=e.nextElementSibling)if(!e.classList.contains('precondition-box')&&!e.classList.contains('design-history'))x.push(e.classList.contains('master-off')&&e.inert);return x.length>0&&x.every(Boolean);}),true,'everything under the master switch is grey and inert while it is off');
   await board.locator('#master-panel-toggle').locator('..').click();
+  assert.equal(await board.evaluate(n=>{const m=n.shadowRoot.querySelector('#master-panel-toggle').closest('.ha-card'),x=[];for(let e=m.nextElementSibling;e;e=e.nextElementSibling)if(!e.classList.contains('precondition-box')&&!e.classList.contains('design-history'))x.push(e.classList.contains('master-off')||e.inert);return x.some(Boolean);}),false,'turning the master on releases everything below it');
+  await board.locator('.device-pill[data-recipient="notify.replacement_phone"]').click();
   await board.locator('#view-overview [data-live-toggle=charging]').locator('..').click();
   await board.locator('[data-alert-id=charge_done] [data-alert-open]').first().click();
   await board.locator('#input-title').fill('My saved charging alert');await board.locator('#input-msg').fill('Battery {battery}% — my custom message');

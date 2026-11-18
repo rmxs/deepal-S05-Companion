@@ -18,7 +18,7 @@ main=main.replace(/const CARD_VERSION = "[^"]+";/,'const CARD_VERSION = '+JSON.s
 const baseStart=main.indexOf("const SCRIPT_BASE ="),baseEnd=main.indexOf("})();",baseStart)+5;assert(baseStart>=0&&baseEnd>baseStart);
 main=main.slice(0,baseStart)+'const SCRIPT_BASE = "/deepal_companion/frontend/";'+main.slice(baseEnd);
 const bridge=fs.readFileSync("source/companion-bridge.js","utf8")+"\n"+fs.readFileSync("source/companion-editor-bridge.js","utf8")+"\n"+fs.readFileSync("source/companion-entities.js","utf8")+"\n"+fs.readFileSync("source/companion-ui.js","utf8")+"\n"+fs.readFileSync("source/companion-app-forms.js","utf8")+"\n"+fs.readFileSync("source/companion-design.js","utf8");
-const hook="customElements.define(SETTINGS_TAG, DeepalS05Settings);";assert(main.includes(hook));main=main.replace(hook,bridge+"\n"+fs.readFileSync("source/companion-charge-prompt.js","utf8")+"\n"+fs.readFileSync("source/companion-charge-curve.js","utf8")+"\n"+hook);
+const hook="customElements.define(SETTINGS_TAG, DeepalS05Settings);";assert(main.includes(hook));main=main.replace(hook,bridge+"\n"+fs.readFileSync("source/companion-charge-prompt.js","utf8")+"\n"+fs.readFileSync("source/companion-charge-curve.js","utf8")+"\n"+fs.readFileSync("source/companion-charge-cost.js","utf8")+"\n"+hook);
 
 main=main.replace('name: "Deepal S05 Control Panel"','name: "Deepal Companion"');
 fs.writeFileSync(front+"/companion-card.js",main);

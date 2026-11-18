@@ -7,6 +7,7 @@ module.exports=async page=>{
   await panel.evaluate(p=>p.navigateMode('notifications'));const board=panel.locator('.supplied-notification-design');await board.waitFor();
   for(const width of [390,1440]){await page.setViewportSize({width,height:800});const before=await board.locator('#view-overview').boundingBox();await board.locator('#master-panel-toggle').locator('..').click();const after=await board.locator('#view-overview').boundingBox();assert(Math.abs(after.y-before.y)<1,'Unsaved changes must not move the block at '+width+'px');await board.locator('#view-overview [data-command=cancel]').dispatchEvent('click');const canceled=await board.locator('#view-overview').boundingBox();assert(Math.abs(canceled.y-before.y)<1,'Clearing Unsaved changes must not move the block');}
   await page.setViewportSize({width:390,height:800});
+  await board.locator('#master-panel-toggle').evaluate(e=>{if(!e.checked)e.click();});
   const alert=board.locator('[data-alert-id=warn_crit] [data-alert-open]').first();await alert.scrollIntoViewIfNeeded();await panel.evaluate(p=>{p.scrollTop=Math.max(p.scrollTop,200);});
   await alert.click();await board.locator('#view-detail').waitFor({state:'visible'});
   await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').scrollTop===0);

@@ -32,7 +32,7 @@ class HistoryStorage:
                 break
         return best
 
-    def _history_rows(self, db, vehicle, entity, start, end):
+    def _history_rows(self, db, vehicle, entity, start, end, apply_exclusions=True):
         rows = {}
         for packed in db.execute("SELECT data FROM reading_blocks WHERE vehicle=? AND entity=? "
                                  "AND bucket>=? AND bucket<=? ORDER BY bucket",
@@ -48,7 +48,7 @@ class HistoryStorage:
         if before:
             rows[before["t"]] = before
         excluded = db.execute("SELECT start,end FROM reading_exclusions WHERE vehicle=? AND entity=? AND end>=? AND start<=?",
-                              (vehicle, entity, min(rows) if rows else start, end)).fetchall()
+                              (vehicle, entity, min(rows) if rows else start, end)).fetchall() if apply_exclusions else []
         if excluded:  # readings a user removed from the curve, whether hot or already compressed
             rows = {t: r for t, r in rows.items() if not any(x["start"] <= t <= x["end"] for x in excluded)}
         return [rows[t] for t in sorted(rows)]

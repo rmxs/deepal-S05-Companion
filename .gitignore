@@ -39,3 +39,9 @@ Thumbs.db
 venv/
 offline-wheels/
 *.whl
+
+# Local handover notes (not for GitHub)
+docs/CLAUDE_HANDOVER.md
+
+# Local knowledge graph (graphify)
+graphify-out/

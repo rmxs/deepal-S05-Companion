@@ -79,6 +79,7 @@ class VehicleRuntime:
         self.price_cache = {}
         self._pricing_lock = asyncio.Lock()
         self._summary_revision = 0
+        self._refresh_lock = asyncio.Lock()
         self._summary_cache = None
         self._summary_flight = None  # the one summary calculation that may be running
         self._priced_flights = {}
@@ -125,6 +126,12 @@ class VehicleRuntime:
         from .notifications import NotificationEngine
         self.notifications = NotificationEngine(self)
         await self.notifications.start()
+        from .preconditioning import Preconditioning
+        self.preconditioning = Preconditioning(self)
+        try:
+            await self.preconditioning.start()
+        except Exception:  # never block the vehicle when preconditioning data cannot load
+            _LOGGER.exception("Preconditioning for %s could not start", self.vehicle)
 
     async def _shutdown(self, _event):
         # A fired listen_once listener is already removed by Home Assistant; unsubscribing it again logs an error.
@@ -134,6 +141,11 @@ class VehicleRuntime:
         await self.stop()
 
     async def refresh(self) -> None:
+        # One refresh at a time: a slower earlier call can no longer finish after a newer one and overwrite its mapping.
+        async with self._refresh_lock:
+            await self._refresh_unlocked()
+
+    async def _refresh_unlocked(self) -> None:
         self._summary_revision += 1
         cfg = (await self.hub.db("config", self.vehicle))["config"]
         self.config = cfg
@@ -441,6 +453,11 @@ class VehicleRuntime:
         if self._refresh_task and not self._refresh_task.done():
             self._refresh_task.cancel()
         self._refresh_task = None
+        if hasattr(self, "preconditioning"):
+            try:
+                await asyncio.wait_for(self.preconditioning.stop(), self.stop_timeout)
+            except Exception:  # noqa: BLE001
+                _LOGGER.warning("Preconditioning state for %s could not be saved", self.vehicle)
         if hasattr(self, "notifications"):
             # The notification store takes the hub lock, which a stuck archive write may hold; bound it so shutdown cannot hang here.
             try:
@@ -525,19 +542,32 @@ class VehicleRuntime:
         result, _ = await self._priced(fetch)
         return result
 
+    @staticmethod
+    def _in_dashboard_window(row, start, end):
+        """Without a period the dashboard shows the last 31 days (by local day); a period narrows it further."""
+        from datetime import datetime, timezone
+        if start is not None and row["s"] < start * 1000:
+            return False
+        if end is not None and row["s"] > end * 1000:
+            return False
+        if start is None:
+            day = dt_util.as_local(datetime.fromtimestamp(row["s"] / 1000, timezone.utc)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000
+            return time.time() * 1000 - day <= 31 * 86400000
+        return True
+
     async def charging_dashboard(self, start=None, end=None):
         key = (self._summary_revision, int(time.time() // 60), start, end)
         if getattr(self, "_dashboard_cache", None) and self._dashboard_cache[0] == key:
             return deepcopy(self._dashboard_cache[1])
-        rows = [row for row in await self.priced_sessions() if not row["live"]]
-        priced = [row for row in rows if row["pricing"].get("cost") is not None]
+        # Header totals cover every completed charge ("All time"); the period figures and the chart use the chosen window.
+        completed = [row for row in await self.priced_sessions() if not row["live"]]
+        rows = [row for row in completed if self._in_dashboard_window(row, start, end)]
+        priced = [row for row in completed if row["pricing"].get("cost") is not None]
         from datetime import datetime, timezone
         buckets = {}
         period = {"sessions": 0, "energy": 0, "cost": 0, "unpriced": 0, "paid_sessions": 0, "paid_energy": 0, "free_sessions": 0, "free_energy": 0, "battery_estimated": 0}
         for row in rows:
             day = dt_util.as_local(datetime.fromtimestamp(row["s"] / 1000, timezone.utc)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000
-            if (start is not None and row['s'] < start*1000) or (end is not None and row['s'] > end*1000) or (start is None and time.time()*1000-day > 31*86400000):
-                continue
             bucket = buckets.setdefault(day, {"s": day, "live": False, "pricing": {"energy": 0, "cost": 0}, "unpriced_count": 0, "split": {"free": 0, "paid": 0, "unpriced": 0}})
             energy = row["pricing"].get("energy")
             bucket["pricing"]["energy"] += energy if energy is not None else row.get("kwh") or 0
@@ -563,9 +593,10 @@ class VehicleRuntime:
                 bucket["unpriced_count"] += 1
             else:
                 bucket["pricing"]["cost"] += row["pricing"]["cost"]
-        result = {"total": len(rows), "priced": len(priced), "unpriced": len(rows)-len(priced),
+        result = {"total": len(completed), "priced": len(priced), "unpriced": len(completed)-len(priced),
                   "cost": sum(row["pricing"]["cost"] for row in priced),
-                  "energy": sum(row["pricing"].get("energy") if row["pricing"].get("energy") is not None else row.get("kwh") or 0 for row in rows),
+                  "energy": sum(row["pricing"].get("energy") if row["pricing"].get("energy") is not None else row.get("kwh") or 0 for row in completed),
+                  "battery_estimated": sum(1 for row in completed if row["pricing"].get("source") in ("battery", "fallback") and row["pricing"].get("energy") is not None),
                   "period": period,
                   "chart_rows": list(buckets.values())}
         self._dashboard_cache = (key, deepcopy(result))

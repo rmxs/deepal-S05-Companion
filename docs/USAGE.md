@@ -1,6 +1,6 @@
 # User guide
 
-[README](../README.md) · [All settings](SETTINGS.md) · [Notifications](NOTIFICATIONS.md)
+[README](../README.md) · [All settings](SETTINGS.md) · [Preconditioning](PRECONDITIONING.md) · [Notifications](NOTIFICATIONS.md)
 
 ## 1. Open Companion
 
@@ -8,9 +8,10 @@
 
 The card and the Companion pages follow your Home Assistant theme, light or dark. The vehicle photo areas (Car View and the interior view) always stay dark, with white text. To show it in the sidebar, turn on **Show “Deepal Card” in the sidebar** under **Card Settings → Advanced** (off by default).
 2. Choose your vehicle if you have more than one configured.
-3. Use the four pages at the top:
+3. Use the five pages at the top:
    - **Card Settings** — customise the dashboard card.
    - **Notifications** — choose phone alerts and Live notifications.
+   - **Preconditioning** — start the climate remotely, set schedules and battery protection. See the [Preconditioning guide](PRECONDITIONING.md).
    - **Sessions** — browse charging sessions, curves and costs.
    - **Charging Profiles** — set up charging locations and prices.
 
@@ -140,6 +141,8 @@ On the real card, the reminder needs a finished charge that added at least the m
 
 **Ignore one-off battery jumps above (%)** (default 20) protects the recorded charge: a single battery reading far above the charge so far is ignored until the next reading confirms it. A real fast jump is counted as soon as one more reading agrees.
 
+**Charging target.** Set **Card Settings → Charging → Charging target (%)** to a goal from 50 to 100 %. While charging, the Energy tile shows the goal with an estimated time, for example “80 % at ~22:21”; at 100 % it shows “Full at” that time. The card cannot stop charging. To receive a phone alert when the target is reached, enable the charging notification and use it together with this setting in **Notifications**.
+
 ## 9. Browse sessions and charts
 
 1. Open **Sessions**.
@@ -171,7 +174,7 @@ Curves use amps over time and fit the recorded charging interval. Dots mark chan
 
 To display the current charge on the main card, enable **Card Settings → Layout → Sections → Charging curve**. It appears while charging. Saved curves remain available from each archived charge when readings were captured or imported.
 
-Dots on the curve mark the moments the charging current changed. While the car charges, the line continues from the last dot to the current time and battery level, so a steady current still shows progress. If the car reports nothing new, the line is refreshed every few minutes (**Card Settings → Advanced → Refresh the charging curve every (min)**, default 5).
+The curve is a step line: each reported current is held until the next change, so nothing is drawn between readings the car never sent. Changes smaller than 0.2 A are not drawn. Dots mark the moments the charging current changed. A stretch with no battery progress for longer than **Card Settings → Advanced → A stop longer than this starts a new charge (min)** is joined by a lighter grey line; hover or touch it to see that data is missing, and when it started and ended. Turn this off with **Highlight Missing Data**. While the car charges, the line continues from the last dot to the current time and battery level, so a steady current still shows progress. If the car reports nothing new, the line is refreshed every few minutes (**Card Settings → Advanced → Refresh the charging curve every (min)**, default 5).
 
 ### Correct or delete a charge (administrators)
 
@@ -210,7 +213,17 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 5. Configure quiet hours and save.
 6. Follow the [notification guide](NOTIFICATIONS.md) to customise individual alerts and enable Live notifications.
 
-## 13. Check that everything works
+## 13. Warm or cool the car before you leave
+
+1. On the card, open **Preconditioning** (in **More**), or open **Preconditioning** in the Companion dashboard.
+2. Move the **Temperature** and **Duration** bars, then press **Start preconditioning**. Press **Stop preconditioning** to end it early.
+3. To start automatically, open the dashboard page, turn on **Scheduled preconditioning** under **General** (it is off by default), then choose **Create schedule**. Pick **Start at** a time, or **Ready by** a time to start earlier.
+4. Under **Notifications**, choose the phones and the events you want to hear about, then press **Send test notification**.
+5. Optional: turn on **Battery protection** and choose a minimum battery level.
+
+The box at the top of the page, **Your setup in short**, explains your choices in plain words. The car allows remote climate for 15 minutes and only while it is parked and switched off. Read the [Preconditioning guide](PRECONDITIONING.md) for every option.
+
+## 14. Check that everything works
 
 Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. A problem says what is wrong and what to do, in the Home Assistant language where a translation exists. Electric cars are not checked for fuel sensors. A pulsing red dot on the tab means a warning or error. The page only reads; it never changes settings or sends a notification.
 

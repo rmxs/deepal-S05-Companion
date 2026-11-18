@@ -34,12 +34,23 @@ class Hub:
         self.card_panel_in_sidebar = False  # default off; an admin can turn it on in Card Settings > Advanced
         self._card_panel_registered = False
         self._card_panel_store = None
+        self._language_store = None
         self.card_panel_pin = {"vehicle_id": "", "view_id": "", "design": ""}  # profile and design fixed for the card page
 
     async def set_card_panel_pin(self, pin):
         self.card_panel_pin = {**self.card_panel_pin, **pin}
         if self._card_panel_store is not None:
             await self._card_panel_store.async_save({"sidebar": self.card_panel_in_sidebar, **self.card_panel_pin})
+
+    async def set_language(self, choice):
+        """The one notification language for everything Companion writes into phone notifications."""
+        from .phone_text import MESSAGE_LANGUAGES, language_choice, set_language
+        if choice not in MESSAGE_LANGUAGES:
+            raise ValueError("Unknown notification language")
+        set_language(self.hass, choice)
+        if self._language_store is not None:
+            await self._language_store.async_save({"language": choice})
+        return language_choice(self.hass)
 
     async def set_card_panel(self, visible):
         """Show or hide the card-only page in the sidebar. The page itself stays reachable by its address."""
@@ -103,6 +114,14 @@ async def async_setup(hass, config):
             hub.card_panel_pin = {k: saved[k] if isinstance(saved.get(k), str) else "" for k in ("vehicle_id", "view_id", "design")}
     except Exception:
         _LOGGER.exception("Could not read the card page setting; showing it in the sidebar")
+    try:
+        from homeassistant.helpers.storage import Store
+        hub._language_store = Store(hass, 1, DOMAIN + ".language")
+        from .phone_text import set_language
+        saved = await hub._language_store.async_load()
+        set_language(hass, saved.get("language") if isinstance(saved, dict) else "auto")
+    except Exception:
+        _LOGGER.exception("Could not read the notification language; following the Home Assistant language")
     await _register_card_panel(hass, hub)
     # Register the bundled card in Lovelace's resource collection when using storage mode.
     from homeassistant.components.lovelace.const import LOVELACE_DATA
@@ -120,6 +139,8 @@ async def async_setup(hass, config):
 
 
 async def async_setup_entry(hass, entry):
+    from .phone_text import async_preload
+    await async_preload(hass)
     hub = hass.data[DOMAIN]
     # A reload does not rerun async_setup. Recheck the idempotent schema here
     # in case the archive file was removed/replaced while HA was running.

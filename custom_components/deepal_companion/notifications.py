@@ -256,7 +256,10 @@ class NotificationEngine:
                 return recipient
             recipient = matches[0]["svc"]
         from homeassistant.helpers import entity_registry as er
-        from homeassistant.components.mobile_app.const import DOMAIN, DATA_NOTIFY
+        try:
+            from homeassistant.components.mobile_app.const import DOMAIN, DATA_NOTIFY
+        except ImportError as error:  # Home Assistant changed the Mobile App internals this integration uses
+            raise ValueError("This Home Assistant version is not supported for Mobile App notifications. Update Deepal Companion.") from error
         entity = er.async_get(self.hass).async_get(recipient)
         if entity is None or entity.platform != "mobile_app" or entity.disabled_by:
             raise ValueError("Selected Mobile App notification entity is unavailable. Select your phone again.")
@@ -339,8 +342,8 @@ class NotificationEngine:
         # Simple {name} placeholders coexist with advanced HA {{ templates }}.
         def simple(text):
             return re.sub(r"(?<!\{)\{([a-zA-Z_]\w*)\}(?!\})", lambda m: str(context.get(m[1], m[0])), text)
-        return {"active": active, "title": str(await self.render(simple(rule["title"]), context)),
-                "message": str(await self.render(simple(rule["message"]), context))}
+        return {"active": active, "title": str(await self.render(simple(tr(self.hass, rule["title"])), context)),
+                "message": str(await self.render(simple(tr(self.hass, rule["message"])), context))}
 
     async def record(self, rule, status, **details):
         self.history.insert(0, {"id": uuid.uuid4().hex, "time": time.time(), "rule_id": rule["id"], "name": rule["name"], "status": status,

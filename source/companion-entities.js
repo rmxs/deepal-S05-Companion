@@ -10,7 +10,7 @@ DeepalS05Settings.prototype._entityRoleName=function(key,config){
   const id=resolveId(this._hass,config,key);
   const name=this._hass?.states?.[id]?.attributes?.friendly_name||this._hass?.entities?.[id]?.name;
   if(name)return name;
-  const label=(key.split(".")[1]||key).replaceAll("_"," ");return label.charAt(0).toUpperCase()+label.slice(1);
+  const label=(key.split(".")[1]||key).replaceAll("_"," ");return T(label.charAt(0).toUpperCase()+label.slice(1));
 };
 const settingsBind=DeepalS05Settings.prototype._bind;
 const settingsLayout=DeepalS05Settings.prototype._tabLayout;

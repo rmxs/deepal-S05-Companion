@@ -90,15 +90,21 @@ class RuntimePerformanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["priced"], 1)
 
     async def test_historical_chart_period_keeps_global_totals(self):
+        """Header totals cover every completed charge; the chosen period only narrows the period figures and the chart."""
         runtime = self.runtime(100)
         module = importlib.import_module("companion_lifecycle.runtime")
         start = 1700000000
         with patch.object(module.dt_util, "as_local", lambda value: value, create=True), patch.object(module.time, "time", return_value=start+100*86400):
             result = await runtime.charging_dashboard(start, start+3*7200)
+            recent = await runtime.charging_dashboard()
         self.assertEqual(result['total'],100)
-        self.assertAlmostEqual(sum(day['pricing']['energy'] for day in result['chart_rows']),4*9.2/.9)
+        self.assertEqual(recent['total'],100)
+        self.assertAlmostEqual(result['energy'],100*9.2/.9)
         self.assertEqual(result['period']['sessions'],4)
         self.assertAlmostEqual(result['period']['energy'],4*9.2/.9)
+        self.assertAlmostEqual(sum(day['pricing']['energy'] for day in result['chart_rows']),4*9.2/.9)
+        self.assertEqual(recent['period']['sessions'],0)  # all fixture charges are older than 31 days
+        self.assertEqual(recent['chart_rows'],[])
 
     async def test_period_totals_separate_free_paid_and_unpriced(self):
         runtime = self.runtime(0)

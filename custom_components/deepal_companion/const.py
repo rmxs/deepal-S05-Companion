@@ -1,7 +1,7 @@
 """Constants for Deepal Companion."""
 DOMAIN = "deepal_companion"
-VERSION = "0.2.0"
-FRONTEND_REVISION = "20261115-23"
+VERSION = "1.0.0"
+FRONTEND_REVISION = "20261118-35"
 FRONTEND_VERSION = VERSION + "&rev=" + FRONTEND_REVISION
 SIGNAL = f"{DOMAIN}_updated"
 FRONTEND_URL = f"/{DOMAIN}/frontend"
@@ -16,7 +16,7 @@ SHARED_KEYS = frozenset({
 DEFAULT_PROMPT_MIN_GAIN = 3  # battery percentage points a charge must add before it asks for a profile
 DEFAULT_PROMPT_RECENT = 10  # latest charges the profile reminder looks at
 DEFAULT_SPIKE_JUMP = 20  # one reading this far above the charge so far waits for confirmation
-RANGES = {"charge_prompt_min_gain": (0, 100), "charge_prompt_recent": (1, 20), "charge_spike_jump": (5, 50)}
+RANGES = {"charge_prompt_min_gain": (0, 100), "charge_prompt_recent": (1, 20), "charge_spike_jump": (5, 50), "charge_target": (0, 100)}
 ENERGY_KEYS = {
     "batt": "sensor.battery_level", "ac": "sensor.ac_charge_current",
     "dc": "sensor.dc_charge_current", "odo": "sensor.total_odometer",

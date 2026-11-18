@@ -163,7 +163,7 @@ const PCSS = `
 .enpanel{--energy-charge:light-dark(#087f5b,#34e5a4);--energy-drive:light-dark(#2457c5,#82acff);--energy-parked:light-dark(#8793a1,#8693a5);--energy-fuel:light-dark(#a85a06,#ffcb66)}
 .enpanel .cc-removed-profile{display:block;color:rgb(var(--ds-warn));font-size:11px;line-height:1.5;margin-top:4px}.enpanel .cc-removed-profile ha-icon{--mdc-icon-size:16px;vertical-align:middle}
 .enpanel .en-cost-tabs {display:flex;gap:8px;margin-bottom:10px}.enpanel .en-cost-tabs button {border:1px solid var(--ds-line);border-radius:10px;padding:8px 12px;background:transparent;color:var(--ds-fg);font:inherit;font-size:12px;cursor:pointer}.enpanel .en-cost-tabs button[aria-pressed=true] {background:rgba(var(--ds-ok),.14);border-color:rgba(var(--ds-ok),.4)}.enpanel .en-cost-heading h3 {font-size:16px;margin:6px 0}.enpanel .en-cost-heading small {font-size:11px;color:var(--ds-fg2)}
-.enpanel .cc-summary {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--ds-line);border-radius:16px;background:rgba(121,173,255,.045)}
+.enpanel .cc-summary {display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--ds-line);border-radius:16px;background:rgba(var(--ds-info),.045)}
 .enpanel .cc-summary small {display:block;color:var(--ds-fg2);font-size:11px;line-height:1.5}
 .enpanel .cc-summary b {display:block;font-size:23px;font-variant-numeric:tabular-nums}
 .enpanel .cc-button {border:1px solid var(--ds-line);border-radius:11px;padding:9px 12px;background:rgba(128,128,128,.07);color:var(--ds-fg);font:inherit;font-size:12px;cursor:pointer}
@@ -186,7 +186,7 @@ const PCSS = `
 .enpanel .cc-info{padding:10px 12px;border:1px solid rgba(var(--ds-info),.3);border-radius:10px;background:rgba(var(--ds-info),.08);font-size:11px;line-height:1.5}.enpanel .cc-info[hidden]{display:none}
 .enpanel .cc-hint {font-size:11px;line-height:1.5;color:var(--ds-fg2);margin:9px 0}
 .enpanel .cc-session-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin:6px 0 18px}.enpanel .cc-session-row .cc-session{margin:0}.enpanel .cc-curve{display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px;color:rgb(var(--ds-ok))}.enpanel .cc-curve svg{width:18px;height:18px}@media(max-width:380px){.enpanel .cc-curve{flex-direction:column;font-size:10px}}
-.enpanel .cc-session {box-sizing:border-box;width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--ds-line);border-radius:12px;background:rgba(121,173,255,.035);padding:12px 14px;color:var(--ds-fg);text-align:left;font:inherit;font-size:12px;cursor:pointer;margin:6px 0 18px}
+.enpanel .cc-session {box-sizing:border-box;width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--ds-line);border-radius:12px;background:rgba(var(--ds-info),.035);padding:12px 14px;color:var(--ds-fg);text-align:left;font:inherit;font-size:12px;cursor:pointer;margin:6px 0 18px}
 .enpanel .cc-session .cc-location-name{display:block;font-size:12px;font-weight:600;margin-bottom:4px}.enpanel .cc-session>span:first-child{min-width:0;overflow-wrap:anywhere}
 .enpanel .cc-session small {display:block;font-size:10px;line-height:1.6;color:var(--ds-fg2)}
 .enpanel .cc-session .cc-price-badge {flex:none;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;background:rgba(var(--ds-ok),.09);color:rgb(var(--ds-ok))}.enpanel .cc-session b{font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}.enpanel .cc-session .cc-price-badge small{font-size:9px}.enpanel .cc-session .cc-price-badge i{font-style:normal;opacity:.65}
@@ -200,7 +200,7 @@ const PCSS = `
 .enpanel { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; display:flex; flex-direction:column; gap:22px; padding:8px 6px 26px; color: var(--ds-fg); }
 .enpanel .en-nav [data-wk]{color:var(--ds-fg,var(--primary-text-color,#eee))}.enpanel .en-nav [data-wk] .i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.enpanel .en-nav [data-wk] .i path{fill:none;stroke:inherit}
 .enpanel .en-nav { display:flex; align-items:center; flex-wrap:wrap; gap:10px; } .enpanel .en-nav .btn { width:44px; height:40px; padding:0; display:grid; place-items:center; } .enpanel .en-nav .btn[disabled] { opacity:.35; cursor:default; pointer-events:none; } .enpanel .en-wk { flex:1; text-align:center; } .enpanel .en-wk b { display:block; font-size:14.5px; font-weight:600; } .enpanel .en-wk small { display:block; margin-top:1px; font-size:12px; color: var(--ds-fg2); } .enpanel .en-lim { flex-basis:100%; text-align:center; }
-.enpanel .en-period { display:flex; gap:3px; padding:3px; border:1px solid var(--ds-line); border-radius:12px; } .enpanel .en-period button { border:0; border-radius:9px; padding:7px 12px; background:transparent; color:var(--ds-fg2); font:inherit; font-size:12px; cursor:pointer; } .enpanel .en-period button[aria-pressed="true"] { background:rgba(121,173,255,.16); color:var(--ds-fg); } .enpanel .en-dates { display:flex; align-items:center; gap:8px; margin-left:auto; } .enpanel .en-dates .en-wk { min-width:140px; } .enpanel .en-nav { justify-content:center; padding:10px; border:1px solid var(--ds-line); border-radius:14px; gap:10px; } @media(max-width:480px) { .enpanel .en-dates { margin-left:0; } }
+.enpanel .en-period { display:flex; gap:3px; padding:3px; border:1px solid var(--ds-line); border-radius:12px; } .enpanel .en-period button { border:0; border-radius:9px; padding:7px 12px; background:transparent; color:var(--ds-fg2); font:inherit; font-size:12px; cursor:pointer; } .enpanel .en-period button[aria-pressed="true"] { background:rgba(var(--ds-info),.16); color:var(--ds-fg); } .enpanel .en-dates { display:flex; align-items:center; gap:8px; margin-left:auto; } .enpanel .en-dates .en-wk { min-width:140px; } .enpanel .en-nav { justify-content:center; padding:10px; border:1px solid var(--ds-line); border-radius:14px; gap:10px; } @media(max-width:480px) { .enpanel .en-dates { margin-left:0; } }
 .enpanel .en-body { display:flex; flex-direction:column; gap:20px; }
 .enpanel .en-now { border-radius:18px; padding:14px 16px; background: rgba(var(--rgb-primary-text-color, 255,255,255), .045); border:1px solid var(--ds-line); }
 .enpanel .en-now.chg { background: rgba(var(--ds-ok), .12); border-color: rgba(var(--ds-ok), .35); }
@@ -366,7 +366,7 @@ class ChargingCosts {
     try{const raw=await this.card._hass.callWS({type:"history/history_during_period",start_time:new Date(m.t0-20*60e3).toISOString(),end_time:new Date(m.now).toISOString(),entity_ids:entities,include_start_time_state:true,significant_changes_only:false,minimal_response:true,no_attributes:true});for(const id of entities)this.sensorHistory[id]=numSeries(rowsOf(raw?.[id]));}catch(_){}
   }
   result(g){const r=this.record(g);if(g.pricing&&JSON.stringify(g.assignment||null)===JSON.stringify(r||null))return {...g.pricing,costEstimated:g.pricing.cost_estimated};const id=r?.profile?.entity;return chargingCost(g,r,this.sensorHistory?.[id]||[],this.card._hass.states?.[id]?.attributes?.unit_of_measurement||"");}
-  money(v){return new Intl.NumberFormat(this.card._hass?.locale?.language||"en",{style:"currency",currency:"EUR"}).format(v);}
+  money(v){const lang=this.card._hass?.locale?.language||"en",currency=this.card._hass?.config?.currency||"EUR";try{return new Intl.NumberFormat(lang,{style:"currency",currency}).format(v);}catch(_){return new Intl.NumberFormat(lang,{style:"currency",currency:"EUR"}).format(v);}}
   number(v){return new Intl.NumberFormat(this.card._hass?.locale?.language||"en",{maximumFractionDigits:2}).format(v);}
   label(r){return {unassigned:T("Choose location"),receipt:T("Entered energy"),meter:T("Measured energy"),power:T("Estimated from power"),battery:T("Estimated from battery"),fallback:T("Sensor unavailable: battery estimate")}[r.source];}
   decorate(m,ctx) {
@@ -376,13 +376,13 @@ class ChargingCosts {
     const completed=m.chg.filter(g=>!g.live),results=completed.map(g=>this.result(g)),known=results.filter(r=>r.cost!==null),total=known.reduce((n,r)=>n+r.cost,0);
     const canEdit=this.card._hass?.user?.is_admin!==false;/* the backend only lets administrators save costs */
     const top=document.createElement("div");top.className="cc-added cc-summary";
-    top.innerHTML='<div><small>'+esc(T("Charging cost"))+'</small><b>'+(known.length?esc(this.money(total)):"—")+'</b><small>'+known.length+"/"+completed.length+" "+esc(T("sessions priced"))+(known.some(r=>r.costEstimated)?" · ≈":"")+'</small></div>'+(canEdit?'<button class="cc-button" data-cc="profiles">'+esc(T("Charging profiles"))+' ⚙</button>':'');
+    top.innerHTML='<div><small>'+esc(T("Charging cost"))+'</small><b>'+(known.length?(known.every(r=>r.cost===0)?esc(T("Free charging")):esc(this.money(total))):"—")+'</b><small>'+known.length+"/"+completed.length+" "+esc(T("sessions priced"))+(known.some(r=>r.costEstimated)?" · ≈":"")+'</small></div>'+(canEdit?'<button class="cc-button" data-cc="profiles">'+esc(T("Charging profiles"))+' ⚙</button>':'');
     const totals=b.querySelector(".en-tot");if(totals)totals.after(top);else b.prepend(top);
     const days=m.days.filter(d=>d.t<=m.now).slice().reverse();
     [...b.querySelectorAll(".en-tb:not(.h)")].forEach((row,i)=>{
       const day=days[i];if(!day)return;const values=m.chg.filter(g=>dayKey(g.s,m.timezone)===day.key).map(g=>this.result(g));if(!values.length)return;
       const priced=values.filter(r=>r.cost!==null),sum=priced.reduce((n,r)=>n+r.cost,0),note=document.createElement("small");note.className="cc-added cc-day-cost";
-      note.textContent=priced.length?(priced.some(r=>r.costEstimated)?"≈ ":"")+this.money(sum)+(priced.length<values.length?" *":""):T("Price not set");
+      note.textContent=priced.length?priced.every(r=>r.cost===0)?T("Free")+(priced.length<values.length?" *":""):(priced.some(r=>r.costEstimated)?"≈ ":"")+this.money(sum)+(priced.length<values.length?" *":""):T("Price not set");
       note.title=T("Charging cost. * = some sessions have no price.");row.children[2]?.append(note);
     });
     const list=m.chg.slice().reverse();
@@ -511,7 +511,7 @@ class ChargingCosts {
       const g=this.model?.chg.find(row=>String(row.s)===button.dataset.start);if(!g)return;
       button.disabled=true;
       try{
-        const module=await import('/deepal_companion/frontend/charging-curve.js?v=0.2.0&rev=20261115-23');if(!this.host.isConnected)return;
+        const module=await import('/deepal_companion/frontend/charging-curve.js?v=1.0.0&rev=20261118-35');if(!this.host.isConnected)return;
         this.curveDialog?.remove();
         this.curveDialog=module.openCurveDialog(this.host.getRootNode(),this.card._hass,async()=>{
           if(g.id&&!String(g.id).startsWith('recorder_')){const data=await this.card._hass.companionRequest('session_curve',{session_id:g.id});return {...data,mode:data.mode||(typeof g.dc==='boolean'?(g.dc?'DC':'AC'):null)};}

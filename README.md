@@ -1,5 +1,7 @@
 <p align="center"><img src="docs/images/header.png" alt="Deepal Companion: the card standing on a stage" width="100%"></p>
 
+<table align="center"><tr><td align="center" valign="top" width="20%"><h3>🇬🇧<br>Know it.<br>Control it.<br>Own it.</h3></td><td align="center" valign="top" width="20%"><h3>🇬🇷<br>Γνώρισέ το.<br>Έλεγξέ το.<br>Κάν' το δικό σου.</h3></td><td align="center" valign="top" width="20%"><h3>🇪🇸<br>Conócelo.<br>Contrólalo.<br>Hazlo tuyo.</h3></td><td align="center" valign="top" width="20%"><h3>🇩🇪<br>Verstehen.<br>Steuern.<br>Besitzen.</h3></td><td align="center" valign="top" width="20%"><h3>🇮🇹<br>Conoscila.<br>Controllala.<br>Falla tua.</h3></td></tr></table>
+
 # Deepal Companion
 
 Your Deepal S05 in Home Assistant: vehicle controls, a customisable dashboard, charging sessions, energy history, costs and phone alerts.
@@ -9,11 +11,23 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 [![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rmxs&repository=deepal-S05-Companion&category=integration)
 
 
-[Installation](docs/INSTALLATION.md) · [User guide](docs/USAGE.md) · [All settings](docs/SETTINGS.md) · [Notifications and Live notifications](docs/NOTIFICATIONS.md) · [Changelog](CHANGELOG.md)
+[Installation](docs/INSTALLATION.md) · [User guide](docs/USAGE.md) · [All settings](docs/SETTINGS.md) · [Preconditioning](docs/PRECONDITIONING.md) · [Notifications and Live notifications](docs/NOTIFICATIONS.md) · [Changelog](CHANGELOG.md)
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
-## What’s new in 0.2.0
+## What’s new in 1.0.0
+
+- **Remote climate preconditioning:** start or stop the climate from the card or the dashboard, or set schedules (once, daily, Mon–Fri, custom days, or “ready by” a time). Companion refreshes the car’s data before and after every start and stop, and counts a command as done only when the car reports it. Add battery protection with your own minimum level, and get phone messages with a Stop button. If someone drives the car, the climate is handed over to the driver. Scheduling is off until you turn it on. See the [Preconditioning guide](docs/PRECONDITIONING.md).
+- **Complete translations on the Sessions page:** the heading, counts, chart, tooltips, period tiles and session cards now read fully in Spanish, Greek, German and Italian.
+- **A fuller gallery:** new screenshots of the settings pages, charging locations, charging profiles on the card and the health checks.
+- **Larger inside temperature:** the Large circle climate tile shows the inside temperature bigger, so it reads at a glance.
+- **New button layouts:** show the main buttons and open the rest from a **More** button on the car image, or put every button in that panel. A **Swipe pages** layout lets you swipe between button pages. Choose one under **Controls → Button style → Layout**.
+- **Cleaner control panel:** the More panel opens under the image and closes itself when a button opens a popup, so one tap on X is enough. Rows with fewer than five buttons are centred.
+- **“Free charging” instead of €0.00:** when every priced session is free, the Energy summary and daily totals say so.
+- **Fixes:** Diagnostics says how many sensors are unavailable instead of “All OK”, read-only info tiles no longer ask for a confirmation before failing, and the five main buttons keep their spacing on narrow phones.
+
+Earlier highlights from 0.2.0:
+
 
 - **Electric or hybrid, decided for you:** the car is detected as Electric or Plug-in hybrid at setup, and **Automatic** keeps following its fuel sensors. An electric car shows no fuel tiles, fuel colours, petrol history or fuel health checks.
 - **Phone notifications in your language:** alerts, Live notifications, their buttons and dates follow the Home Assistant language (Italian, Spanish, German, Greek or English). Health messages are translated too.
@@ -53,6 +67,10 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 <tr><td width="50%"><img src="docs/images/feature-car-view-day.png" alt="Car View with a day sky"></td><td width="50%"><img src="docs/images/feature-car-view-dusk.png" alt="Car View with a dusk sky"></td></tr>
 </table>
 
+### Preconditioning
+
+<p align="center"><img src="docs/images/feature-preconditioning.png" alt="Preconditioning on the card: temperature, duration, Start, schedules and notifications" width="100%"></p>
+
 ### Charging and costs
 
 <table>
@@ -75,6 +93,15 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 <tr><td width="50%"><img src="docs/images/feature-sessions-page.png" alt="Sessions page with the battery and petrol history"></td><td width="50%"><img src="docs/images/feature-notifications-page.png" alt="Notifications page"></td></tr>
 </table>
 
+### Settings and health
+
+<table>
+<tr><td width="50%"><img src="docs/images/feature-settings-appearance.png" alt="Appearance settings"></td><td width="50%"><img src="docs/images/feature-settings-colours.png" alt="Colour settings"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-settings-controls.png" alt="Controls settings"></td><td width="50%"><img src="docs/images/feature-settings-diagnostics.png" alt="Diagnostics settings"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-settings-charging.png" alt="Charging settings"></td><td width="50%"><img src="docs/images/feature-card-profiles.png" alt="Charging profiles on the card"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-charging-locations.png" alt="Charging locations"></td><td width="50%"><img src="docs/images/feature-health.png" alt="Health checks"></td></tr>
+</table>
+
 ## How it started
 
 Deepal Companion started as a personal project: a Home Assistant card I made for my own Deepal S05. I wanted a place to see the car’s status, use its controls and make the dashboard feel like something designed for the car.
@@ -89,9 +116,9 @@ Made for my car, shared for yours.
 [![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rmxs&repository=deepal-S05-Companion&category=integration)
 
 
-## Version 0.2.0
+## Version 1.0.0
 
-This release adds charging-profile reordering, chart zoom, custom entity actions, translated phone notifications and cleaner electric-car views. See [CHANGELOG.md](CHANGELOG.md) for release notes. After updating, restart Home Assistant and hard-refresh the browser. Saved settings and charging records are kept.
+This release adds remote climate preconditioning with schedules, battery protection and phone notifications, completes the translations on the Sessions page and adds new screenshots to the gallery. See [CHANGELOG.md](CHANGELOG.md) for release notes. After updating, restart Home Assistant and hard-refresh the browser. Saved settings and charging records are kept.
 
 ## Features
 
@@ -147,6 +174,28 @@ This release adds charging-profile reordering, chart zoom, custom entity actions
 - Import of available Home Assistant Recorder sessions and charging readings.
 - JSON export and database backup.
 
+### Preconditioning
+
+- Start and stop the cabin climate from the card (a **Preconditioning** button with a quick panel) or from **Companion → Preconditioning**, with temperature and duration bars. The last choices are remembered.
+- Schedules: once, daily, Mon–Fri or custom days, either **Start at** a time or **Ready by** a time. Scheduling is off by default.
+- Every start and stop refreshes the car’s data first, asks the car for a fresh report right after the command and again while waiting, and refreshes once more afterwards. A command counts only when the car’s fresh report confirms it, with limited retries that are skipped when the car already reached the wanted state.
+- Plain-language explanations when something fails, for example when the car is switched on or being driven, in which case the climate is handed over to the driver.
+- Battery protection with your own minimum level (10–50 %): block a start, stop a running session, and choose whether it applies while charging.
+- Phone notifications for results and problems, sharing the phone list with Live climate, with a Stop button and a test button.
+- A “Your setup in short” summary, a diagnostics box and every action in **Notifications → Recent activity** and the Home Assistant log.
+- The car limits remote climate to 15 minutes. Companion never extends it, and times shown are estimates.
+
+#### How to: warm or cool the car before you leave
+
+1. **Check the basics once.** Open **Companion → Preconditioning**. The page should show the vehicle and no error. Preconditioning needs the Deepal Alternative integration signed in, and the car parked and switched off.
+2. **Start by hand.** On the card, tap **Preconditioning**. Set the temperature and the duration (the car allows up to 15 minutes), then press **Start preconditioning**. The status goes from **Starting** to **Verifying** to **Active** once the car confirms the climate is on. Press **Stop preconditioning** to end it early.
+3. **Set a schedule (optional).** On the Preconditioning page, open **Schedules** and press **New**. Choose **Once**, **Daily**, **Mon–Fri** or **Custom days**. Choose **Start at** a time, or **Ready by** a time (the climate then starts earlier by the preparation time). Pick the temperature and duration and save. Then turn on **Scheduled preconditioning**: schedules never run while it is off.
+4. **Protect the battery.** Under **Battery protection**, choose your minimum level (10–50 %). A start is blocked at or below it, and a running session stops when the battery drops to it.
+5. **Get notified.** Under **Notifications**, turn on the switch, choose the phones and the events you want, and press **Send test notification**. “Sent to 1 of 1 phones” means Home Assistant accepted it.
+6. **Check the result.** The **Diagnostics** box shows the last confirmed state, the last start and stop, any failure and the session history. The history keeps 30 days and scrolls when it is long. Administrators can empty it with **Clear history**. Every action is also in **Notifications → Recent activity**.
+
+If something does not work, see [Preconditioning troubleshooting](docs/TROUBLESHOOTING.md) and the full [Preconditioning guide](docs/PRECONDITIONING.md).
+
 ### Notifications
 
 - Background alerts that work while the card and dashboard are closed.
@@ -175,7 +224,7 @@ This release adds charging-profile reordering, chart zoom, custom entity actions
 
 ## Requirements
 
-- Home Assistant **2026.3.0 or newer**.
+- Home Assistant **2026.7.0 or newer**.
 - [**Deepal Alternative**](https://github.com/Sunek0/ha-deepal-alternative), configured with your vehicle and its entities enabled.
 - **Marketplace** on Home Assistant 2026.11 or newer, or **HACS** on earlier supported versions.
 - The **Home Assistant Companion App** for phone notifications.
@@ -199,7 +248,7 @@ On Home Assistant versions before 2026.11, use **HACS → ⋮ → Custom reposit
 
 ## Find your settings
 
-The dashboard has four main pages: **Card Settings → Notifications → Sessions → Charging Profiles**.
+The dashboard has five main pages: **Card Settings → Notifications → Preconditioning → Sessions → Charging Profiles**.
 
 | Open | What you can configure |
 | --- | --- |
@@ -212,6 +261,7 @@ The dashboard has four main pages: **Card Settings → Notifications → Session
 | **Card Settings → Diagnostics & tyres** | Warning indicators, tyre units and pressure limits |
 | **Card Settings → Advanced** | Show “Deepal Card” in the sidebar, vehicle type (Automatic, Plug-in hybrid or Electric), paint, wheels, capacities, custom photos, sensor mapping, custom diagnostics and configuration backup/reset |
 | **Notifications** | Devices, alerts, timing, messages, quiet hours, Live notifications, tests and recent activity |
+| **Preconditioning** | Manual start and stop, schedules, battery protection, preconditioning notifications, retries and diagnostics |
 | **Sessions** | Charging history, costs, curves, filters, sorting, charts and data options |
 | **Charging Profiles** | Charging locations, tariffs, free charging, energy sources and charger sensors |
 
@@ -230,6 +280,7 @@ Use **Sessions → Data options** to import available Recorder charges, export J
 - [Installation and updates](docs/INSTALLATION.md)
 - [Step-by-step user guide](docs/USAGE.md)
 - [Complete settings reference](docs/SETTINGS.md)
+- [Preconditioning](docs/PRECONDITIONING.md)
 - [Phone alerts and Live notifications](docs/NOTIFICATIONS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Report an issue](https://github.com/rmxs/deepal-S05-Companion/issues)

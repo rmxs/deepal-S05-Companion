@@ -15,7 +15,7 @@ from .phone_text import tr
 DEFAULT = {"enabled": False, "devices": [], "min_interval": 300,
            "battery_step": 5, "show_timer": True, "max_age": 1800, "icon": "", "url": ""}
 
-RULE = {"id": "live_charging", "name": "Live charging", "data": {"notification_icon": "mdi:ev-station"}}
+RULE = {"id": "live_charging", "name": "Live charging", "data": {"notification_icon": "mdi:lightning-bolt-circle"}}
 
 
 def validate_live(value):
@@ -150,26 +150,29 @@ class LiveCharging:
         key = hashlib.sha256(self.runtime.vehicle.encode()).hexdigest()[:20]
         return "dc_test_" + key if test else "dc_charge_" + key + "_" + uuid.uuid4().hex[:16]
 
-    def payload(self, snapshot, options, tag, test=False):
-        updated = local_time(snapshot["updated"], "%d %b %H:%M", self.hass)
+    def payload(self, snapshot, options, tag, test=False, now=None):
+        updated = local_time(snapshot["updated"], "%H:%M", self.hass)
         status = tr(self.hass, "Charging" if snapshot["charging"] else "Not charging")
         parts = [(tr(self.hass, "Test") + " · " if test else "") + status, str(snapshot["battery"]) + "%"]
-        if snapshot["charging"] and snapshot["current"] is not None:
-            parts.append(f'{snapshot["mode"]} · {snapshot["current"]:g} A')
-        parts.append(tr(self.hass, "Reported") + " " + updated)
+        remaining = None
+        if options["show_timer"] and snapshot["charging"] and snapshot["end"]:
+            # Hours and minutes as text (a phone timer always counts seconds); it is refreshed with every update.
+            minutes = max(1, round((snapshot["end"] - (time.time() if now is None else now)) / 60))
+            span = f"{minutes // 60}h {minutes % 60}m" if minutes >= 60 else f"{minutes} min"
+            remaining = tr(self.hass, "Est. {0} remaining").replace("{0}", span)
+        parts.append(tr(self.hass, "Updated") + " " + updated)
         color = self.runtime.config.get("lvl_green", "#63cba3")
         if not isinstance(color, str) or not re.fullmatch(r"#[a-fA-F0-9]{6}", color):
             color = "#63cba3"
         data = {"tag": tag, "live_update": True, "progress": snapshot["battery"], "progress_max": 100,
-                "critical_text": str(snapshot["battery"]) + "%", "notification_icon": options.get("icon") or "mdi:ev-station",
-                "color": color, "notification_icon_color": color, "progress_bar_color": color, "text_color": color,
+                "critical_text": str(snapshot["battery"]) + "%", "notification_icon": options.get("icon") or "mdi:lightning-bolt-circle",
+                "color": color, "notification_icon_color": color, "progress_bar_color": color, "text_color": "#FFFFFF",
                 "silent": True, "alert_once": True, "chronometer": False}
         if options.get("url"):
             data.update(url=options["url"], clickAction=options["url"])
-        if options["show_timer"] and snapshot["charging"] and snapshot["end"]:
-            data.update(chronometer=True, when=snapshot["end"], when_relative=False)
-        # The title is the information itself; the message carries the details.
-        return {"title": " · ".join(parts[:2]), "message": " · ".join(parts[2:]), "data": data}
+        # The title is the state and level; the message starts with the time left, then the details.
+        details = ([remaining] if remaining else []) + parts[2:]
+        return {"title": " · ".join(parts[:2]), "message": " · ".join(details), "data": data}
 
     async def send(self, device, payload):
         try:
@@ -226,7 +229,7 @@ class LiveCharging:
                 refreshed = now - previous.get("sent", 0) >= 300 and snap["updated"] > previous.get("updated", 0)
                 if previous and not changed and not refreshed:
                     continue
-                result = await self.send(device, self.payload(snap, options, self.state["tag"]))
+                result = await self.send(device, self.payload(snap, options, self.state["tag"], now=now))
                 self.last_attempt[device] = now
                 if result["status"] == "accepted":
                     active[device] = {"sent": now, "signature": signature, "end": end, "updated": snap["updated"]}

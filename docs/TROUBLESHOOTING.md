@@ -64,6 +64,25 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 6. If the phone was replaced, recheck its Mobile App registration and recipient selection.
 7. For Live notifications, follow the separate [requirements and test steps](NOTIFICATIONS.md#live-notifications-on-the-lock-screen).
 
+## Preconditioning does not start, or fails
+
+1. **“The car is switched on or being driven”** (Deepal code 1036): remote climate works only when the car is parked and switched off. Companion does not retry and hands the climate over to the driver.
+2. **“The car did not answer in time”:** the car may be asleep or have a weak mobile signal. Companion asks for fresh data before every start and stop, and retries up to the number of attempts set under **General → Advanced: retries and checks**.
+3. **Stop or Start was “not confirmed” although the car did change:** Companion asks the car for a fresh report after every command. If the car still does not send one within the wait time (**General → Advanced: retries and checks**), the attempt counts as not confirmed. Increase **Wait for the car to answer**, and check the Deepal Alternative integration and the car’s mobile signal.
+4. **“The Deepal sign-in has expired”:** open Deepal Alternative in Home Assistant and sign in again.
+5. **“Deepal refused because too many commands were sent”:** wait a little. Companion pauses before trying again.
+6. **Start blocked by the battery:** check **Battery protection** on the Preconditioning page. The last battery reading is refreshed before every start. If the car still does not report its battery level, the start is blocked on purpose.
+7. **A schedule did not run:** check that **Scheduled preconditioning** is on (it is off by default), that the schedule is enabled, and **Notifications → Recent activity** for “skipped” or “missed”. A schedule that is more than five minutes late because Home Assistant was not running is recorded as missed.
+8. **Remote climate stops after 15 minutes:** this is the car’s own limit. Companion never extends it.
+8. **“Unknown operation” on the Preconditioning page:** restart Home Assistant after updating.
+
+## A preconditioning notification does not arrive
+
+1. Open **Notifications → Preconditioning**, choose a phone and press **Send test notification**.
+2. “Sent to 1 of 1 phones” means Home Assistant accepted the message. Arrival on the phone is not confirmed, so also check the phone’s notification permission for the Home Assistant app.
+3. Check the event you expect is switched on, the main **Notifications** switch is on, and the phone is selected.
+4. Check **Settings → System → Logs** for “Error sending notification”, and restart Home Assistant after an update.
+
 ## The lock time looks wrong
 
 1. The card reads the car’s cloud about every 5 minutes, and an unlock lasts only seconds, so a quick unlock and lock between two readings is never seen.

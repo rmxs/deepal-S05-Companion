@@ -24,6 +24,8 @@ module.exports = async page => {
   await panel.evaluate(p=>p.setHealthResult({status:'ok'}));assert.equal(await panel.locator('[data-mode=health]').evaluate(button=>button.classList.contains('health-attention')),false);
   const inactive=await board.locator('[data-alert-id]').evaluateAll(rows=>{const row=rows.find(r=>!r.querySelector('input').checked);if(!row)return null;const style=getComputedStyle(row.firstElementChild),track=getComputedStyle(row.querySelector("input").nextElementSibling);return {opacity:Number(style.opacity),filter:style.filter,track:track.backgroundColor};});
   assert(inactive&&inactive.opacity<=.6&&inactive.filter.includes('grayscale(1)'), 'Disabled alert content must be muted while its switch remains visible');
+  await board.locator('#master-panel-toggle').evaluate(e=>{if(!e.checked)e.click();});
+  await board.locator('.device-pill').first().click();
   await board.locator('[data-alert-id=unlocked] [data-alert-open]').first().click();
   const detail = board.locator('#view-detail'); await detail.waitFor({state: 'visible'});
   assert.equal(await board.locator('#input-park').count(), 0, 'the old Parked for field is gone');

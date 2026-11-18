@@ -5,9 +5,9 @@ const styles=`
 .health{display:grid;gap:12px}
 .health-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .health-summary h2{margin:0;font-size:16px;flex:1;min-width:160px}
-.health-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;color:rgb(var(--health-color));background:rgb(var(--health-color)/.14)}
+.health-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;color:rgb(var(--health-color));background:rgba(var(--health-color),.14)}
 .health-chip ha-icon{--mdc-icon-size:18px}
-.health-ok{--health-color:52,211,153}.health-warning{--health-color:251,191,36}.health-error{--health-color:248,113,113}
+.health-ok{--health-color:52,211,153}.health-warning{--health-color:var(--ds-warn,250,204,21)}.health-error{--health-color:248,113,113}
 .health-meta{font-size:12px;color:var(--secondary-text-color)}
 .health-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .health-row{display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border:1px solid var(--divider-color);border-radius:12px;background:var(--card-background-color);border-left:3px solid rgb(var(--health-color))}

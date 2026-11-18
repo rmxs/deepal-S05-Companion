@@ -4,9 +4,9 @@ module.exports=async page=>{
   const panel=page.locator('deepal-companion-panel');
   await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').settings);
   assert.equal(new URL(page.url()).hash,'#card');
-  assert.deepEqual(await panel.locator('nav [data-mode]>span').allTextContents(),['Card Settings','Notifications','Sessions','Charging Profiles','Health']);
-  assert.deepEqual(await panel.locator('nav [data-mode]').evaluateAll(buttons=>buttons.map(button=>button.dataset.mode)),['settings','notifications','history','chargers','health']);
-  assert.equal(await panel.locator('nav [data-mode]>ha-icon[aria-hidden=true]').count(),5);
+  assert.deepEqual(await panel.locator('nav [data-mode]>span').allTextContents(),['Card Settings','Notifications','Sessions','Charging Profiles','Preconditioning','Health']);
+  assert.deepEqual(await panel.locator('nav [data-mode]').evaluateAll(buttons=>buttons.map(button=>button.dataset.mode)),['settings','notifications','history','chargers','preconditioning','health']);
+  assert.equal(await panel.locator('nav [data-mode]>:is(ha-icon,svg)[aria-hidden=true]').count(),6,'every tab has a decorative icon (Preconditioning uses its own SVG)');
   for(const width of [320,360,390,768,1440]){await page.setViewportSize({width,height:1050});assert(await panel.locator('nav').evaluate(nav=>nav.scrollWidth<=nav.clientWidth+1&&[...nav.children].every(button=>button.scrollWidth<=button.clientWidth+1)),'Navigation labels fit at '+width);}
   await page.setViewportSize({width:1440,height:1050});
   const version=require('../custom_components/deepal_companion/manifest.json').version;

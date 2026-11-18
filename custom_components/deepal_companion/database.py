@@ -13,10 +13,23 @@ from .const import DEFAULT_PROFILES, DEFAULT_PROMPT_MIN_GAIN, DEFAULT_PROMPT_REC
 from .storage import HistoryStorage
 
 UNDO_DAYS = 30  # a deleted charge can be restored for this long
+HISTORY_POINT_BUDGET = 5000  # max points per entity returned by history(); longer windows are thinned
 
 
 def encode(value):
     return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+
+
+
+def thin_rows(rows, budget):
+    """Keep at most about `budget` rows, always including the first and last so charts span the window."""
+    if len(rows) <= budget:
+        return rows
+    stride = -(-len(rows) // budget)  # ceiling division
+    kept = [r for i, r in enumerate(rows) if i % stride == 0]
+    if kept[-1] is not rows[-1]:
+        kept.append(rows[-1])
+    return kept
 
 
 class _Snapshot:
@@ -36,6 +49,15 @@ class _Snapshot:
 
     def session_page(self, vehicle, before=None, limit=5, location="", sort="newest"):
         return self._archive.session_page(vehicle, before, limit, location, sort, db=self._db)
+
+    def list_vehicles(self):
+        return self._archive.list_vehicles(db=self._db)
+
+    def config(self, vehicle, view=None):
+        return self._archive.config(vehicle, view, db=self._db)
+
+    def summary(self, vehicle):
+        return self._archive.summary(vehicle, db=self._db)
 
 
 class Database(HistoryStorage):
@@ -172,8 +194,8 @@ class Database(HistoryStorage):
                 current["_configured_battery"] = config["_configured_battery"]
                 db.execute("UPDATE vehicles SET name=?, config=? WHERE id=?", (name, encode(current), vehicle))
 
-    def list_vehicles(self):
-        with self.connect() as db:
+    def list_vehicles(self, db=None):
+        with self._use(db) as db:
             return [
                 {"id": r["id"], "name": r["name"], "config": json.loads(r["config"]),
                  "views": [{"id": v["id"], "name": v["name"], "revision": v["revision"]}
@@ -181,8 +203,8 @@ class Database(HistoryStorage):
                 for r in db.execute("SELECT * FROM vehicles ORDER BY created")
             ]
 
-    def config(self, vehicle, view=None):
-        with self.connect() as db:
+    def config(self, vehicle, view=None, db=None):
+        with self._use(db) as db:
             car = db.execute("SELECT * FROM vehicles WHERE id=?", (vehicle,)).fetchone()
             if not car:
                 raise ValueError("Unknown vehicle")
@@ -251,7 +273,8 @@ class Database(HistoryStorage):
             elif action == "delete":
                 if db.execute("SELECT COUNT(*) FROM views WHERE vehicle=?", (vehicle,)).fetchone()[0] <= 1:
                     raise ValueError("Keep at least one display profile")
-                db.execute("DELETE FROM views WHERE vehicle=? AND id=?", (vehicle, view))
+                if not db.execute("DELETE FROM views WHERE vehicle=? AND id=?", (vehicle, view)).rowcount:
+                    raise ValueError("Unknown display profile")
             else:
                 raise ValueError("Unknown profile action")
         return {"view_id": view}
@@ -362,17 +385,17 @@ class Database(HistoryStorage):
         result = {}
         with self._use(db) as db:
             for key, entity, start, end in requests:
-                rows = self._history_rows(db, vehicle, entity, start, end)
+                rows = self._history_rows(db, vehicle, entity, start, end, apply_exclusions=False)  # billing ignores curve edits
                 unit = self._prior_reading(db, vehicle, entity, end, unit_only=True)
                 result[key] = {"readings": [[r["t"] * 1000, r["state"]] for r in rows], "unit": unit["unit"] if unit else ""}
         return result
 
-    def history(self, vehicle, entities, start, end):
+    def history(self, vehicle, entities, start, end, db=None, budget=HISTORY_POINT_BUDGET):
         result = {}
-        with self.connect() as db:
+        with self._use(db) as conn:
             for entity in entities:
-                rows = self._history_rows(db, vehicle, entity, start, end)
-                result[entity] = [{"lu": r["t"], "s": r["state"]} for r in rows]
+                rows = self._history_rows(conn, vehicle, entity, start, end)
+                result[entity] = [{"lu": r["t"], "s": r["state"]} for r in (thin_rows(rows, budget) if budget else rows)]
         return result
 
     def save_session(self, vehicle, data):
@@ -394,8 +417,11 @@ class Database(HistoryStorage):
                     entity = (entities or {}).get(role)
                     if entity and samples:
                         prior = {r["t"] for r in self._history_rows(db, vehicle, entity, samples[0][0]/1000, samples[-1][0]/1000)}
+                        # Use the unit the live sensor already reports, so pricing reads the curve in the same unit.
+                        known = self._prior_reading(db, vehicle, entity, samples[-1][0]/1000, unit_only=True)
+                        unit = known["unit"] if known else ("%" if role == "battery" else "A")
                         db.executemany("INSERT OR IGNORE INTO readings VALUES(?,?,?,?,?)",
-                                       [(vehicle, entity, t/1000, str(value) if value is not None else "unavailable", "%" if role == "battery" else "A") for t, value in samples if t/1000 not in prior])
+                                       [(vehicle, entity, t/1000, str(value) if value is not None else "unavailable", unit) for t, value in samples if t/1000 not in prior])
                 existing = db.execute("SELECT id,data FROM sessions WHERE vehicle=? AND start<=? AND end>=? LIMIT 1", (vehicle, end, start)).fetchone()
                 if existing:
                     saved = json.loads(existing["data"])
@@ -484,19 +510,18 @@ class Database(HistoryStorage):
         with self.connect() as db:
             created = now if now is not None else time.time()
             for entity in entities:
-                db.execute("INSERT INTO reading_exclusions VALUES(?,?,?,?,?)", (vehicle, entity, start, end, created))
-                db.execute("DELETE FROM readings WHERE vehicle=? AND entity=? AND t>=? AND t<=?", (vehicle, entity, start, end))
+                db.execute("INSERT INTO reading_exclusions VALUES(?,?,?,?,?)", (vehicle, entity, start, end, created))  # raw readings are kept
 
-    def session_curve(self, vehicle, ident, entities):
-        with self.connect() as db:
-            row = db.execute("SELECT data FROM sessions WHERE vehicle=? AND id=?", (vehicle, ident)).fetchone()
-        if not row:
-            raise ValueError("Charging session was not found")
-        session = json.loads(row["data"])
-        series = {}
-        for role, entity in session.get("curve_entities", entities).items():
-            if entity:
-                series[role] = self.history(vehicle, [entity], session["s"]/1000, session["e"]/1000).get(entity, [])
+    def session_curve(self, vehicle, ident, entities, db=None, budget=HISTORY_POINT_BUDGET):
+        with self._use(db) as conn:
+            row = conn.execute("SELECT data FROM sessions WHERE vehicle=? AND id=?", (vehicle, ident)).fetchone()
+            if not row:
+                raise ValueError("Charging session was not found")
+            session = json.loads(row["data"])
+            series = {}
+            for role, entity in session.get("curve_entities", entities).items():
+                if entity:
+                    series[role] = self.history(vehicle, [entity], session["s"]/1000, session["e"]/1000, db=conn, budget=budget).get(entity, [])
         for role, readings in session.get("curve", {}).items():
             if readings:
                 series[role] = [{"lu": t/1000, "s": value} for t, value in readings]
@@ -571,8 +596,8 @@ class Database(HistoryStorage):
                 "locations": [{"id": ident, "name": name} for ident, name in sorted(locations.items(), key=lambda item: item[1].casefold())],
                 "next_before": next_before}
 
-    def summary(self, vehicle):
-        records = self.sessions(vehicle)
+    def summary(self, vehicle, db=None):
+        records = self.sessions(vehicle, db=db)
         completed = [s for s in records if not s["live"]]
         return {"sessions": len(completed), "active": next((s for s in records if s["live"]), None),
                 "battery_kwh": round(sum(s.get("kwh") or 0 for s in completed), 4)}
@@ -666,15 +691,15 @@ class Database(HistoryStorage):
         cars = [v for v in self.list_vehicles() if v["id"] == vehicle]
         if not cars:
             raise ValueError("Unknown vehicle")
-        with self.connect() as db:
+        with self.connect() as db:  # one connection for the whole export, so curves are read from one snapshot
             views = [{"id": r["id"], "name": r["name"], "config": json.loads(r["config"])}
                      for r in db.execute("SELECT * FROM views WHERE vehicle=?", (vehicle,))]
-        sessions = self.sessions(vehicle, include_curve=True)
-        for session in sessions:
-            if session.get("curve_entities"):
-                saved = self.session_curve(vehicle, session["id"], {})
-                session["curve"] = {role: [[point["lu"]*1000, point["s"]] for point in series]
-                                    for role, series in saved["series"].items()}
+            sessions = self.sessions(vehicle, include_curve=True, db=db)
+            for session in sessions:
+                if session.get("curve_entities"):
+                    saved = self.session_curve(vehicle, session["id"], {}, db=db, budget=None)  # exports keep every point
+                    session["curve"] = {role: [[point["lu"]*1000, point["s"]] for point in series]
+                                        for role, series in saved["series"].items()}
         return {"format": "deepal_companion", "version": 1, "exported": time.time(),
                 "vehicle": cars[0], "views": views, "costs": self.get(vehicle, "costs", {}),
                 "sessions": sessions,

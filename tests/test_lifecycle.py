@@ -66,6 +66,16 @@ class Flow:
     def async_abort(self, **kwargs):
         return {"type": "abort", **kwargs}
 module("homeassistant.config_entries", ConfigFlow=Flow, OptionsFlow=Flow)
+class Store:
+    """In-memory stand-in for homeassistant.helpers.storage.Store (load/save only)."""
+    saved = {}
+    def __init__(self, hass, version, key):
+        self.key = key
+    async def async_load(self):
+        return Store.saved.get(self.key)
+    async def async_save(self, data):
+        Store.saved[self.key] = json.loads(json.dumps(data))
+module("homeassistant.helpers.storage", Store=Store)
 module("homeassistant.helpers.selector", EntitySelectorConfig=lambda **kwargs: kwargs,
        EntitySelector=lambda cfg: str, SelectSelectorConfig=lambda **kwargs: kwargs,
        SelectSelector=lambda cfg: __import__("voluptuous").In(cfg["options"]))
@@ -343,7 +353,6 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.runtime.worker.done())
         self.assertEqual(self.runtime._worker_failures, 0)
         self.assertIsNone(self.runtime.degraded_reason)
-        self.runtime = None
 
     async def test_incomplete_shutdown_keeps_last_checkpoint_and_writes_marker(self):
         self.assertTrue(await integration.async_setup(self.hass, {}))

@@ -13,3 +13,4 @@
 /.gitignore export-ignore
 /.gitattributes export-ignore
 /.claudeignore export-ignore
+graphify-out/graph.json merge=graphify

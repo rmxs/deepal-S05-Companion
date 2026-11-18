@@ -16,18 +16,38 @@ module.exports=async page=>{
    const card=window.__DEEPAL_COMPANION_UI.preview(window.curveHass,{vehicle_id:'car',view_id:'mobile'},{prefix:'s05',charge_curve:true});card.id='curve-qa-card';card.inert=false;card.style.width='430px';document.body.append(card);card._force();
  });
  const card=page.locator('#curve-qa-card');try{await card.locator('.curve-chart').waitFor();}catch(error){console.error('Curve state:',await card.evaluate(card=>({current:card._n('sensor.ac_charge_current'),enabled:card._c?.charge_curve,hidden:card._c?.hidden,loading:!!card._curveLoad,controller:!!card._chargingCurve,text:card.shadowRoot.querySelector('.charging-curve-block')?.textContent,requests:window.curveHistoryCalls})));throw error;}
- assert.equal(await card.locator('.curve-dot').count(),3);assert((await card.locator('.curve-line').getAttribute('d')).includes('C'));
+ assert.equal(await card.locator('.curve-dot').count(),3);assert.equal(await card.locator('.curve-line').count(),3,'Readings further apart than the stop time are separate line pieces');assert.equal(await card.locator('.curve-missing').count(),2,'Each silent stretch without battery progress is a grey missing-data segment');assert((await card.locator('.curve-line').last().getAttribute('d')).includes('H'),'The line is a step line');
  const requests=await page.evaluate(()=>window.curveHistoryCalls);
  await page.evaluate(()=>{const card=document.getElementById('curve-qa-card');card.hass={...window.curveHass};card._force();});
  assert.equal(await page.evaluate(()=>window.curveHistoryCalls),requests,'Unchanged HA updates must not refetch history');
  await page.evaluate(()=>{window.curveHass.states['sensor.s05_battery_level']={...window.curveHass.states['sensor.s05_battery_level'],state:'81'};const card=document.getElementById('curve-qa-card');card.hass={...window.curveHass};card._force();});
  await page.waitForFunction(()=>[...document.getElementById('curve-qa-card').shadowRoot.querySelectorAll('.curve-battery')].at(-1)?.dataset.battery==='81');
- const liveCurve=await card.evaluate(card=>{const svg=card.shadowRoot.querySelector('.curve-chart'),numbers=svg.querySelector('.curve-line').getAttribute('d').match(/-?[\d.]+/g).map(Number),lastDot=Math.max(...[...svg.querySelectorAll('.curve-dot')].map(dot=>Number(dot.getAttribute('cx'))));return {dots:svg.querySelectorAll('.curve-dot').length,live:Number(svg.dataset.liveEnd),end:Number(svg.dataset.end),lineEnd:numbers.at(-2),lastDot};});
+ const liveCurve=await card.evaluate(card=>{const svg=card.shadowRoot.querySelector('.curve-chart'),numbers=[...svg.querySelectorAll('.curve-line')].at(-1).getAttribute('d').match(/-?[\d.]+/g).map(Number),lastDot=Math.max(...[...svg.querySelectorAll('.curve-dot')].map(dot=>Number(dot.getAttribute('cx'))));return {dots:svg.querySelectorAll('.curve-dot').length,live:Number(svg.dataset.liveEnd),end:Number(svg.dataset.end),lineEnd:numbers.at(-2),lastDot};});
  assert.equal(liveCurve.dots,3,'A battery update moves the end of the line without adding a dot');assert.equal(liveCurve.live,liveCurve.end);assert(Date.now()-liveCurve.live<60000,'The line ends at the current time');assert(liveCurve.lineEnd>liveCurve.lastDot+50&&Math.abs(liveCurve.lineEnd-548)<1,'The line runs past the last current change to now');
  assert.equal(await page.evaluate(()=>window.curveHistoryCalls),requests,'A battery update must not refetch history');
  await page.evaluate(()=>{window.curveHass.states['sensor.s05_ac_charge_current'].state='18';window.curveHass.states['sensor.s05_ac_charge_current'].last_changed=new Date().toISOString();const card=document.getElementById('curve-qa-card');card.hass={...window.curveHass};card._force();});
  await page.waitForFunction(()=>document.getElementById('curve-qa-card').shadowRoot.querySelectorAll('.curve-dot').length===4);
  if(process.env.FEATURE_CAPTURE)await card.locator('.charging-curve-block').screenshot({path:process.env.FEATURE_CAPTURE+'-live-curve.png'});
+ /* A charge stopped and restarted is one continuous curve. Changes under 0.2 A are not drawn (9.5 to 9.6 A here) and there are no orange stop markers */
+ for(const dots of [4]){
+  await page.evaluate(()=>{
+   const now=Date.now(),base=window.testHass,states=structuredClone(base.states),m=1/1000*60000;
+   for(const [key,value]of [['ac_charge_current',12],['dc_charge_current',0]])states['sensor.s05_'+key]={...states['sensor.s05_'+key],state:String(value),last_changed:new Date(now-300000).toISOString()};
+   const hass={...base,states,callWS:async message=>{
+     if(message.op==='summary')return {active:{s:now-1800000}};
+     if(message.type==='history/history_during_period')return {'sensor.s05_ac_charge_current':[{lu:(now-1800000)/1000,s:'15.2'},{lu:(now-1680000)/1000,s:'0'},{lu:(now-1680000+11000)/1000,s:'9.5'},{lu:(now-1200000)/1000,s:'9.6'},{lu:(now-600000)/1000,s:'0'},{lu:(now-300000)/1000,s:'12'}],'sensor.s05_dc_charge_current':[{lu:(now-1800000)/1000,s:'0'}],'sensor.s05_battery_level':[{lu:(now-1800000)/1000,s:'40'}]};
+     return base.callWS(message);
+   }};
+   document.getElementById('stop-restart-card')?.remove();
+   const card=window.__DEEPAL_COMPANION_UI.preview(hass,{vehicle_id:'car',view_id:'mobile'},{prefix:'s05',charge_curve:true});card.id='stop-restart-card';card.inert=false;card.style.width='430px';document.body.append(card);card._force();
+  });
+  await page.locator('#stop-restart-card .curve-chart').waitFor();
+  const shown=await page.evaluate(()=>[...document.getElementById('stop-restart-card').shadowRoot.querySelectorAll('.curve-dot')].length);
+  assert.equal(shown,dots,'Stop/restart charge: every drawn reading has a dot, small current changes are not drawn');
+  const markers=await page.evaluate(()=>document.getElementById('stop-restart-card').shadowRoot.querySelectorAll('.curve-stop,.curve-gap').length);
+  assert.equal(markers,0,'No orange stop markers or dashed gap lines');
+ }
+ await page.evaluate(()=>document.getElementById('stop-restart-card')?.remove());
  await page.evaluate(()=>{const card=document.getElementById('curve-qa-card');window.__DEEPAL_COMPANION_UI.updatePreview(card,{prefix:'s05',charge_curve:false});});assert.equal(await card.locator('.charging-curve-block').count(),0);
  const chargingControls=await page.evaluate(()=>{
    const card=document.getElementById('curve-qa-card'),ui=window.__DEEPAL_COMPANION_UI;
@@ -43,9 +63,9 @@ module.exports=async page=>{
    window.archivedCurveDialog=module.openCurveDialog(card.shadowRoot,card._hass,()=>({start,end,series:{ac:[{lu:start/1000,s:'8'},{lu:(start+900000)/1000,s:'0'},{lu:(start+901000)/1000,s:'8'},{lu:(start+1800000)/1000,s:'16'},{lu:end/1000,s:'0'}],dc:[],battery:[{lu:start/1000,s:'40'},{lu:(start+1800000)/1000,s:'60'},{lu:end/1000,s:'80'}]}}),{lvl_green:'#42b883'});
  });
  await card.locator('.archived-curve-dialog .curve-chart').waitFor();
- const palette=await card.locator('.archived-curve-dialog .curve-line').evaluate(path=>getComputedStyle(path).stroke);assert.equal(palette,'rgb(52, 229, 164)','Archived curve uses the high-contrast dark-theme series colour');
+ const palette=await card.locator('.archived-curve-dialog .curve-line').last().evaluate(path=>getComputedStyle(path).stroke);assert.equal(palette,'rgb(52, 229, 164)','Archived curve uses the high-contrast dark-theme series colour');
  assert.deepEqual(await card.locator('.archived-curve-dialog .curve-battery').allTextContents(),['40%','60%','80%']);
- assert.equal(await card.locator('.archived-curve-dialog .curve-dot').count(),4,'A momentary zero is hidden while the resumed reading and final stop are kept');await card.locator('.archived-curve-dialog .curve-chart').focus();await page.keyboard.press('Home');assert(await card.locator('.archived-curve-dialog .curve-plot .curve-reading').isVisible(),'Card popup shows the reading bubble inside the graph');
+ assert.equal(await card.locator('.archived-curve-dialog .curve-dot').count(),3,'A momentary zero is hidden, the resumed reading at the same current is not a change, and the 16 A step and the final stop are kept');await card.locator('.archived-curve-dialog .curve-chart').focus();await page.keyboard.press('Home');assert(await card.locator('.archived-curve-dialog .curve-plot .curve-reading').isVisible(),'Card popup shows the reading bubble inside the graph');
  await page.evaluate(()=>{const card=document.getElementById('curve-qa-card');window.savedArchivedCurve=card.shadowRoot.querySelector('.archived-curve-dialog .charging-curve-block');for(let i=0;i<6;i++)card._force();card._c.charge_curve=true;card._force();});
  await page.waitForFunction(()=>!!document.getElementById('curve-qa-card')._chargingCurve);
  await page.evaluate(()=>{const card=document.getElementById('curve-qa-card');card._c.charge_curve=false;card._force();});

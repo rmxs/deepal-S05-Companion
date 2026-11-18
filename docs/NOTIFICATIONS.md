@@ -40,6 +40,18 @@ The device list comes from the Home Assistant Mobile App integration. Recheck yo
 
 Only settings relevant to the selected alert are shown. Some alerts need vehicle sensors that may not be available on every model. **Plugged in, but not charging** can also apply during scheduled charging; choose a suitable delay or leave it off.
 
+## Preconditioning messages
+
+Messages about remote climate preconditioning have their own switch and event list under **Notifications → Preconditioning**. The same choices also appear on the vehicle card’s Preconditioning panel and on **Preconditioning → Notifications**; change them in one place and they change everywhere.
+
+- **Phones:** chosen as pills, like the rest of this page, and shared with **Live climate**. Changing the phones in either place changes both.
+- **Events:** confirmed on and off, failures, unknown state, schedule results, a session ended by the car and battery protection are on by default. Requested starts and stops and retry warnings are off.
+- **Send test notification:** sends an example message to the chosen phones.
+- While the climate runs, the message has a **Stop** button. The running status on the lock screen comes from **Live climate**.
+- Every action is also listed under **Recent activity**, with the phones it was sent to.
+
+Turning these messages off never turns off verification, battery protection or the activity log. The master switch above and the phone’s notification permission still apply. See the [Preconditioning guide](PRECONDITIONING.md).
+
 ## Customise an alert
 
 1. Select the alert row or its edit arrow.
@@ -170,6 +182,11 @@ A test uses a separate notification from a real one, and ending it leaves your r
 
 Alert titles and messages, button names and everything in the Live notifications use the Home Assistant language: English, Italian, Spanish, German or Greek. Other languages stay English. An alert keeps the language it had when you saved it, so choose **Reset alert** or re-save it after changing the Home Assistant language. Titles and messages you wrote yourself are sent as written. Times use the Home Assistant time zone.
 
+### Notification language
+
+At the top of the Notifications page, **Notification language** sets the language of every notification Companion writes: alerts, charging and live updates, and preconditioning. **Automatic** (the default) follows the Home Assistant language; you can also pick English, Greek, German, Spanish or Italian. Only administrators can change it. Texts you wrote yourself are sent as written.
+
+
 ## Recent activity
 
 1. Open **Notifications → Recent activity**.
@@ -180,4 +197,3 @@ Alert titles and messages, button names and everything in the Live notifications
 Deleting activity entries does not delete charging sessions or notification settings.
 
 The notifications button on the card shows a red number for entries you have not opened yet. It is saved per Home Assistant user, so it follows you to other devices, and it clears when you open the list. A user who has never opened it starts at zero. The settings preview does not show the number.
-

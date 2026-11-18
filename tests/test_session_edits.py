@@ -79,6 +79,18 @@ class SessionEditTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.db.exclude_readings("car", [None], self.t, self.t + 1)
 
+    def test_curve_exclusion_keeps_raw_readings_and_billing_inputs(self):
+        with self.db.connect() as db:
+            db.executemany("INSERT INTO readings VALUES(?,?,?,?,?)",
+                           [("car", "sensor.dc", self.t + i * 60, "400" if 10 <= i < 15 else "0", "A") for i in range(30)])
+        before = self.db.pricing_inputs("car", [("k", "sensor.dc", self.t, self.t + 1800)])["k"]["readings"]
+        self.db.exclude_readings("car", ["sensor.dc"], self.t + 600, self.t + 900)
+        with self.db.connect() as db:
+            raw = db.execute("SELECT COUNT(*) FROM readings WHERE entity='sensor.dc'").fetchone()[0]
+        self.assertEqual(raw, 30, "Excluded readings are not deleted")
+        after = self.db.pricing_inputs("car", [("k", "sensor.dc", self.t, self.t + 1800)])["k"]["readings"]
+        self.assertEqual(after, before, "Billing inputs do not change when the curve is edited")
+
 
 if __name__ == "__main__":
     unittest.main()

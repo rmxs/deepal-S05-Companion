@@ -23,10 +23,10 @@ The **Profile** box starts closed. Use the arrow next to the connection badge to
 | On the image | Show/hide Name, Plate, Total range, Cloud connection, Last update (the age badge on the refresh button) and the Settings button (the gear at the bottom right of the image) |
 | Message under the status | None, Rolling or With dots |
 | Top-right buttons | Show/hide and reorder Notifications, View, Diagnostics and Refresh |
-| Control buttons | Show/hide and reorder Lock, Windows, Trunk, Climate, Tyres, Cabin, Flash, Sound signal and Locate |
-| Button layout | Main buttons + More, Rows (5 per row), One row with scroll, or One row (everything fits) |
+| Control buttons | Show/hide and reorder Lock, Windows, Trunk, Climate, Preconditioning, Tyres, Cabin, Flash, Sound signal and Locate |
+| Button layout | Main buttons + More, Main buttons + More on the image (More opens a panel under the image, or takes a free slot in the row), All buttons in More on the image, Swipe pages, or Rows (5 per row) |
 | Button labels | No labels, Status only, Title only or Title + status |
-| Main buttons | Three, four or five buttons in the main row |
+| Main buttons | Three, four or five buttons in the main row (for Swipe pages: buttons per page) |
 | Remaining buttons | Hidden under More or always visible |
 | Button size | Small, Medium or Large |
 | Info | Show/hide and reorder odometer, outside/inside temperature, humidity, fuel level, petrol volume, power status and charging status, when available |
@@ -118,7 +118,9 @@ New warning sensors and custom diagnostic indicators are managed in Advanced.
 | Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
 | Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
 | Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
+| A stop longer than this starts a new charge (min) | In the live curve, a stop shorter than this stays part of the same charge, so a charge you stopped and restarted shows as one curve. It is also the silent time after which a stretch with no battery progress counts as missing data. 1–120, default 15 |
 | Refresh the charging curve every (min) | While charging, the curve's line follows the latest car report. When the car reports nothing new, the line still moves to the current time this often. 1–60, default 5 |
+| Highlight Missing Data | On by default. Gaps between readings where the car reported no battery progress are joined by a lighter grey line and shaded area, and hovering or touching one explains that data is missing with its start, end and duration. Off keeps one plain continuous line. Applies to the card and to saved charges |
 | Full-tank fuel range | Automatic 940 km for hybrids, or a positive override |
 | Hero photos folder | Automatic image folder or a custom folder |
 | State-specific photos | Replace individual available vehicle-state images and check their previews |
@@ -159,6 +161,25 @@ Empty numeric fields display the default as a hint. Enter your own value to over
 - **Edit charge:** location, free charging, price/kWh, measured kWh and total paid.
 - **Curve:** inspect the saved current readings for a charge.
 - **Data options:** Export JSON, Database backup and Import older Recorder charges.
+
+## Preconditioning
+
+The **Preconditioning** page (and the card’s Preconditioning panel) controls remote climate. Settings need Home Assistant administrator rights; everyone can read the status.
+
+| Setting | Available choices |
+| --- | --- |
+| Temperature | 18–32 °C in 0.5 °C steps. The last value you use is remembered for the next Start and for new schedules |
+| Duration | 1–15 minutes (the car limits remote climate to 15 minutes). The last value you use is remembered |
+| Start / Stop | Manual control. Start is disabled while an operation runs or when battery protection blocks it |
+| Scheduled preconditioning | Main switch for all schedules. Off by default; manual Start still works |
+| Schedules (up to 20) | Name, Repeat (Once, Daily, Mon–Fri, Custom days), Mode (Start at, Ready by), Date (Once), Start or Ready time, Duration or Preparation time, Temperature and an on/off switch |
+| Battery protection | Off by default. Minimum battery 10–50 % in 5 % steps, Block START at or below the minimum, Request STOP at the minimum, Apply while charging (on by default) |
+| Preconditioning notifications | Main switch, phones (shared with Live climate), and one switch per event: climate on confirmed, climate off confirmed, session ended by the vehicle, command failed, state could not be confirmed, scheduled run result, battery protection, retry warning, start requested, stop requested |
+| Send test notification | Sends an example message to the chosen phones |
+| Advanced: retries and checks | Attempts 1–3 (default 3), Wait between attempts 10–120 s (default 30 s), Wait for the car to answer 30–180 s (default 90 s) |
+| Diagnostics | Current operation and session IDs, last confirmed state, last successful Start and Stop, last failure, retry count and session history (kept for 30 days, scrolls when long, with a Clear history button for administrators) |
+
+The notification choices and the phones are the same on the card, on this page and on **Notifications → Preconditioning**. **Your setup in short** at the top of the page explains the current choices in plain words. See the [Preconditioning guide](PRECONDITIONING.md).
 
 ## Notifications
 
@@ -201,6 +222,7 @@ See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup
 - Charging-detected reminders for every unanswered recent charge, oldest first; dismissal applies to one charge and one user, and a reminder clears after assignment elsewhere. The minimum battery gain and the number of recent charges checked are set in Card Settings → Advanced.
 - Background notification checks, repeats, quiet hours and stopping reminders after their condition clears or they are dismissed.
 - Live charging start/update/end handling from reported charging state.
+- Preconditioning: fresh vehicle data before and after every start and stop and while waiting for the car’s answer, confirmation from the car’s own report, limited retries, schedules, battery protection and a hand-over to the driver when the car is switched on.
 - Settings updates across cards using the same profile.
 - Date and time display using Home Assistant preferences.
 
@@ -229,6 +251,11 @@ The choice only changes what is shown. A hybrid set to Electric still records fu
 ### Language of phone notifications
 
 Alert titles and messages, the Live charging, Live climate and Left open or unlocked notifications, their buttons and the dates in them use the Home Assistant language (**Settings → System → General**): English, Italian, Spanish, German or Greek. Other languages stay English. An alert is stored in the language that was active when it was saved; edited titles and messages are sent exactly as you typed them. Times use the Home Assistant time zone.
+
+### Notification language
+
+At the top of the Notifications page, **Notification language** sets the language of every notification Companion writes: alerts, charging and live updates, and preconditioning. **Automatic** (the default) follows the Home Assistant language; you can also pick English, Greek, German, Spanish or Italian. Only administrators can change it. Texts you wrote yourself are sent as written.
+
 
 ### Chart navigation
 

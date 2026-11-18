@@ -26,7 +26,7 @@ identity = lambda fn: fn
 module("homeassistant")
 module("homeassistant.auth")
 module("homeassistant.auth.permissions")
-module("homeassistant.auth.permissions.const", POLICY_READ="read")
+module("homeassistant.auth.permissions.const", POLICY_READ="read", POLICY_CONTROL="control")
 module("homeassistant.components")
 module("homeassistant.components.websocket_api", websocket_command=lambda schema: identity, async_response=identity)
 module("homeassistant.core", callback=identity)
@@ -62,6 +62,33 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         saved=self.db.get('car','costs')
         self.assertEqual(saved['profiles'],[])
         self.assertEqual(saved['sessions']['1700000000'],receipt)
+
+    async def test_preconditioning_commands_need_control_permission(self):
+        started = []
+        async def request_start(temperature, duration, source=None):
+            started.append(source); return {"ok": True}
+        async def request_stop(source=None):
+            started.append("stop"); return {"ok": True}
+        self.hub.vehicles["car"].preconditioning = types.SimpleNamespace(entity=lambda logical: "climate.s05_cabin_climate", request_start=request_start, request_stop=request_stop, snapshot=lambda: {})
+        def user(control):
+            connection = Connection()
+            connection.user.permissions.check_entity = lambda entity, rule: rule == "read" or (control and entity == "climate.s05_cabin_climate")
+            return connection
+        for op in ("precondition_start", "precondition_stop"):
+            refused = await self.request(op, {"temperature": 21, "duration": 10}, user(False))
+            self.assertTrue(refused.errors and not refused.results, op + " must be refused without control permission")
+            allowed = await self.request(op, {"temperature": 21, "duration": 10}, user(True))
+            self.assertTrue(allowed.results and not allowed.errors, allowed.errors)
+        self.assertEqual(started, ["manual", "stop"])
+        async def refresh_now():
+            return {"fresh": True}
+        self.hub.vehicles["car"].preconditioning.refresh_now = refresh_now
+        refused = await self.request("precondition_refresh", {}, user(False))
+        self.assertTrue(refused.errors and not refused.results, "refreshing the car data needs control permission")
+        allowed = await self.request("precondition_refresh", {}, user(True))
+        self.assertTrue(allowed.results and not allowed.errors, allowed.errors)
+        reading = await self.request("precondition_get", {}, user(False))
+        self.assertTrue(reading.results and not reading.errors, "reading the state needs only read access")
 
     async def test_history_requests_have_a_bounded_time_window(self):
         result = await self.request('history', {'entity_ids': ['sensor.batt'], 'start_time': 0, 'end_time': 4*365*86400})
@@ -119,12 +146,14 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.view = self.db.list_vehicles()[0]["views"][0]["id"]
         async def db(method, *args):
             return getattr(self.db, method)(*args)
+        async def read_db(load):
+            return load(self.db)
         async def refresh():
             pass
         async def sessions(start, end):
             return self.db.sessions("car", start, end)
         runtime = types.SimpleNamespace(entry=types.SimpleNamespace(data={"battery_entity": "sensor.batt"}, options={}), refresh=refresh, priced_sessions=sessions)
-        self.hub = types.SimpleNamespace(db=db, vehicles={"car": runtime}, setting_keys={"car_color", "battery_kwh", "entities", "prefix", "companion_design", "companion_width", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump"}, changed=lambda vehicle: None)
+        self.hub = types.SimpleNamespace(db=db, read_db=read_db, vehicles={"car": runtime}, setting_keys={"car_color", "battery_kwh", "charge_target", "entities", "prefix", "companion_design", "companion_width", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump"}, changed=lambda vehicle: None)
         self.hass = types.SimpleNamespace(data={"deepal_companion": self.hub})
 
     async def asyncTearDown(self):
@@ -136,6 +165,14 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
             data = {**(data or {}), "expected_revision": self.db.config("car", self.view)["revision"]}
         await api.request(self.hass, connection, {"id": 1, "type": "deepal_companion/request", "op": op, "vehicle_id": "car", "view_id": self.view, "data": data or {}, **extra})
         return connection
+
+    async def test_charge_target_accepts_goals_and_rejects_out_of_range(self):
+        accepted = await self.request('config_patch', {'patch': {'charge_target': 80}})
+        self.assertTrue(accepted.results, accepted.errors)
+        self.assertTrue(accepted.results and not accepted.errors)
+        for bad in (101, -1, True):
+            rejected = await self.request('config_patch', {'patch': {'charge_target': bad}})
+            self.assertTrue(rejected.errors, 'charge_target %r must be refused' % (bad,))
 
     async def test_all_views_are_listed(self):
         c = await self.request("list")
@@ -435,7 +472,10 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_unexpected_failure_gets_a_fixed_message_without_details(self):
         async def failing(method, *args):
             raise RuntimeError('database path /config/.storage secret detail')
+        async def failing_read(load):
+            raise RuntimeError('database path /config/.storage secret detail')
         self.hub.db = failing
+        self.hub.read_db = failing_read
         with self.assertLogs(api._LOGGER, level='ERROR'):
             result = await self.request('summary')
         self.assertEqual(result.errors[0][0], 'unknown_error')

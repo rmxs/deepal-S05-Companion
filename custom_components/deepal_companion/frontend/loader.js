@@ -1,6 +1,6 @@
 /* One bundled resource; retries the short period before HA exposes custom integrations. */
 (() => {
-  const path = "/deepal_companion/frontend/companion-card.js?v=0.2.0&rev=20261115-23";
+  const path = "/deepal_companion/frontend/companion-card.js?v=1.0.0&rev=20261118-35";
   if (customElements.get("deepal-companion-card") || window.__deepalCompanionLoading) return;
   window.__deepalCompanionLoading = true;
   let attempts = 0;

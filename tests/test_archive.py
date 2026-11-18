@@ -17,6 +17,7 @@ sys.modules["companion_test"] = package
 Database = importlib.import_module("companion_test.database").Database
 ChargingEngine = importlib.import_module("companion_test.charging").ChargingEngine
 calculate = importlib.import_module("companion_test.pricing").calculate
+HISTORY_POINT_BUDGET = importlib.import_module("companion_test.database").HISTORY_POINT_BUDGET
 
 
 class ArchiveTests(unittest.TestCase):
@@ -230,6 +231,36 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(self.db.get("one", "engine"), engine)
         values = self.db.pricing_inputs("one", [("atomic", "sensor.ac", 90, 200)])
         self.assertEqual(values["atomic"], {"readings": [[100000, "8"]], "unit": "A"})
+
+
+class HistoryBudgetTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = Database(str(Path(self.tmp.name) / "archive.sqlite"))
+        self.db.initialize()
+        self.db.ensure_vehicle("one", "One", {"prefix": "s05", "battery_entity": "sensor.b", "entities": {}})
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_long_window_is_thinned_but_keeps_both_ends(self):
+        base = 1_000_000.0
+        count = HISTORY_POINT_BUDGET * 3
+        with self.db.connect() as c:
+            c.executemany("INSERT INTO readings VALUES(?,?,?,?,?)",
+                          [("one", "sensor.b", base + i, str(i % 100), "%") for i in range(count)])
+        rows = self.db.history("one", ["sensor.b"], base - 1, base + count)["sensor.b"]
+        self.assertLessEqual(len(rows), HISTORY_POINT_BUDGET + 1)
+        self.assertEqual(rows[0]["lu"], base)
+        self.assertEqual(rows[-1]["lu"], base + count - 1)
+
+    def test_short_window_is_returned_unchanged(self):
+        base = 2_000_000.0
+        with self.db.connect() as c:
+            c.executemany("INSERT INTO readings VALUES(?,?,?,?,?)",
+                          [("one", "sensor.b", base + i, str(i), "%") for i in range(50)])
+        rows = self.db.history("one", ["sensor.b"], base - 1, base + 50)["sensor.b"]
+        self.assertEqual([r["lu"] for r in rows], [base + i for i in range(50)])
 
 
 class ChargingTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 const assert=require('assert'),fs=require('fs'),path=require('path');
 (async()=>{
- const code=fs.readFileSync(path.resolve(__dirname,'../custom_components/deepal_companion/frontend/charging-curve.js'),'utf8'),{smoothPath,changedPoints,chargingWindow,curveRange,batteryAt,filterTransientZeros}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+ const code=fs.readFileSync(path.resolve(__dirname,'../custom_components/deepal_companion/frontend/charging-curve.js'),'utf8'),{smoothPath,changedPoints,chargingWindow,curveRange,missingIntervals,stepPath,displayFlags,batteryAt,filterTransientZeros,liveCurveStart}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
  const points=[[0,100],[10,10],[20,12],[30,30],[40,100]],d=smoothPath(points);
  assert(!/NaN|Infinity/.test(d));assert(d.includes('C'));
  const curves=[...d.matchAll(/C([\d.e+-]+),([\d.e+-]+) ([\d.e+-]+),([\d.e+-]+) ([\d.e+-]+),([\d.e+-]+)/g)];
@@ -25,5 +25,27 @@ const assert=require('assert'),fs=require('fs'),path=require('path');
  assert.deepEqual(guarded.map(point=>point.a),[6,0],'A DC reading that appears as AC charging ends is not a charge');assert.ok(guarded.every(point=>point.mode==='AC'),'The charge stays AC');
  const laterDc={ac:[{lu:1,s:'6'},{lu:100,s:'0'}],dc:[{lu:1,s:'0'},{lu:4000,s:'120'},{lu:5000,s:'0'}]};
  assert.deepEqual(changedPoints(laterDc,'ac','dc','battery',0).map(point=>point.a),[6,0,120,0],'A DC charge that starts later is kept');
- console.log('PASS: changed readings, gap separation, no interpolation overshoot, trimmed charge time, active low/high and DC stop mode.');
+ /* stop, change the current, start, stop, change, start: a running charge keeps every part of it */
+ const restarted=[{t:0,a:8},{t:60000,a:0},{t:240000,a:10},{t:420000,a:0},{t:600000,a:12}];
+ assert.deepEqual(liveCurveStart(restarted,700000),restarted,'Short stops inside a charge keep every part of it');
+ const twoCharges=[{t:0,a:8},{t:60000,a:0},{t:4000000,a:10},{t:4100000,a:0},{t:4200000,a:12}];
+ assert.deepEqual(liveCurveStart(twoCharges,4300000),twoCharges.slice(2),'A stop longer than 15 minutes starts a new charge');
+ assert.deepEqual(liveCurveStart(twoCharges,4300000,120*60000),twoCharges,'A longer chosen gap keeps the earlier part');
+ const quiet=[{t:0,a:8,segment:0},{t:60000,a:9,segment:0},{t:120000,a:0,segment:0},{t:180000,a:7,segment:0}];
+ assert.deepEqual(missingIntervals(quiet,15*60000),[],'Readings closer than the setting, and a genuine 0 A reading, are not missing data');
+ const one=[{t:0,a:8,segment:0},{t:60000,a:9,segment:0},{t:21*60000,a:10,segment:0}];
+ const oneGap=missingIntervals(one,15*60000);assert.deepEqual(oneGap.map(g=>g.index),[1],'One gap longer than the setting');assert.equal(oneGap[0].from,one[1],'Gap starts at the real reading before it');assert.equal(oneGap[0].to,one[2],'Gap ends at the real reading after it');assert.equal(oneGap[0].duration,20*60000);
+ const many=[{t:0,a:8,segment:0},{t:20*60000,a:9,segment:0},{t:40*60000,a:10,segment:0},{t:41*60000,a:0,segment:0},{t:42*60000,a:7,segment:0}];
+ assert.deepEqual(missingIntervals(many,15*60000).map(g=>g.index),[0,1],'Several gaps, none invented inside them');
+ const segment=[{t:0,a:8,segment:0},{t:1000,a:8,segment:1}];assert.deepEqual(missingIntervals(segment,15*60000).map(g=>g.index),[0],'A segment change is bridged as missing data');
+ assert.deepEqual(missingIntervals([],15*60000),[]);assert.deepEqual(missingIntervals([{t:0,a:8}],15*60000),[]);
+ const progressing=[{t:0,a:8,battery:40,segment:0},{t:21*60000,a:10,battery:45,segment:0}];
+ assert.deepEqual(missingIntervals(progressing,15*60000,[{t:5*60000,battery:42},{t:15*60000,battery:44}]),[],'Battery progress inside a silent interval means no missing data');
+ const flat=[{t:0,a:8,battery:40,segment:0},{t:21*60000,a:10,battery:40,segment:0}];
+ assert.deepEqual(missingIntervals(flat,15*60000,[{t:5*60000,battery:40}]).map(g=>g.index),[0],'A long silent interval without battery progress is missing');
+ assert.equal(stepPath([[0,10],[5,20],[9,0]]),'M0,10H5V20H9V0','Step line holds each reading until the next change');
+ assert.deepEqual(displayFlags([{a:10},{a:10.1},{a:10.3},{a:12},{a:0},{a:0.1}]),[true,false,true,true,true,true],'Changes under 0.2 A are hidden; zeros and the last reading stay');
+ assert.deepEqual(displayFlags([{a:10},{a:10.15},{a:10.25}]),[true,false,true],'Each hidden step is compared with the last drawn value');
+ console.log('PASS: missing intervals (single, multiple, zero reading, segment change, empty).');
+ console.log('PASS: changed readings, gap separation, no interpolation overshoot, trimmed charge time, active low/high, DC stop mode and stop/restart charges.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

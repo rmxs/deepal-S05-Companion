@@ -79,10 +79,11 @@ class LiveCharging(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(data["live_update"])
         self.assertEqual(data["progress"], 60)
         self.assertEqual(data["color"], "#11aa22")
-        self.assertIn("16 A", self.calls[0][1]["message"])
-        self.assertIn("Reported", self.calls[0][1]["message"])
+        self.assertNotIn("AC", self.calls[0][1]["message"])
+        self.assertNotIn(" A", self.calls[0][1]["message"])
+        self.assertRegex(self.calls[0][1]["message"], r"^Updated \d{2}:\d{2}$")
         self.assertFalse(data["chronometer"])
-        self.assertEqual(data["notification_icon"], "mdi:ev-station")
+        self.assertEqual(data["notification_icon"], "mdi:lightning-bolt-circle")
         self.assertEqual(live.validate_live({"icon": "mdi:flash"})["icon"], "mdi:flash")
         self.assertEqual(self.activity.payload(self.activity.snapshot(self.now, self.activity.options()), {**self.activity.options(), "icon": "mdi:flash"}, "t")["data"]["notification_icon"], "mdi:flash")
         self.now += 600
@@ -113,13 +114,16 @@ class LiveCharging(unittest.IsolatedAsyncioTestCase):
         self.state("sensor.s05_remaining_charge_time_h_mm", "01:20", age=300)
         await self.activity.tick()
         data = self.calls[0][1]["data"]
-        self.assertEqual(data["when"], self.now - 300 + 4800)
-        self.assertFalse(data["when_relative"])
-        self.assertTrue(data["chronometer"])
+        # Hours and minutes as text (no seconds); the end comes from the sensor timestamp, not the send time.
+        self.assertFalse(data["chronometer"])
+        self.assertNotIn("when", data)
+        self.assertEqual(data["text_color"], "#FFFFFF")
+        self.assertTrue(self.calls[0][1]["message"].startswith("Est. 1h 15m remaining"))
+        self.assertNotRegex(self.calls[0][1]["message"], r"\d:\d\d:\d\d")
         self.now += 120
         self.readings(65)
         await self.activity.tick()
-        self.assertEqual(self.calls[-1][1]["data"]["when"], data["when"])
+        self.assertTrue(self.calls[-1][1]["message"].startswith("Est. 1h 13m remaining"))
 
     async def test_no_invented_timer_for_expired_or_invalid_duration(self):
         for value in ("00:01", "invalid", "00:99"):

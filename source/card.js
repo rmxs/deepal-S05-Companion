@@ -16,7 +16,7 @@ const SETTINGS_TAG = "deepal-s05-settings";
 const EDITOR_TAG = "deepal-s05-card-editor";
 if (customElements.get(TAG)) return;
 
-const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], charge_curve_refresh: [1, 60], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
+const NUM_RANGE = { charge_prompt_min_gain: [0, 100], charge_prompt_recent: [1, 20], charge_spike_jump: [5, 50], charge_curve_refresh: [1, 60], charge_curve_gap: [1, 120], charge_target: [0, 100], bat_t1: [0, 100], bat_t2: [0, 100], bat_t3: [0, 100], fuel_t1: [0, 100], fuel_t2: [0, 100], fuel_t3: [0, 100], image_scale: [0.5, 3] };
 const BAD = ["unknown", "unavailable", "none", "None", "null", ""];
 const TRANSITIONAL = ["locking", "unlocking", "opening", "closing"];
 const CLIMATE_TURN_OFF = 128; // ClimateEntityFeature.TURN_OFF
@@ -38,6 +38,8 @@ const SCRIPT_BASE = (() => {
 /* sections the Minimal / Cockpit designs do not draw: shown greyed out in the Sections list, saved order and visibility stay untouched */
 const DESIGN_UNUSED = { minimal: ["hero", "actions", "status", "stats", "costs"], ultra: ["hero", "actions", "status", "stats", "costs"], cockpit: ["stats"] };
 const SECTIONS = ["hero", "actions", "status", "charge", "curve", "stats", "info", "costs", "reminder"]; /* diagnostics is no longer a section: warnings live on the top Diagnostics button */
+/* Status is drawn on the vehicle image: the Layout list shows it as a line of the Vehicle image row. Reordering moves the other sections and leaves Status where it was saved. */
+const keepStatus = (list, saved) => { const rest = list.filter((x) => x !== "status"), at = saved.indexOf("status"); if (at < 0) return list; rest.splice(Math.min(at, rest.length), 0, "status"); return rest; };
 const SECTION_LABELS = {
   hero: "Vehicle image",
   actions: "Control buttons",
@@ -53,12 +55,13 @@ const HERO_SHOW_OPTS = [["name", "Name"], ["plate", "Plate"], ["range", "Total r
 const HERO_SPACE = { compact: [0, 0], standard: [8, 2.5], airy: [16, 5] }; // [top, bottom] as % of the card width
 const TOP_BTN_IDS = ["bell", "view", "diag", "refresh"]; // the small buttons at the top right of the hero (left to right)
 const TOP_BTN_LABELS = { diag: "Diagnostics", bell: "Notifications (bell)", view: "View switch (Car View)", refresh: "Refresh" };
-const BUTTON_IDS = ["lock", "windows", "trunk", "climate", "tires", "cabin", "flash", "honk", "find"];
+const BUTTON_IDS = ["lock", "windows", "trunk", "climate", "precondition", "tires", "cabin", "flash", "honk", "find"];
 const BUTTON_LABELS = {
   lock: "Lock",
   windows: "Windows",
   trunk: "Trunk",
   climate: "Climate",
+  precondition: "Preconditioning",
   tires: "Tyres",
   cabin: "Interior",
   flash: "Lights",
@@ -86,8 +89,9 @@ const DEFAULTS = {
   buttons_hidden: [],
   top_buttons: ["bell", "view", "diag", "refresh"], // order of the small buttons at the top right
   top_buttons_hidden: [],
-  button_layout: "split", // split (main buttons + "More") | grid (rows) | scroll (one scrolling row) | fit (one row, everything fits)
+  button_layout: "split", // split (main buttons + "More") | image (main buttons, "More" on the image) | imageall (all buttons in "More" on the image) | swipe (pages with dots) | grid (rows)
   climate_ui: "circle", // climate tile: steps (target with − / + and a small power button) | circle (classic: one big on/off circle)
+  energy_ui: "ring", // Energy tile: ring (classic: two arcs in the corner) | gauge (half gauge) | capsule (split capsules with a total range line)
   button_primary: 5, // split: how many buttons (from the start of the list) go in the main row
   buttons_more: "collapse", // split: collapse (hidden behind "More") | show
   button_labels: "status", // none | status | title | both
@@ -98,6 +102,7 @@ const DEFAULTS = {
   diag_ignore: [], // sensors found by "Discovery" that the user dismissed
   hero_show: ["name", "plate", "range", "cloud", "updated"], // what shows on the image: name, plate, range, cloud, updated
   info: ["odometer", "humidity"],
+  charge_cost_selector: true, // charging with the curve hidden: show the cost location selector until a location is saved
   info_order: ["odometer","outside_temp","inside_temp","humidity","fuel_level","fuel_volume","power_status","charge_status"],
   info_custom: [], // [{entity, label, icon, unit, tap_action}]; long press always opens more-info
   entities: {},
@@ -114,7 +119,10 @@ const DEFAULTS = {
   iso_wheels: "cover", // wheels in Car View: cover (20" with caps) · open (20" without caps) · pro (18")
   charge_style: "beside", // line · text · big · beside
   charge_curve: true,
+  charge_target: 0, // charging goal in percent: 0 = off, 50–100 in 5 % steps. Advisory only: the card shows the goal, an estimated time and a notice; it cannot stop charging
+  charge_curve_gap: 15, // minutes: in the live curve a stop longer than this starts a new charge
   charge_curve_refresh: 5, // minutes: while charging, the end of the charging curve moves to now at least this often when the car reports nothing new
+  charge_curve_missing: true, // Highlight Missing Data: lighter line and a tooltip across gaps between readings; false keeps one plain line
   charging_reminder: true,
   charging_cost: true, // false = the card shows no charging cost block (saved prices and receipts are kept)
   energy_sheet: true, // tapping the Energy/Battery tile opens the history sheet (false = opens the sensor)
@@ -318,6 +326,7 @@ const ICONS = {
   trip: "<circle cx=\"6\" cy=\"5\" r=\"2\"/><circle cx=\"18\" cy=\"19\" r=\"2\"/><path d=\"M8 5h8a4 4 0 0 1 0 8H8a3 3 0 0 0 0 6h8\"/>",
   pin: "<path d=\"M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z\"/><circle class=\"a\" cx=\"12\" cy=\"10\" r=\"2.5\"/>",
   timer: "<circle cx=\"12\" cy=\"14\" r=\"8\"/><path d=\"M9 2h6M12 2v4M18 5l2 2M12 9v5l3 2\"/>",
+  precond: '<path style="fill:currentColor;stroke:none" transform="translate(1 3.273) scale(0.03051)" fill-rule="evenodd" d="M46 548 L46 557 L48 562 L51 566 L61 571 L618 571 L627 567 L631 562 L633 557 L633 548 L630 542 L625 537 L617 534 L292 534 L291 535 L280 535 L279 534 L62 534 L54 537 L48 543 Z M506 0 L498 4 L492 12 L491 17 L491 65 L490 66 L470 55 L453 43 L442 39 L430 42 L425 47 L422 54 L423 65 L429 73 L478 104 L483 106 L491 112 L491 140 L492 141 L492 151 L491 152 L491 214 L489 215 L479 210 L474 206 L457 197 L389 156 L380 155 L371 159 L365 167 L364 177 L366 183 L372 190 L402 207 L410 213 L419 217 L447 235 L469 247 L470 249 L373 303 L367 309 L365 313 L364 323 L366 329 L373 336 L377 338 L388 338 L413 325 L452 302 L478 289 L489 282 L491 283 L491 366 L485 371 L470 379 L428 405 L424 410 L422 416 L422 424 L425 431 L429 435 L435 438 L446 438 L457 432 L465 426 L489 413 L490 414 L490 469 L491 473 L497 481 L503 484 L511 485 L520 481 L524 477 L527 471 L527 457 L528 456 L527 453 L527 434 L528 433 L528 415 L529 414 L544 422 L567 438 L574 441 L583 441 L589 438 L594 433 L597 423 L596 416 L594 412 L589 407 L540 376 L528 367 L528 283 L529 282 L538 286 L548 293 L559 298 L612 329 L616 383 L620 392 L623 395 L632 399 L641 398 L646 395 L652 387 L653 384 L652 362 L651 361 L651 351 L652 350 L697 375 L709 374 L713 372 L718 366 L720 362 L720 351 L718 347 L709 339 L686 327 L670 317 L672 315 L706 299 L711 294 L714 287 L714 280 L712 274 L708 269 L700 265 L691 265 L656 282 L654 282 L632 294 L628 294 L612 284 L601 279 L594 274 L566 259 L559 254 L552 251 L550 248 L629 205 L688 237 L699 238 L705 236 L709 233 L714 224 L714 216 L712 210 L705 203 L672 186 L670 183 L711 161 L716 156 L718 152 L719 142 L717 137 L712 131 L704 128 L698 128 L680 136 L655 150 L654 149 L654 143 L655 142 L658 117 L659 116 L658 105 L656 101 L649 95 L641 93 L635 94 L627 99 L622 109 L622 115 L620 122 L620 128 L619 129 L619 135 L618 136 L618 142 L617 143 L613 171 L610 174 L529 217 L528 216 L528 113 L538 105 L543 103 L592 72 L597 64 L598 55 L595 47 L590 42 L586 40 L578 39 L567 43 L529 67 L528 66 L528 14 L527 11 L520 3 L513 0 Z M243 0 L236 2 L228 10 L208 47 L199 61 L194 72 L181 93 L177 101 L176 111 L179 118 L183 122 L189 125 L222 125 L224 127 L225 146 L230 168 L236 183 L258 224 L264 241 L266 251 L266 265 L262 284 L254 301 L230 337 L218 359 L213 371 L208 394 L208 421 L212 440 L218 456 L229 476 L238 487 L247 491 L256 491 L265 487 L271 480 L273 475 L273 463 L271 458 L262 445 L254 426 L252 417 L253 395 L256 384 L263 368 L289 327 L299 307 L306 287 L307 277 L308 276 L308 268 L309 267 L308 242 L303 220 L297 205 L288 187 L283 180 L273 159 L268 144 L267 127 L269 125 L302 125 L305 124 L313 117 L315 111 L315 104 L310 93 L294 67 L290 58 L285 51 L262 9 L256 3 L252 1 Z M67 0 L56 5 L51 12 L46 23 L42 28 L20 69 L7 90 L1 102 L1 107 L0 108 L2 116 L10 124 L13 125 L46 125 L49 127 L50 144 L55 165 L64 186 L84 221 L90 237 L92 247 L92 266 L87 285 L74 309 L57 332 L47 348 L39 364 L32 391 L32 417 L33 418 L34 428 L37 439 L47 461 L56 475 L65 486 L75 491 L85 491 L93 487 L98 482 L101 475 L101 462 L98 456 L84 437 L78 423 L76 415 L76 393 L80 381 L88 365 L113 329 L126 305 L134 280 L135 264 L136 263 L135 241 L130 219 L114 185 L99 159 L93 141 L92 127 L96 125 L127 125 L131 123 L138 115 L139 103 L86 8 L81 3 L77 1 Z"/>',
   wifi: "<path d=\"M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a6 6 0 0 1 8 0\"/><circle class=\"k\" cx=\"12\" cy=\"20\" r=\"1\"/>",
   shield: "<path d=\"m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6z\"/><path class=\"a\" d=\"m8 12 3 3 5-6\"/>",
   /* ── Control buttons ── */
@@ -482,6 +491,20 @@ const TT = {
 const tt = (n, cls = "") => `<svg class="tt ${cls}" viewBox="0 0 32 32" aria-hidden="true">${TT[n]}</svg>`;
 /* ───── Shared UI tools (card + settings) — whatever is used in 2+ places lives here ───── */
 const UI = {
+  /* Local clock time HH:MM. */
+  clock(d) { return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); },
+  /* Charging target (advisory). Returns the goal, whether it is already reached and, while charging, an estimated time to reach it. The estimate assumes the car's remaining time runs to 100 % at a steady rate; charging slows near the top, so it is never a promise. Null when no goal is set. */
+  chargeTarget(battery, charging, remaining, target, now = Date.now()) {
+    const goal = Number(target), pct = Number(battery), m = /^(\d+):(\d{1,2})/.exec(String(remaining || ""));
+    if (!Number.isFinite(goal) || goal < 50 || goal > 100 || battery === null || battery === undefined || !Number.isFinite(pct)) return null;
+    const level = Math.min(100, Math.max(0, pct)), reached = level >= goal;
+    let eta = null;
+    if (charging && !reached && level < 100 && m) {
+      const minutes = (Number(m[1]) * 60 + Number(m[2])) * (goal - level) / (100 - level);
+      if (minutes > 0) eta = new Date(now + minutes * 60000);
+    }
+    return { goal, reached, eta };
+  },
   /* "#rrggbb" → "r,g,b" (or the default d) */
   hex2rgb(h, d) { const m = /^#?([0-9a-f]{6})$/i.exec(String(h || "").trim()); return m ? [0, 2, 4].map((i) => parseInt(m[1].substr(i, 2), 16)).join(",") : d; },
 
@@ -796,9 +819,10 @@ ha-icon.i { --mdc-icon-size: var(--is, 20px); width: var(--is, 20px); height: va
 .vtop { flex:none; margin-bottom:10px; }
 .vgrp.slide { animation: ds-vfade .2s ease-out; } @keyframes ds-vfade { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion: reduce) { #vtabs .vpill { transition:none; } .veh .slide { animation:none; } }
-.btn { padding:10px 12px; border-radius:14px; border:1px solid var(--ds-line); background: var(--ds-soft); cursor:pointer; font-size:13.5px; font-weight:600; }
-.btn.go { background: rgba(var(--ds-ok), .18); border-color: rgba(var(--ds-ok), .5); color: rgb(var(--ds-ok)); }
-.btn.sm { padding:6px 10px; font-size:12.5px; border-radius:11px; }
+.btn { padding:10px 12px; border-radius:var(--ctl-r); border:1px solid var(--ds-line); background: var(--ds-soft); cursor:pointer; font-size:13.5px; font-weight:600; }
+.btn.go { background: rgb(var(--ds-ok)); border-color: transparent; color: #101512; }
+.btn.stop { background: rgba(var(--ds-bad), .14); border-color: rgba(var(--ds-bad), .35); color: rgb(var(--ds-bad)); }
+.btn.sm { padding:6px 10px; font-size:12.5px; border-radius:var(--ctl-r); }
 .btnrow { display:flex; gap:8px; } .btnrow > * { flex:1; }
 .mv { width:30px; height:30px; display:grid; place-items:center; border-radius:10px; border:1px solid var(--ds-line);
   background:transparent; cursor:pointer; color: var(--ds-fg2); flex:none; padding:0; }
@@ -811,7 +835,7 @@ ha-icon.i { --mdc-icon-size: var(--is, 20px); width: var(--is, 20px); height: va
 .on > .sw, .sw.on { background: rgb(var(--ds-info)); } .on > .sw::after, .sw.on::after { transform: translateX(14px); }
 `;
 const VARS = `
-  --ds-r: 22px; --ds-tr: 22px; --ds-ok: 52,211,153; --ds-warn: 251,191,36; --ds-bad: 248,113,113; --ds-info: 121,173,255; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
+  --ds-r: 22px; --ds-tr: 22px; --ctl-r: 12px; --ctl-pill: 999px; --ctl-cta: 16px; --ds-ok: 52,211,153; --ds-warn: 250,204,21; --ds-bad: 248,113,113; --ds-info: 121,173,255; --ds-bad-sp: 248 113 113; --ds-warn-sp: 250 204 21; --ds-info-sp: 121 173 255; --ds-ev: 52,211,153; --ds-fu: 52,211,153;
   --ds-fg: var(--primary-text-color, #fff); --ds-fg2: rgba(255,255,255,.72); --ds-fg2: color-mix(in srgb, var(--primary-text-color, #fff) 72%, transparent);
   --ds-line: rgba(var(--rgb-primary-text-color, 255,255,255), .12); --ds-soft: rgba(var(--rgb-primary-text-color, 255,255,255), .06);
   --ds-card: var(--ha-card-background, var(--card-background-color, #202226));
@@ -894,7 +918,7 @@ ${BASE_CSS}
 .total .split .e .i { color: rgb(var(--ds-ev)); } .total .split .f .i { color: rgb(var(--ds-fu)); }
 .rfs { position:relative; flex:none; width:30px; height:30px; padding:0; border-radius:50%; display:grid; place-items:center; cursor:pointer; color: rgba(255,255,255,.8);
   background: rgba(10,11,15,.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border:1px solid rgba(255,255,255,.16); -webkit-tap-highlight-color: transparent; transition: transform .14s ease; }
-.rfs[hidden] { display:none; } .rfs .i { --is:20px; } .rfs:active { transform: scale(.9); } .rfs.ok { color: rgb(var(--ds-ok)); border-color: rgb(var(--ds-ok) / .55); } .rfs.bad { color: rgb(var(--ds-bad)); border-color: rgb(var(--ds-bad) / .55); } .rfs.success { color: rgb(var(--ds-ok)); } .rfs.error { color: rgb(var(--ds-bad)); }
+.rfs[hidden] { display:none; } .rfs .i { --is:20px; } .rfs:active { transform: scale(.9); } .rfs.ok { color: rgb(var(--ds-ok)); border-color: rgba(var(--ds-ok), .55); } .rfs.bad { color: rgb(var(--ds-bad)); border-color: rgba(var(--ds-bad), .55); } .rfs.success { color: rgb(var(--ds-ok)); } .rfs.error { color: rgb(var(--ds-bad)); }
 .rfs .bdg { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; box-sizing:border-box; border-radius:8px; background: rgb(var(--ds-bad)); color:#fff; font-size:10px; font-weight:800; font-style:normal; line-height:16px; text-align:center; pointer-events:none; box-shadow:0 0 0 1.5px rgba(10,11,15,.85); }
 .rfs .age { position:absolute; top:-8px; right:-10px; z-index:2; min-width:18px; height:16px; padding:0 5px; box-sizing:border-box; border-radius:8px; font-size:10px; font-weight:800; font-style:normal; line-height:16px; text-align:center; font-variant-numeric:tabular-nums; pointer-events:none; --c: var(--ds-ok); color: rgb(var(--c)); background: linear-gradient(rgba(var(--c), .26), rgba(var(--c), .26)), rgba(10,11,15,.86); box-shadow: 0 0 0 1px rgba(var(--c), .5); } .rfs .age.warn { --c: var(--ds-warn); } .rfs .age.bad { --c: var(--ds-bad); }
 .rfs .ring { position:absolute; inset:-3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events:none; overflow:visible; }
@@ -907,11 +931,11 @@ ${BASE_CSS}
 .meta .rfs { width:30px; height:30px; background:transparent !important; border:0 !important; box-shadow:none !important; backdrop-filter:none; -webkit-backdrop-filter:none; }
 .meta .rfs:not(:last-child)::after { content:""; position:absolute; right:-1px; top:8px; bottom:8px; width:1px; background: rgba(255,255,255,.14); }
 .meta .rfs:not(:last-child)[hidden]::after { display:none; }
-.meta .rfs.ok { background: rgb(var(--ds-ok) / .16) !important; } .meta .rfs.bad { background: rgb(var(--ds-bad) / .16) !important; }
+.meta .rfs.ok { background: rgba(var(--ds-ok), .16) !important; } .meta .rfs.bad { background: rgba(var(--ds-bad), .16) !important; }
 /* Car View: the car (e.g. white or silver, from above, large or in a low hero) can pass behind the buttons at the top right; so they have a darker, blurred background and are visible over any colour */
 .hero[data-style="carview"] .rfs { background: rgba(10,11,15,.7); border:1px solid rgba(255,255,255,.26); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 1px 7px rgba(0,0,0,.5); }
 .hero[data-style="carview"] .rfs:not(.ok):not(.bad):not(.success):not(.error) { color:#fff; }
-.hero[data-style="carview"] .rfs.ok { border-color: rgb(var(--ds-ok) / .6); } .hero[data-style="carview"] .rfs.bad { border-color: rgb(var(--ds-bad) / .6); }
+.hero[data-style="carview"] .rfs.ok { border-color: rgba(var(--ds-ok), .6); } .hero[data-style="carview"] .rfs.bad { border-color: rgba(var(--ds-bad), .6); }
 .fx { position:absolute; inset:0; pointer-events:none; display:none; }
 .hero.unlocked .fx-handles { display:block; }
 .fx-handles { z-index:3; --fx:66.2%; --fy:41.2%; --rx:79.6%; --ry:38.5%; }
@@ -983,6 +1007,9 @@ ${BASE_CSS}
 .act[disabled] { opacity:.4; cursor:not-allowed; }
 .act .dot { position:absolute; top:5px; right:5px; width:7px; height:7px; border-radius:50%; background: rgb(var(--c)); }
 .act.on .dot { background:#fff; }
+.act .dot.pulse { background: rgb(var(--ds-ok, 52,211,153)); animation: dcPcPulse 1.8s ease-out infinite; }
+@keyframes dcPcPulse { 0% { box-shadow: 0 0 0 0 rgba(var(--ds-ok, 52,211,153), .75); } 70% { box-shadow: 0 0 0 7px rgba(var(--ds-ok, 52,211,153), 0); } 100% { box-shadow: 0 0 0 0 rgba(var(--ds-ok, 52,211,153), 0); } }
+@media (prefers-reduced-motion: reduce) { .act .dot.pulse { animation: none; } }
 .act .ring { position:absolute; inset:-3px; width: calc(100% + 6px); height: calc(100% + 6px); pointer-events:none; overflow:visible; }
 .act .ring rect { fill:none; stroke: rgb(var(--c)); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 20 80; animation: ds-dash 1.2s linear infinite; }
 @keyframes ds-dash { to { stroke-dashoffset: -100; } }
@@ -1015,6 +1042,7 @@ ${BASE_CSS}
 .t2 .tt { position:relative; z-index:1; font-size: 14.5px; font-weight: 600; letter-spacing:-.01em; }
 .t2 .ts { margin-top: 4px; font-size: 12.5px; color: var(--ds-fg2); line-height:1.35; }
 .t2 .ts b { font-weight:600; color: var(--ds-fg); font-size: 13px; }
+.t2.tempc .ts b { font-size: 24px; line-height: 1.15; } /* inside temperature value only */
 .t2 .ts.chg, .t2 .ts.chg b { color: rgb(var(--ds-ok)); } .t2.batt .ts { max-width: 58%; } .t2 .ts .sub { font-size: 12px; color: var(--ds-fg2); }
 /* "Charging now" ↔ time remaining: fast upward scroll with blur (6 s cycle, ~2.5 s rest). --d keeps the phase the same when the tile is rebuilt. */
 .t2 .ts.chg .cw { display:grid; overflow:hidden; white-space:nowrap; line-height:1.5; }
@@ -1023,13 +1051,21 @@ ${BASE_CSS}
 @keyframes ds-chgo { 0%,40% { transform:translateY(0); opacity:1; filter:blur(0); } 44% { filter:blur(3px); } 48% { transform:translateY(-120%); opacity:0; filter:blur(5px); } 48.1%,90% { transform:translateY(120%); opacity:0; filter:blur(5px); } 96% { filter:blur(3px); } 100% { transform:translateY(0); opacity:1; filter:blur(0); } }
 @keyframes ds-chgi { 0%,40% { transform:translateY(120%); opacity:0; filter:blur(5px); } 44% { filter:blur(3px); } 48%,90% { transform:translateY(0); opacity:1; filter:blur(0); } 94% { filter:blur(3px); } 98%,100% { transform:translateY(-120%); opacity:0; filter:blur(5px); } }
 @media (prefers-reduced-motion: reduce) { .t2 .ts.chg .cf { animation:none; } .t2 .ts.chg .cf2 { display:none; } }
+.row.tgnum { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:default; }
+.row.tgnum > span { min-width:0; }
+.row.tgnum input { width:88px; flex:none; text-align:right; }
+.ts.chg .cw3 { display:block; overflow:hidden; height:1.5em; line-height:1.5; }
+.ts.chg .rl3 { display:flex; flex-direction:column; animation: ds-roll4 12s cubic-bezier(.5,0,.1,1) infinite; }
+.ts.chg .rl3 > b { display:block; flex:none; height:1.5em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+@keyframes ds-roll4 { 0%,22% { transform:translateY(0); } 25%,47% { transform:translateY(-25%); } 50%,72% { transform:translateY(-50%); } 75%,100% { transform:translateY(-75%); } }
+@media (prefers-reduced-motion: reduce) { .ts.chg .rl3 { animation:none; } }
 .gauge .fg { stroke: rgb(var(--ds-ev)); opacity:.28; }
 .gauge .fp { stroke: rgb(var(--ds-ev)); filter: drop-shadow(0 0 3px rgba(var(--ds-ev), .9)); animation: ds-chgflow 2.4s cubic-bezier(.45,.05,.55,.95) infinite, ds-chgfade 2.4s linear infinite; }
 @keyframes ds-chgflow { from { stroke-dashoffset: var(--fs); } to { stroke-dashoffset: var(--fe); } }
 @keyframes ds-chgfade { 0% { opacity: 0; } 15% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
-.t2 .lg { margin-top: 10px; display:flex; flex-direction:column; gap:3px; font-size:12px; }
-.t2 .lg span { display:flex; align-items:center; gap:4px; } .t2 .lg .i { --is: 14px; } .t2 .lg b { color: var(--ds-fg); font-weight:600; }
-.t2 .lg small { color: var(--ds-fg2); font-size: 11.5px; }
+.t2 .lg { margin-top: 10px; display:flex; flex-direction:column; gap:4px; font-size:12.5px; }
+.t2 .lg span { display:flex; align-items:center; gap:4px; } .t2 .lg .i { --is: 14px; } .t2 .lg b { color: var(--ds-fg); font-weight:600; font-size:14.5px; }
+.t2 .lg small { color: var(--ds-fg2); font-size: 12.5px; }
 /* Climate tile: temperature inside, target with ± and an on/off button */
 .t2.temp { display:grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr auto; align-items:start; min-height:132px; }
 .t2.temp .tt { grid-column:1; grid-row:1; align-self:start; } /* same title height as the Energy tile (it used to sit 2px lower because of the button) */
@@ -1049,13 +1085,39 @@ ${BASE_CSS}
 .cv { display:flex; flex-direction:column; align-items:center; line-height:1.1; min-width:0; } .cv small { font-size:11px; color: var(--ds-fg2); } .cv b { font-size:15px; font-weight:600; color: rgb(var(--ds-info)); }
 .gauge { position:absolute; right:-35px; bottom:-35px; width: 150px; height: 150px; pointer-events:none; }
 .gauge svg { width:100%; height:100%; overflow:visible; }
-.gauge circle { fill:none; stroke-linecap:round; } .gauge .tr { stroke: var(--ds-line); }
+.gauge circle { fill:none; stroke-linecap:round; } .gauge .tr { stroke: var(--ds-line); } .gauge line.tg { stroke: rgb(var(--ds-ev)); stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(var(--ds-ev), .8)); }
 .gauge .ev { stroke: rgb(var(--ds-ev)); filter: drop-shadow(0 0 4px rgba(var(--ds-ev), .5)); transition: stroke-dasharray .8s ease; }
 .gauge .fu { stroke: rgb(var(--ds-fu)); transition: stroke-dasharray .8s ease; }
 .gauge .c { position:absolute; inset:0; display:grid; place-items:center; font-size:29px; font-weight:700; letter-spacing:-.03em; color: var(--ds-fg); }
 .gauge .c { display:flex; flex-direction:column; justify-content:center; align-items:center; line-height:1.05; }
 .gauge .c .gf { display:inline-flex; align-items:center; gap:2px; font-size:15px; font-weight:700; letter-spacing:-.02em; margin-top:2px; } .gauge .c .gf svg.i { width:14px; height:14px; transform:none; overflow:visible; }
 .gauge .c small { font-size:12px; font-weight:500; color: var(--ds-fg2); }
+.t2.batt[data-eui=gauge] { container-type:inline-size; } .t2.batt[data-eui=gauge] > .lg:not(.hv) { display:none; }
+.hg { position:relative; width:100%; margin-top:6px; pointer-events:none; }
+.t2 .lg.hv { flex-direction:row; justify-content:space-between; gap:6px; margin-top:6px; }
+@container (min-width: 250px) { .t2.batt[data-eui=gauge] > .lg:not(.hv) { display:flex; } .t2 .lg.hv { display:none; } .hg { position:absolute; right:-4px; bottom:6px; width:68%; margin:0; } }
+.hg svg { display:block; width:100%; overflow:visible; }
+.hg > svg path { fill:none; stroke-width:12; stroke-linecap:round; } .hg .tr { stroke: var(--ds-line); } .hg .ev { stroke: rgb(var(--ds-ev)); filter: drop-shadow(0 0 4px rgba(var(--ds-ev), .5)); transition: stroke-dasharray .8s ease; } .hg .fu { stroke: rgb(var(--ds-fu)); transition: stroke-dasharray .8s ease; }
+.hg .fg { stroke: rgb(var(--ds-ev)); opacity:.28; } .hg .fp { stroke: rgb(var(--ds-ev)); filter: drop-shadow(0 0 3px rgba(var(--ds-ev), .9)); animation: ds-chgflow 2.4s cubic-bezier(.45,.05,.55,.95) infinite, ds-chgfade 2.4s linear infinite; }
+.hg .c { position:absolute; left:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; line-height:1.05; font-size:clamp(19px, 12.5cqw, 28px); font-weight:700; letter-spacing:-.03em; color: var(--ds-fg); }
+.hg .c small { font-size:12px; font-weight:500; color: var(--ds-fg2); }
+.hg .c .gf { display:inline-flex; align-items:center; gap:2px; font-size:clamp(12px, 7cqw, 15px); font-weight:700; letter-spacing:-.02em; margin-top:2px; } .hg .c .gf svg.i { width:14px; height:14px; transform:none; overflow:visible; }
+@media (prefers-reduced-motion: reduce) { .hg .fp { animation:none; opacity:0; } }
+.t2.batt[data-eui=capsule] { container-type:inline-size; display:flex; flex-direction:column; gap:8px; }
+.cap-h { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.t2 .ts.chg.cap-b { margin:0; max-width:none; padding:2px 10px; border-radius:999px; background: rgba(var(--ds-ok), .15); border:1px solid rgba(var(--ds-ok), .22); font-size:11px; } .t2 .ts.chg.cap-b b { font-size:11px; }
+.cap-g { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; } .cap-g.one { grid-template-columns:minmax(0,1fr); }
+.cap-c { background: rgba(0,0,0,.22); border:1px solid var(--ds-line); border-radius:16px; padding:9px 10px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.cap-r { display:flex; justify-content:space-between; align-items:center; gap:4px; font-size:11.5px; } .cap-l { display:flex; align-items:center; gap:4px; color: var(--ds-fg2); font-weight:500; min-width:0; } .cap-l .i { --is:13px; color: rgb(var(--cc)); }
+.cap-p { color: rgb(var(--cc)); font-size:13px; font-weight:700; }
+.cap-v { display:flex; align-items:baseline; gap:4px; } .cap-v b { font-size:clamp(17px, 7cqw, 22px); font-weight:700; color: var(--ds-fg); letter-spacing:-.02em; line-height:1; } .cap-v small { font-size:11px; color: var(--ds-fg2); }
+.cap-t { position:relative; height:6px; border-radius:3px; background: var(--ds-line); overflow:hidden; }
+.cap-t i { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background: rgb(var(--cc)); transition: width .8s ease; }
+.cap-t .fg { right:0; opacity:.28; } .cap-t .fp { width:16%; left:var(--fs); box-shadow:0 0 6px rgba(var(--cc), .9); transition:none; animation: ds-capflow 2.4s cubic-bezier(.45,.05,.55,.95) infinite, ds-chgfade 2.4s linear infinite; }
+@keyframes ds-capflow { from { left:var(--fs); } to { left:var(--fe); } }
+.cap-f { display:flex; justify-content:space-between; font-size:11.5px; color: var(--ds-fg2); padding:0 2px; } .cap-f b { color: var(--ds-fg); font-weight:600; }
+@container (max-width: 249px) { .cap-w { display:none; } }
+@media (prefers-reduced-motion: reduce) { .cap-t .fp { animation:none; opacity:0; } }
 .knob { --kc: var(--ds-info); position:absolute; right:-18px; bottom:-16px; width: 112px; height: 112px; border-radius:50%; border:0; cursor:pointer; padding:0;
   display:grid; place-items:center; box-sizing:border-box;
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.16), rgba(255,255,255,.05) 70%); box-shadow: inset 0 0 0 1px var(--ds-line), 0 10px 24px rgba(0,0,0,.25);
@@ -1081,6 +1143,9 @@ ${BASE_CSS}
 .dbig { font-size: clamp(18px, 6.6cqw, 44px); font-weight:300; letter-spacing:-.03em; line-height:1; } .dbig small { font-size:.42em; font-weight:400; margin-left:1px; letter-spacing:0; opacity:.85; }
 .dst { display:inline-flex; align-items:center; gap:.9cqw; margin-top:.8cqw; font-size: clamp(9px, 2.4cqw, 14px); font-weight:600; letter-spacing:.06em; text-transform:uppercase; opacity:.85; }
 .dst i { width: clamp(5px, 1.2cqw, 7px); height: clamp(5px, 1.2cqw, 7px); border-radius:50%; background: rgb(var(--ds-bad)); box-shadow:0 0 6px rgb(var(--ds-bad)); } .dst.on i { background: rgb(var(--ds-ok)); box-shadow:0 0 6px rgb(var(--ds-ok)); }
+.dov .dpc { position:absolute; left:10px; bottom:10px; pointer-events:auto; display:inline-flex; align-items:center; gap:6px; width:auto; height:32px; min-height:32px; padding:0 12px 0 10px; border-radius:999px; border:1px solid rgba(255,255,255,.14); font-size:12px; font-weight:600; letter-spacing:.01em; line-height:1; color:#fff; background: rgba(10,11,15,.62); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); --is:15px; --bs:32px; }
+.dov .dpc svg { width:15px !important; height:15px !important; flex:none; }
+.dov .dpc span { white-space:nowrap; }
 .dov .dpw { position:absolute; right:10px; top:10px; --bs:42px; pointer-events:auto; background: rgba(10,11,15,.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .dash .air { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:0; transition: opacity .6s ease; }
 .dash.air .air { opacity:1; }
@@ -1255,9 +1320,9 @@ ha-card[data-ti="custom"] .tile:not(.bad) .i { color: var(--ds-tile-custom); } h
   :host([data-app]) ha-card > :not(.hero):not(.sheet) { flex:none; }
 }
 @container (max-width: 370px) { .chgbox.line { font-size:12.5px; } .chgbox .a { font-size:18px; } .chgbox.big .a { font-size:28px; } }
-.charge { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; padding: 12px; border-radius:18px; border:1px solid rgba(var(--ds-ok), .28); background: linear-gradient(145deg, rgba(var(--ds-ok), .10), var(--ds-soft)); }
-.charge > div { min-width:0; } .charge .l { font-size:11.5px; color: var(--ds-fg2); }
-.charge .v { margin-top:3px; font-size:15px; font-weight:600; color: var(--ds-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.charge { display:flex; flex-direction:column; gap:10px; padding:10px 14px 14px; border-radius:18px; border:1px solid rgba(var(--ds-ok), .28); background: linear-gradient(145deg, rgba(var(--ds-ok), .10), var(--ds-soft)); }
+.cg-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 10px; min-height:44px; } .cg-state { display:flex; align-items:center; gap:8px; min-width:0; font-size:13px; } .cg-state .i { --is:18px; color: rgb(var(--ds-ok)); } .cg-state b { font-weight:600; white-space:nowrap; } .cg-state i { font-style:normal; font-size:11px; font-weight:700; letter-spacing:.06em; padding:2px 8px; border-radius:999px; background: rgba(var(--ds-ok), .16); color: rgb(var(--ds-ok)); }
+.cg-stats { display:grid; grid-auto-flow:column; grid-auto-columns:max-content; justify-content:space-evenly; } .cg-stat { padding:0 clamp(8px,3vw,18px); text-align:center; border-left:1px solid var(--ds-line); } .cg-stat:first-child { border-left:0; } .cg-stat b { display:block; font-size:17px; font-weight:700; color: var(--ds-fg); white-space:nowrap; font-variant-numeric:tabular-nums; } .cg-stat span { display:block; margin-top:2px; font-size:11.5px; color: var(--ds-fg2); }
 .upd { align-self:stretch; margin:6px 14px 0; display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid rgba(var(--ds-warn),.5); border-radius:12px; background:rgba(var(--ds-warn),.12); color:var(--ds-fg); font-size:12px; text-align:left; cursor:pointer; } .upd[hidden] { display:none; } .upd .i { --is:16px; flex:none; color:rgb(var(--ds-warn)); }
 .foot[hidden] { display:none; } .foot { position:relative; }
 /* Settings gear: a small round glass button on the image, bottom right, opposite the lock status */
@@ -1282,7 +1347,7 @@ ha-card:has(.sheet.show) *:not(.sheet):not(.sheet *), ha-card.off *, ha-card.off
   .box, ha-card[data-ppad] .box { max-width:none; border-radius:26px 26px 0 0; border-inline:0; border-bottom:0; max-height:92%; padding-bottom: calc(max(12px, env(safe-area-inset-bottom, 0px)) + 26px); box-shadow: 0 -10px 40px rgba(0,0,0,.45); }
   .box.wide { max-height:92%; }
   .box.confirm h3 { font-size:18px; } .box.confirm p.c { font-size:14px; margin:8px 0 16px; }
-  .box.confirm .btnrow { gap:10px; } .box.confirm .btn { min-height:54px; font-size:16px; border-radius:16px; }
+  .box.confirm .btnrow { gap:10px; } .box.confirm .btn { min-height:54px; font-size:16px; border-radius:var(--ctl-cta); }
 }
 .box h3 { margin:0; font-size:16px; font-weight:600; color: var(--ds-fg); } .box p.c { margin:6px 0 12px; font-size:13px; color: var(--ds-fg2); text-align:center; }
 .confirm { text-align:center; }
@@ -1295,7 +1360,7 @@ ha-card:has(.sheet.show) *:not(.sheet):not(.sheet *), ha-card.off *, ha-card.off
 .lkh { margin:10px 0 0; text-align:center; font-size:12px; color: var(--ds-fg2); }
 .hd .ttl { min-width:0; } .hd .ver { display:block; margin-top:2px; font-size:11px; font-weight:500; letter-spacing:.02em; color: var(--ds-fg2); opacity:.75; }
 .hd { touch-action:none; flex:none; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-.box.nfl { min-height:0; } .nfpanel { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:4px 2px 2px; --design-inner: var(--ds-soft); --design-line: var(--ds-line); --design-fg: var(--ds-fg); --design-muted: var(--ds-fg2); --design-bad: 248 113 113; --design-warn: 251 191 36; --design-info: 56 189 248; --design-accent-fg: #fff; }
+.box.nfl { min-height:0; } .nfpanel { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:4px 2px 2px; --design-inner: var(--ds-soft); --design-line: var(--ds-line); --design-fg: var(--ds-fg); --design-muted: var(--ds-fg2); --design-bad: var(--ds-bad-sp); --design-warn: var(--ds-warn-sp); --design-info: var(--ds-info-sp); --design-accent-fg: #fff; }
 .nfpanel .activity-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 10px; } .nfpanel .activity-heading h3 { font-size:14px; } .nfpanel .activity-heading>div { display:flex; align-items:center; gap:10px; } .nfpanel .activity-list { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
 .nfpanel button { font:inherit; cursor:pointer; color:var(--ds-fg); border-radius:12px; border:1px solid var(--ds-line); background:var(--ds-soft); padding:8px 12px; min-height:36px; } .nfpanel .activity-delete-all, .nfpanel .activity-confirm-delete { color:rgb(var(--ds-bad)); border-color:rgba(var(--ds-bad),.3); background:rgba(var(--ds-bad),.08); } .nfpanel .activity-confirm-delete { color:#fff; background:rgb(var(--ds-bad)); } .nfpanel .activity-delete { width:40px; min-width:40px; height:40px; padding:0; background:none; border:0; color:var(--ds-fg2); } .nfpanel .activity-footer { display:flex; justify-content:center; padding:12px 0 0; } .nfpanel .activity-footer:empty { display:none; } .nfpanel .activity-footer>div { min-height:40px; } .nfpanel [hidden] { display:none !important; } .nfpanel .hint, .nfpanel .notification-info { font-size:12px; color:var(--ds-fg2); text-align:center; margin:8px 0; }
 .hd.sh { gap:12px; padding:2px 4px 0; margin-bottom:6px; } .hd.sh .ttl { flex:1; } .hd.sh h3 { margin:0; font-size:18px; font-weight:600; letter-spacing:.01em; } .hd .eic { flex:none; width:36px; height:36px; border-radius:50%; display:grid; place-items:center; background: rgba(var(--ds-ok), .16); color: rgb(var(--ds-ok)); } .hd .eic .i { --is:19px; }
@@ -1311,6 +1376,35 @@ ${LOADER_CSS}
 /* buttons: main row + "More" */
 .actions.split { --bs: 60px; display:block; padding:2px 0 4px; margin-block: -2px -4px; }
 .actions.split.sz-s { --bs: 50px; } .actions.split.sz-l { --bs: 68px; }
+.actions.split .act, .actions.swipe .act { width: min(var(--bs), calc((100cqw - (var(--np, 4) - 1) * 10px) / var(--np, 4))); height: auto; aspect-ratio: 1; } /* keeps at least 10px between buttons on narrow cards */
+.actions.swipe { --bs: 60px; padding: 2px 0 0; margin-block: -2px 0; } .actions.swipe.sz-s { --bs: 50px; } .actions.swipe.sz-l { --bs: 68px; }
+.actions.swipe .pages { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none; overscroll-behavior-x:contain; padding: 2px 0 4px; }
+.actions.swipe .pages::-webkit-scrollbar { display:none; }
+.actions.swipe .page { flex: 0 0 100%; display:flex; justify-content:center; gap: 4px; scroll-snap-align:start; scroll-snap-stop:always; }
+.actions.swipe .page .cell { flex: 0 0 calc((100% - (var(--np, 4) - 1) * 4px) / var(--np, 4)); } /* a shorter last page is centred */
+.actions.swipe .pdots { display:flex; justify-content:center; gap:2px; height:10px; margin-top:2px; }
+.actions.swipe .pdots button { position:relative; width:14px; height:10px; padding:0; border:0; background:none; cursor:pointer; }
+.actions.swipe .pdots button::before { content:""; position:absolute; left:4px; top:2px; width:6px; height:6px; border-radius:3px; background: var(--ds-line); transition: width .2s ease, left .2s ease, background .2s ease; }
+.actions.swipe .pdots button.on { width:22px; } .actions.swipe .pdots button.on::before { left:3px; width:16px; background: rgb(var(--ds-ok)); }
+.actions.swipe .pdots button::after { content:""; position:absolute; inset:-12px -2px; } /* bigger touch area */
+.himore { position:absolute; right:48px; bottom:12px; z-index:3; display:inline-flex; align-items:center; gap:4px; height:26px; padding:0 9px; border-radius:13px; background: rgba(10,11,15,.55); border:1px solid rgba(255,255,255,.16); color:#fff; font: inherit; font-size:12px; font-weight:600; cursor:pointer; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); -webkit-tap-highlight-color:transparent; }
+.himore.solo { right:12px; } .himore.on { background: rgba(var(--ds-ok), .9); border-color: transparent; }
+.himore .i { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; }
+.himore::before { content:""; position:absolute; inset:-9px -4px; } /* 44px touch area */
+.himore .mdot { position:absolute; top:-3px; right:-3px; width:8px; height:8px; border-radius:50%; background: rgb(var(--ds-warn)); }
+.hpanel { position:relative; display:none; padding:10px 8px 12px; border-radius: var(--ds-tr, 20px); background: var(--ds-soft); border:1px solid var(--ds-line); color: var(--ds-fg); }
+.hpanel.show { display:block; animation: ds-hpin .2s ease; }
+@keyframes ds-hpin { from { opacity:0; transform: translateY(-6px); } to { opacity:1; transform:none; } }
+.hpanel .hph { display:flex; align-items:center; justify-content:space-between; padding: 0 6px 8px; font-size:13px; }
+.hpanel .hph button { display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; background: var(--ds-soft); color: inherit; cursor:pointer; } .hpanel .hph .i { --is:14px; }
+.hpanel .hprow { display:flex; flex-wrap:wrap; justify-content:center; gap:14px 4px; container-type: inline-size; }
+.hpanel .hprow .cell { flex: 0 0 calc((100% - (var(--np, 5) - 1) * 4px) / var(--np, 5)); } /* same columns as the main row; shorter rows are centred */
+.hpanel { --bs: 60px; } .hpanel.sz-s { --bs: 50px; } .hpanel.sz-l { --bs: 64px; }
+.hpanel .act { width: min(var(--bs), calc((100cqw - (var(--np, 4) - 1) * 10px) / var(--np, 4))); height:auto; aspect-ratio:1; }
+ha-card .actions.noacts { display:none; }
+.act.hmorebtn .i { width:40%; height:40%; fill:none; stroke: var(--ds-fg); stroke-width:1.8; }
+.act.hmorebtn.on { background: rgba(var(--ds-ok), .18); border-color: rgba(var(--ds-ok), .5); } .act.hmorebtn.on .i { stroke: rgb(var(--ds-ok)); }
+.act.hmorebtn .hcnt { position:absolute; top:-2px; right:-2px; min-width:18px; height:18px; padding:0 5px; box-sizing:border-box; border-radius:9px; background: var(--ds-card); border:1px solid var(--ds-line); color: var(--ds-fg); font-size:10px; font-weight:700; line-height:16px; text-align:center; }
 .actions.split .prow { display:grid; grid-template-columns: repeat(var(--np, 4), 1fr); gap: 4px; }
 .actions.split .mrow { display:flex; flex-wrap:wrap; justify-content:center; gap: 14px 4px; padding: 0; transition: padding .28s ease; }
 .actions.split.moreopen .mrow { padding: 12px 0 8px; }
@@ -1363,7 +1457,7 @@ h4 { margin:0 0 2px; font-size:11.5px; font-weight:700; letter-spacing:.08em; te
 .lvbar { height:10px; border-radius:999px; box-shadow: inset 0 0 0 1px var(--ds-line); }
 
 .list { display:flex; flex-direction:column; gap:4px; }
-.row { display:flex; align-items:center; gap:8px; padding:7px 8px 7px 11px; border-radius:13px; background: var(--ds-soft); min-height:44px; }
+.list .row.pin-parent { flex-wrap:wrap; } .pin-sub { box-sizing:border-box; flex:1 0 100%; min-width:0; display:flex; align-items:center; gap:8px; margin-top:2px; padding:4px 0 2px 26px; border-top:1px solid var(--ds-line); font-size:13px; color:var(--ds-fg2); } .pin-sub > span { flex:1; } .pin-sub.off > span { opacity:.45; } .row { display:flex; align-items:center; gap:8px; padding:7px 8px 7px 11px; border-radius:13px; background: var(--ds-soft); min-height:44px; }
 .row > span { flex:1; min-width:0; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; } .row > span small { display:block; font-size:11px; color: var(--ds-fg2); }
 .row.off > span { opacity:.45; } .row.unused { opacity:.4; pointer-events:none; } .row > .i { color: var(--ds-fg2); }
 .row.tg { cursor:pointer; text-align:left; border:0; width:100%; } .row.tg.on > .i { color: rgb(var(--ds-info)); }
@@ -1434,6 +1528,7 @@ function mergeConfig(yaml, local) {
   if (y.diagnostics_mode !== undefined && y.diag_mode === undefined) y.diag_mode = y.diagnostics_mode;
   if (y.button_labels === true) y.button_labels = "status";
   if (y.button_labels === false) y.button_labels = "none";
+  if (y.button_layout === "scroll" || y.button_layout === "fit") y.button_layout = "split"; /* these layouts were removed */
   const c = { ...clone(DEFAULTS), ...y, ...(local || {}) };
   c.info_order = [...new Set([...(Array.isArray(c.info_order)?c.info_order:[]), ...INFO_IDS])].filter(id=>INFO_IDS.includes(id));
   /* Wrong types from the YAML (e.g. a list that became text) must not "crash" the card: whatever does not match the default's type takes the default */
@@ -1490,7 +1585,7 @@ class DeepalS05Card extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" }); I18N.watch(this.shadowRoot);
     this._pending = {}; this._flashes = {}; this._opt = {}; this._last = {};
-    this._toastState = null; this._confirm = null; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null; this._nfSheet = false; this._nfEl = null; this._nfAct = null;
+    this._toastState = null; this._confirm = null; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null; this._nfSheet = false; this._nfEl = null; this._nfAct = null; this._pcSheet = false; this._pcEl = null; this._pcAct = null;
     this._sig = null; this._built = false;
   }
 
@@ -1686,8 +1781,8 @@ class DeepalS05Card extends HTMLElement {
     const st = this._allKeys().map((k) => this._obj(k)?.state ?? "∅").join("|");
     const cu = [...(this._c.diag_custom || []), ...(this._c.info_custom || [])].map((x) => this._eobj(x.entity)?.state ?? "∅").join("|");
     return [st, cu, Math.floor(Date.now() / 60000), Object.keys(this._pending).join(","),
-      Object.entries(this._flashes).map(([k, v]) => k + v.type).join(","), this._confirm ? this._confirm.id : "", String(this._diagSheet), String(this._lockSheet), String(this._lockAsk), String(this._enSheet), String(this._nfSheet),
-      JSON.stringify(this._c), JSON.stringify(this._opt), String(this._tpend), String(this._moreOpen), String((this._tgt() || {}).state), String(this._view), JSON.stringify((this._hass && this._hass.locale) || null), String((this._obj("lock.doors") || {}).last_changed), this._toastState ? this._toastState.msg : ""].join("#");
+      Object.entries(this._flashes).map(([k, v]) => k + v.type).join(","), this._confirm ? this._confirm.id : "", String(this._diagSheet), String(this._lockSheet), String(this._lockAsk), String(this._enSheet), String(this._nfSheet), String(this._pcSheet),
+      JSON.stringify(this._c), JSON.stringify(this._opt), String(this._tpend), String(this._moreOpen), String(this._imgOpen), String((this._tgt() || {}).state), String(this._view), JSON.stringify((this._hass && this._hass.locale) || null), String((this._obj("lock.doors") || {}).last_changed), this._toastState ? this._toastState.msg : ""].join("#");
   }
   _force() { this._sig = null; if (this._hass && this._c) this._render(); }
   _diagAvail() { return DIAG.filter((d) => this._obj(d[0])); }
@@ -1713,8 +1808,8 @@ class DeepalS05Card extends HTMLElement {
     const okTiles = oth.map(row).join("") + (tyres.length > 1 ? `<button class="dgrow ok" data-ent="${esc(tyres[0].ent)}">${icoBadge("tirealert")}<span><b>${esc(T("Tyres"))}</b><small>${esc(T("{0} OK", tyres.length))}</small></span></button>` : "");
     const open = !!this._dgOk, okSec = ok.length ? `<button class="dgtog ok" data-dg-ok aria-expanded="${open}">${ico(open ? "chevu" : "chevd")}<span>${esc(T("OK"))}</span><em>${ok.length}</em></button>${open ? `<div class="dglist ok">${okTiles}</div>` : ""}` : "";
     const sev = bad.some((x) => x.st === "bad") ? "bad" : bad.length ? "warn" : na.length ? "na" : "ok";
-    const head = bad.length ? T(bad.length === 1 ? "{0} problem" : "{0} problems", bad.length) : T("All OK");
-    const sub = [T("{0} sensors", it.length), na.length ? T("{0} unavailable", na.length) : ""].filter(Boolean).join(" · ");
+    const head = bad.length ? T(bad.length === 1 ? "{0} problem" : "{0} problems", bad.length) : na.length ? T("{0} unavailable", na.length) : T("All OK");
+    const sub = [T("{0} sensors", it.length), bad.length && na.length ? T("{0} unavailable", na.length) : ""].filter(Boolean).join(" · ");
     const found = discoverDiag(this._hass, this._c);
     const nw = found.length ? `<div class="dgnew"><div><b>${esc(T(found.length === 1 ? "{0} new sensor found" : "{0} new sensors found", found.length))}</b><small>${esc(found.map((f) => f.label).join(", "))}</small></div>
       <div class="btnrow"><button class="btn sm" data-dg-ignore>${esc(T("Ignore"))}</button><button class="btn sm pl" data-dg-add>${ico("plus")} ${esc(T("Add"))}</button></div></div>` : "";
@@ -1897,6 +1992,9 @@ class DeepalS05Card extends HTMLElement {
       climate: { on: climateOn, icon: climateOn ? "snow" : "snowoff", sub: climate === null ? "unavailable" : climateOn ? (tg !== null ? `on · ${this._fmtNum(tg, 1)}°` : "on") : "off", tone: climate === null ? "bad" : "", disabled: climate === null, confirm: "climate",
         watch: this._obj("binary_sensor.climate_on") ? "binary_sensor.climate_on" : "climate.cabin_climate", timeout: 35000, call: cCall,
         unsupported: climateOn ? "This entity has no turn-off command for climate" : "This entity has no turn-on command for climate" },
+      precondition: (() => { this._pcFetch(); const p = this._pcInfo || {}, ok = !!(this._hass && this._hass.companionRequest);
+        return { on: !!p.active, icon: "precond", tone: p.active ? "ok" : "", pcsheet: true, pulse: !!p.scheduled && !p.active, disabled: !ok,
+          sub: !ok ? "unavailable" : p.active ? (p.remaining ? `on · ${Math.ceil(p.remaining / 60)} min` : "on") : p.scheduled ? "scheduled" : "off" }; })(),
       tires: (() => { const s = this._tiresSummary(); return { icon: "tirealert", ...s, open: "iso" }; })(),
       cabin: (() => { const s = this._cabinSummary(climateOn); return { icon: s.on ? "interioron" : "interior", ...s, open: "climate" }; })(),
       flash: { confirm: "flash", icon: "headlight", sub: "flash", btn: "button.flash_lights", call: ["button", "press", "button.flash_lights"] },
@@ -1930,6 +2028,7 @@ class DeepalS05Card extends HTMLElement {
   _onAction(id) {
     const a = this._actions().find((x) => x.id === id);
     if (!a || a.disabled || this._pending[id]) return;
+    if (a.pcsheet) { this._pcSheet = true; return this._force(); }
     if (a.open) { this._view = a.open; return this._force(); }
     if (!a.call) { this._flash(id, "error"); this._toast(a.unsupported || "The action is not supported", "error"); return; }
     if (a.confirm && this._c.confirm.includes(a.confirm)) {
@@ -2014,6 +2113,7 @@ class DeepalS05Card extends HTMLElement {
     this._flashes[id] = { type, timer: setTimeout(() => { delete this._flashes[id]; this._force(); }, type === "error" ? 1800 : 1300) };
     this._force();
   }
+  /* One notice when the battery reaches the goal while charging. Only after this session saw the battery below the goal, so a reload does not repeat it. */
   _toast(msg, type) {
     clearTimeout(this._toastTimer);
     const ms = ((Number(this._c.toast_duration) > 0 ? Number(this._c.toast_duration) : 5) + (type === "error" ? 3 : 0)) * 1000;
@@ -2074,9 +2174,9 @@ class DeepalS05Card extends HTMLElement {
     }
     this._onAction("lock");
   }
-  _closeSheet() { clearTimeout(this._confirmTimer); if (this._confirm && this._confirm.temp !== undefined) this._tpend = undefined; this._confirm = null; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null; this._nfSheet = false; this._nfEl = null; if (this._nfAct) { this._nfAct.destroy(); this._nfAct = null; } this._force(); }
-  _popupBox() { if (!this._el) return null; if (this._confirm || this._diagSheet || this._lockSheet || this._enSheet || this._nfSheet) return this._el.box; return this._view ? this._el.vbox : null; }
-  _closeTop() { if (this._confirm || this._diagSheet || this._lockSheet || this._enSheet || this._nfSheet) return this._closeSheet(); if (this._view) { this._view = null; this._force(); } }
+  _closeSheet() { clearTimeout(this._confirmTimer); if (this._confirm && this._confirm.temp !== undefined) this._tpend = undefined; this._confirm = null; this._diagSheet = false; this._lockSheet = false; this._lockAsk = null; this._enSheet = false; this._enEl = null; this._nfSheet = false; this._nfEl = null; if (this._nfAct) { this._nfAct.destroy(); this._nfAct = null; } this._pcSheet = false; this._pcEl = null; if (this._pcAct) { this._pcAct.destroy(); this._pcAct = null; this._pcFetch(true); } this._force(); }
+  _popupBox() { if (!this._el) return null; if (this._confirm || this._diagSheet || this._lockSheet || this._enSheet || this._nfSheet || this._pcSheet) return this._el.box; return this._view ? this._el.vbox : null; }
+  _closeTop() { if (this._confirm || this._diagSheet || this._lockSheet || this._enSheet || this._nfSheet || this._pcSheet) return this._closeSheet(); if (this._view) { this._view = null; this._force(); } }
   _key(e) {
     const box = this._popupBox(); if (!box) return;
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); return this._closeTop(); }
@@ -2122,6 +2222,12 @@ class DeepalS05Card extends HTMLElement {
     this._nfBusy = false; this._nfCheck(true);
   }
   /* Settings live in the Companion dashboard (admins only); the card just links there. */
+  /* The preconditioning sheet links to Companion dashboard → Preconditioning (admins only); a section name scrolls to it, e.g. "notifications". */
+  _openPreconditionSettings(section) {
+    this._closeSheet();
+    history.pushState(null, "", "/deepal-companion#preconditioning" + (section ? "/" + section : ""));
+    window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+  }
   _openDashboard() {
     history.pushState(null, "", "/deepal-companion");
     window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
@@ -2139,7 +2245,33 @@ class DeepalS05Card extends HTMLElement {
       this._nfAct.set(page);
     } catch (e) { fail(/Unknown.*operation/i.test((e && e.message) || "") ? "Restart Home Assistant to load notifications, then try again." : "Could not load notifications."); }
   }
-  _vsheetOpen() { return !!this._view && !this._diagSheet && !this._lockSheet && !this._enSheet && !this._nfSheet; }
+  /* Preconditioning state for the card button: colour while a Companion session runs, pulsing dot while a schedule is set.
+     Light polling (every 60 s, 15 s while active); never runs in previews. */
+  _pcFetch(force) {
+    const h = this._hass;
+    if (!h || !h.companionRequest || this._isCompanionPreview || this._pcBusy || document.hidden) return;
+    const every = this._pcInfo && this._pcInfo.active ? 15000 : 60000;
+    if (!force && Date.now() - (this._pcAt || 0) < every) return;
+    this._pcBusy = true; this._pcAt = Date.now();
+    h.companionRequest("precondition_get").then((r) => {
+      const st = r.state || {}, cfg = r.config || {};
+      const info = { active: st.owner === "companion" && !!st.session_start && !!(r.climate && r.climate.on), scheduled: !!cfg.scheduling_enabled && (cfg.schedules || []).some((x) => x.enabled), remaining: r.estimated_remaining };
+      const changed = JSON.stringify(info) !== JSON.stringify(this._pcInfo || {});
+      this._pcInfo = info; if (changed) this._force();
+    }).catch(() => {}).finally(() => { this._pcBusy = false; });
+  }
+  async _loadPrecondition(d) {
+    const gone = () => this._pcEl !== d, h = this._hass;
+    if (!h || !h.companionRequest) { d.innerHTML = `<p class="hint">${esc(T("Preconditioning needs the Deepal Companion integration."))}</p>`; return; }
+    try {
+      const mod = await import(`${SCRIPT_BASE}companion-precondition.js?v=${CARD_VERSION}`);
+      if (gone()) return;
+      d.innerHTML = ""; const host = document.createElement("div"); d.appendChild(host);
+      this._pcAct = mod.mountPrecondition(host, { request: (op, data) => h.companionRequest(op, data), t: T, loaderHtml, loaderCss: LOADER_CSS, mode: "quick", admin: !!(this._rawHass || this._hass)?.user?.is_admin, onMore: (section) => this._openPreconditionSettings(section),
+        admin: !(h.user && h.user.is_admin === false), notify: (m, err) => this._toast(m, err ? "error" : undefined), getHass: () => this._hass });
+    } catch (e) { if (!gone()) d.innerHTML = `<p class="hint">${esc(T("Could not load preconditioning."))}</p>`; }
+  }
+  _vsheetOpen() { return !!this._view && !this._diagSheet && !this._lockSheet && !this._enSheet && !this._nfSheet && !this._pcSheet; }
 
   /* ───── interior: seat levels / steering wheel / temperature ───── */
   _level(key) {
@@ -2276,11 +2408,11 @@ class DeepalS05Card extends HTMLElement {
       <div class="pk ${this._c.target_style === "bar" ? "bar" : ""}" id="pk"><div class="pt">Target</div>
         <div class="pbar"><div class="pbv"><span id="pkv">--</span><small>°C</small></div><div class="ptr"><input type="range" id="pkr" min="0" max="0" step="1" aria-label="Target"></div><div class="ptk" id="pktk"></div></div>
         <div class="pw"><div class="pp" id="pkp"></div><div class="pf l"></div><div class="pf r"></div><div class="pc"></div></div></div>
-      <div class="cseats">${["sh_l", "sv_l", "sv_r", "sh_r"].map((id) => { const [, , icon, name] = INT_SPOTS.find((x) => x[0] === id); return `<button class="sbtn ${icon === "seatvent" ? "cool" : "hot"}" data-spot="${id}" aria-label="${esc(name)}" title="${esc(name)}"><span class="cc">${ico(icon)}</span><span class="nm">${esc(T(name))}</span><span class="lvl"><i></i><i></i><i></i></span></button>`; }).join("")}</div>`;
+      <div class="cseats">${["sh_l", "sv_l", "sv_r", "sh_r"].map((id) => { const [, , icon, name] = INT_SPOTS.find((x) => x[0] === id); return `<button class="sbtn ${icon === "seatvent" ? "cool" : "hot"}" data-spot="${id}" aria-label="${esc(I18N.t(name, []))}" title="${esc(name)}"><span class="cc">${ico(icon)}</span><span class="nm">${esc(T(name))}</span><span class="lvl"><i></i><i></i><i></i></span></button>`; }).join("")}</div>`;
   }
   _seatsHtml() {
     const B = `${this._layerBase()}interior/`;
-    const btns = INT_SPOTS.map(([id, , icon, name, x, y]) => `<button class="sbtn ${icon === "seatvent" ? "cool" : "hot"}" data-spot="${id}" style="left:${x}%;top:${y}%" aria-label="${esc(name)}" title="${esc(name)}">${ico(icon)}<span class="lvl"><i></i><i></i><i></i></span></button>`).join("");
+    const btns = INT_SPOTS.map(([id, , icon, name, x, y]) => `<button class="sbtn ${icon === "seatvent" ? "cool" : "hot"}" data-spot="${id}" style="left:${x}%;top:${y}%" aria-label="${esc(I18N.t(name, []))}" title="${esc(name)}">${ico(icon)}<span class="lvl"><i></i><i></i><i></i></span></button>`).join("");
     return `<div class="ipane"><div class="ipi"><img data-l="base" src="${esc(B)}base.webp?r=2" alt="">${INT_LAYERS.map((n) => `<img class="l" data-l="${n}" src="${esc(B + n)}.webp?r=2" alt="">`).join("")}${btns}</div></div>`;
   }
 
@@ -2580,7 +2712,7 @@ class DeepalS05Card extends HTMLElement {
     this._el.veh.addEventListener("error", (e) => { if (e.target?.dataset?.l === "base") this._el.vmiss.hidden = false; }, true);
     this._el.veh.addEventListener("load", (e) => { if (e.target?.dataset?.l === "base") this._el.vmiss.hidden = true; }, true);
     this._el.vbox = g("vbox");
-    this._el.vbox.addEventListener("click", (e) => { if (e.target.closest("[data-vclose]")) { this._view = null; this._force(); } });
+    this._el.vbox.addEventListener("click", (e) => { if (e.target.closest("[data-vclose]")) { this._view = null; this._force(); } else if (e.target.closest("[data-precondition]")) { e.stopPropagation(); this._pcSheet = true; this._force(); } });
     this._swipe(this._el.vbox, this._el.vsheet); this._swipe(this._el.box, this._el.sheet);
     this._noChain(this._el.vsheet); this._noChain(this._el.sheet);
     this._pkInit(); this._bindPress();
@@ -2590,7 +2722,15 @@ class DeepalS05Card extends HTMLElement {
       const tp = e.target.closest("[data-tp]"); if (tp) { if (!tp.disabled) this._tempStep(Number(tp.dataset.tp)); return; }
       const b = e.target.closest("[data-id]"); if (b) return this._onAction(b.dataset.id);
     });
+    this._el.actions.addEventListener("scroll", (e) => { /* swipe layout: follow the visible page */
+      const p = e.target.closest?.("[data-pages]"); if (!p || !p.clientWidth) return;
+      const i = Math.round(p.scrollLeft / p.clientWidth); this._swipePage = i;
+      this._el.actions.querySelectorAll("[data-page]").forEach((d) => d.classList.toggle("on", Number(d.dataset.page) === i));
+    }, true);
     this._el.actions.addEventListener("click", (e) => {
+      if (e.target.closest("[data-himore]")) { this._imgOpen = !this._imgOpen; return this._force(); }
+      const dot = e.target.closest("[data-page]");
+      if (dot) { const p = this._el.actions.querySelector("[data-pages]"); p?.scrollTo({ left: Number(dot.dataset.page) * p.clientWidth, behavior: "smooth" }); return; }
       if (e.target.closest("[data-more]")) { this._moreOpen = !this._moreOpen; lsWrite(`deepal-s05-more:${this._c.prefix}`, this._moreOpen ? 1 : null); return this._force(); }
       const b = e.target.closest("[data-id]"); if (b) this._onAction(b.dataset.id);
     });
@@ -2612,6 +2752,7 @@ class DeepalS05Card extends HTMLElement {
       if (lk) return this._lockPick(lk.dataset.lk);
       const dg = e.target.closest("[data-dg-set],[data-dg-add],[data-dg-ignore],[data-dg-ok]");
       if (dg) return this._diagAct(dg.dataset);
+      if (e.target.closest("[data-pcmore]")) return this._openPreconditionSettings();
       const t = e.target.closest("[data-sheet],[data-close]");
       if (!t) return;
       if (t.dataset.sheet === "yes") {
@@ -2705,7 +2846,8 @@ class DeepalS05Card extends HTMLElement {
     this._paintNotificationLink();
     /* buttons */
     const off = this._offline();
-    const lay = ["split", "grid", "scroll", "fit"].includes(c.button_layout) ? c.button_layout : "split";
+    const layPick = ["split", "image", "imageall", "swipe", "grid"].includes(c.button_layout) ? c.button_layout : "split";
+    const lay = (layPick === "image" || layPick === "imageall") && c.hidden.includes("hero") ? "split" : layPick; /* the "More" button needs the image */
     const lab = c.button_labels, showT = lab === "title" || lab === "both", showS = lab === "status" || lab === "both";
     const acts = this._actions();
     const cellOf = (id) => {
@@ -2713,13 +2855,14 @@ class DeepalS05Card extends HTMLElement {
       const f = this._flashes[a.id], pend = !!this._pending[a.id], state = pend ? "pending" : f ? f.type : "";
       const icon = f && !pend ? (f.type === "success" ? "check" : "alert") : a.icon;
       const tone = off ? "" : a.tone || "";
-      const dot = !state && (tone === "warn" || tone === "bad") ? '<span class="dot"></span>' : "";
+      const dot = !state && (tone === "warn" || tone === "bad") ? '<span class="dot"></span>' : !state && a.pulse && !off ? '<span class="dot pulse" aria-hidden="true"></span>' : "";
       const ring = pend ? '<svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><rect x="2.5" y="2.5" width="95" height="95" rx="47.5" pathLength="100"/></svg>' : "";
       const label = `${a.label}: ${off ? "" : a.sub || ""}`;
       const sub = off ? "" : pend ? "Waiting…" : f ? (f.type === "success" ? "Done" : "Failed") : cap(a.sub || "");
       return `<div class="cell ${tone}"><button class="act ${tone} ${a.on && !off ? "on" : ""} ${state}" data-id="${a.id}" ${a.disabled || off ? "disabled" : ""} title="${esc(label)}" aria-label="${esc(label)}">${ico(icon)}${dot}${ring}</button>${showT ? `<span class="cap t">${esc(a.label)}</span>` : ""}${showS && sub ? `<span class="cap s">${esc(sub)}</span>` : ""}</div>`;
     };
     const vis = c.buttons.filter((id) => !c.buttons_hidden.includes(id));
+    let imgMore = [], imgInRow = false;
     if (this._moreOpen === undefined) this._moreOpen = !!lsRead(`deepal-s05-more:${c.prefix}`);
     if (lay === "split") {
       const np = Math.max(1, Math.min(5, Math.round(Number(c.button_primary)) || 4)), prim = vis.slice(0, np), more = vis.slice(np);
@@ -2730,10 +2873,72 @@ class DeepalS05Card extends HTMLElement {
       el.actions.innerHTML = `<div class="prow">${prim.map(cellOf).join("")}</div>` +
         (more.length ? `<div class="mwrap"><div class="mrow" id="mrow" ${open ? "" : "inert"}>${more.map(cellOf).join("")}</div></div>` +
           (keep ? "" : `<button class="morebtn" data-more aria-expanded="${open}" aria-controls="mrow" title="${esc(T("More"))}" aria-label="${esc(T("More"))}"><span>More</span>${ico("chevd")}${alert ? '<span class="mdot"></span>' : ""}</button>`) : "");
+    } else if (lay === "swipe") {
+      const np = Math.max(1, Math.min(5, Math.round(Number(c.button_primary)) || 4)), pages = [];
+      for (let i = 0; i < vis.length; i += np) pages.push(vis.slice(i, i + np));
+      const pg = Math.min(this._swipePage || 0, Math.max(0, pages.length - 1));
+      el.actions.className = `actions swipe sz-${c.button_size} ${off ? "offline" : ""}`;
+      el.actions.style.setProperty("--np", String(np));
+      el.actions.innerHTML = `<div class="pages" data-pages>${pages.map((p) => `<div class="page">${p.map(cellOf).join("")}</div>`).join("")}</div>` +
+        (pages.length > 1 ? `<div class="pdots">${pages.map((_, i) => `<button data-page="${i}" class="${i === pg ? "on" : ""}" aria-label="${i + 1}/${pages.length}"></button>`).join("")}</div>` : "");
+      const pw = el.actions.querySelector("[data-pages]"); if (pw && pg) pw.scrollLeft = pg * pw.clientWidth; /* keep the page the user swiped to when the card refreshes */
+    } else if (lay === "image") {
+      const np = Math.max(1, Math.min(5, Math.round(Number(c.button_primary)) || 4));
+      imgMore = vis.slice(np); const prim = vis.slice(0, np);
+      imgInRow = imgMore.length > 0 && prim.length < 5; /* a free slot in the row: "More" goes there instead of on the image */
+      const moreCell = imgInRow ? `<div class="cell"><button class="act hmorebtn ${this._imgOpen ? "on" : ""}" data-himore aria-expanded="${!!this._imgOpen}" title="${esc(T("More"))}" aria-label="${esc(T("More"))}"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span class="hcnt">${imgMore.length}</span></button>${showT || showS ? `<span class="cap s">${esc(T("More"))}</span>` : ""}</div>` : "";
+      el.actions.className = `actions split sz-${c.button_size} ${off ? "offline" : ""}`;
+      el.actions.style.setProperty("--np", String(prim.length + (imgInRow ? 1 : 0)));
+      el.actions.innerHTML = `<div class="prow">${prim.map(cellOf).join("")}${moreCell}</div>`;
+    } else if (lay === "imageall") { /* no button row: every button lives in the panel */
+      imgMore = vis.slice();
+      el.actions.className = `actions noacts sz-${c.button_size}`;
+      el.actions.style.removeProperty("--np");
+      el.actions.innerHTML = "";
     } else {
       el.actions.className = `actions ${lay} sz-${c.button_size} ${off ? "offline" : ""}`;
       el.actions.style.removeProperty("--np");
       el.actions.innerHTML = vis.map(cellOf).join("");
+    }
+    { /* "More" on the image: a small button next to the Settings gear opens a panel just under the image */
+      let hm = el.hero.querySelector(":scope>.himore"), hp = el.card.querySelector(":scope>.hpanel");
+      if (imgInRow) { hm?.remove(); hm = null; }
+      if (imgMore.length) {
+        if (!hm && !imgInRow) {
+          hm = document.createElement("button"); hm.className = "himore"; hm.dataset.himore = "";
+          hm.addEventListener("click", (e) => { e.stopPropagation(); this._imgOpen = !this._imgOpen; this._force(); });
+          el.hero.append(hm);
+        }
+        if (!hp) {
+          hp = document.createElement("div"); hp.className = "hpanel"; hp.setAttribute("role", "group");
+          hp.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (e.target.closest("[data-hpclose]")) { this._imgOpen = false; return this._force(); }
+            const b = e.target.closest("[data-id]"); if (!b) return;
+            this._onAction(b.dataset.id);
+            if (this._popupBox()) { this._imgOpen = false; this._force(); } /* the button opened a popup: close the panel behind it */
+          });
+          el.hero.after(hp);
+        }
+        if (!el.card._hpOutside) { /* a tap outside the open panel only closes it, so it never presses something underneath */
+          el.card._hpOutside = true;
+          el.card.addEventListener("pointerdown", (e) => {
+            if (!this._imgOpen || this._popupBox()) return; /* taps inside an open popup are never swallowed */ const path = e.composedPath(), p = el.card.querySelector(":scope>.hpanel"), m = el.hero.querySelector(":scope>.himore");
+            if ((p && path.includes(p)) || (m && path.includes(m)) || path.some((n) => n.dataset && n.dataset.himore !== undefined)) return;
+            this._imgSwallow = true; clearTimeout(this._imgSwallowT); this._imgSwallowT = setTimeout(() => { this._imgSwallow = false; }, 700); this._imgOpen = false; this._force();
+          }, true);
+          el.card.addEventListener("click", (e) => { if (!this._imgSwallow) return; this._imgSwallow = false; e.stopPropagation(); e.preventDefault(); }, true);
+        }
+        const open = !!this._imgOpen, alert = !off && imgMore.some((id) => { const t = (acts.find((x) => x.id === id) || {}).tone; return t === "warn" || t === "bad"; });
+        if (hm) { hm.classList.toggle("solo", !!el.foot.hidden); hm.classList.toggle("on", open);
+        hm.setAttribute("aria-expanded", String(open)); hm.setAttribute("aria-label", T("More")); hm.title = T("More");
+        hm.innerHTML = `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><b>${imgMore.length}</b>${alert ? '<span class="mdot"></span>' : ""}`; }
+        hp.classList.toggle("show", open); hp.toggleAttribute("inert", !open);
+        hp.className = `hpanel sz-${c.button_size}${open ? " show" : ""}${off ? " offline" : ""}`;
+        hp.innerHTML = `<div class="hph"><b>${esc(T("More"))}</b><button data-hpclose aria-label="${esc(T("Close"))}">${ico("close")}</button></div><div class="hprow" style="--np:${Math.min(5, Math.max(imgMore.length, Number(el.actions.style.getPropertyValue("--np")) || 5))}">${imgMore.map(cellOf).join("")}</div>`;
+        if (hp.previousElementSibling !== el.hero) el.hero.after(hp);
+        hp.style.order = getComputedStyle(el.hero).order; /* stays right under the image in every design */
+      } else { hm?.remove(); hp?.remove(); this._imgOpen = false; }
     }
 
     /* status (over the image) */
@@ -2783,7 +2988,17 @@ class DeepalS05Card extends HTMLElement {
     const GD = 40, GS = 1.5, arc = (r) => { const rp = r * GS, a = (x) => (x * 180) / Math.PI; return [180 - a(Math.asin(Math.min(1, GD / rp))) - 4, 360 - a(Math.acos(Math.min(1, GD / rp))) + 4]; };
     const [o0, o1] = arc(44), [i0, i1] = arc(33), at = (a0, a1, p) => a0 + ((a1 - a0) * cl(p)) / 100, f1 = (x) => x.toFixed(1);
     const oEnd = at(o0, o1, bat);
-    const flow = v.charging && bat !== null && bat < 99.5 ? `<circle class="fg" cx="50" cy="50" r="44" stroke-width="7" pathLength="360" stroke-dasharray="${f1(o1 - oEnd)} 360" stroke-dashoffset="-${f1(oEnd)}"/><circle class="fp" cx="50" cy="50" r="44" stroke-width="7" pathLength="360" stroke-dasharray="25 360" style="--fs:-${f1(oEnd)};--fe:-${f1(Math.max(oEnd, o1 - 25))}"/>` : "";
+    const tgState = UI.chargeTarget(bat, v.charging, this._s("sensor.remaining_charge_time_h_mm"), c.charge_target), tgMark = tgState ? (() => { const a = at(o0, o1, tgState.goal) * Math.PI / 180; return `<line class="tg" x1="${f1(50 + 48.5 * Math.cos(a))}" y1="${f1(50 + 48.5 * Math.sin(a))}" x2="${f1(50 + 53 * Math.cos(a))}" y2="${f1(50 + 53 * Math.sin(a))}"/>`; })() : "";
+    const flow = v.charging && bat !== null && bat < 99.5 ? `<circle class="fg" cx="50" cy="50" r="44" stroke-width="8.5" pathLength="360" stroke-dasharray="${f1(o1 - oEnd)} 360" stroke-dashoffset="-${f1(oEnd)}"/><circle class="fp" cx="50" cy="50" r="44" stroke-width="8.5" pathLength="360" stroke-dasharray="25 360" style="--fs:-${f1(oEnd)};--fe:-${f1(Math.max(oEnd, o1 - 25))}"/>` : "";
+    const hgR = fu ? 88 : 82, hgD = (r) => `M${100 - r} 100A${r} ${r} 0 0 1 ${100 + r} 100`, hgEnd = cl(bat) * 3.6;
+    const hgArc = (r, p, cls) => `<path class="tr" d="${hgD(r)}" pathLength="360"/><path class="${cls}" d="${hgD(r)}" pathLength="360" stroke-dasharray="${f1(cl(p) * 3.6)} 360"/>`;
+    const hgFlow = v.charging && bat !== null && bat < 99.5 ? `<path class="fg" d="${hgD(hgR)}" pathLength="360" stroke-dasharray="${f1(360 - hgEnd)} 360" stroke-dashoffset="-${f1(hgEnd)}"/><path class="fp" d="${hgD(hgR)}" pathLength="360" stroke-dasharray="25 360" style="--fs:-${f1(hgEnd)};--fe:-${f1(Math.max(hgEnd, 335))}"/>` : "";
+    const halfGauge = c.energy_ui === "gauge" ? `<div class="lg"><span style="color:rgb(${evRgb})">${ico("bolt")}<b>${num(range)}</b><small>km</small></span>${fu ? `<span style="color:rgb(${fuRgb})">${ico("fuel")}<b>${num(fuel)}</b><small>km</small></span>` : ""}</div><div class="hg"><svg viewBox="0 0 200 106" aria-hidden="true">${hgArc(hgR, bat === null ? 0 : bat, "ev")}${hgFlow}${fu ? hgArc(66, fuelPct === null ? 0 : fuelPct, "fu") : ""}</svg><div class="c"><span>${bat === null ? "--" : Math.round(bat)}<small>%</small></span>${fu ? `<span class="gf" style="color:rgb(${fuRgb})">${ico("fuel")}${fuelPct === null ? "--" : Math.round(cl(fuelPct))}<small>%</small></span>` : ""}</div></div><div class="lg hv"><span style="color:rgb(${evRgb})">${ico("bolt")}<b>${num(range)}</b><small>km</small></span>${fu ? `<span style="color:rgb(${fuRgb})">${ico("fuel")}<b>${num(fuel)}</b><small>km</small></span>` : ""}</div>` : "";
+    /* the Energy tile rolls through its lines while charging: Charging now · time left · charging target (when set) */
+    const rollTarget = tgState ? (tgState.reached ? T("Target reached") : tgState.goal >= 100 ? (tgState.eta ? T("Full at {0}", UI.clock(tgState.eta)) : T("Target") + " 100%") : (tgState.eta ? T("{0}% at ~{1}", tgState.goal, UI.clock(tgState.eta)) : T("Target") + " " + tgState.goal + "%")) : null;
+    const rollLines = [T("Charging now")].concat(c.chg_roll !== false && leftTxt ? [T("{0} left", leftTxt)] : [], c.chg_roll !== false && rollTarget ? [rollTarget] : []);
+    const rollMarkup = (lines) => lines.length < 2 ? `<b>${esc(lines[0])}</b>` : lines.length === 2 ? `<span class="cw" style="--d:0s"><b class="cf cf1">${esc(lines[0])}</b><b class="cf cf2">${esc(lines[1])}</b></span>` : `<span class="cw3"><span class="rl3">${[...lines, lines[0]].map((x) => `<b>${esc(x)}</b>`).join("")}</span></span>`;
+    const chgRoll = v.charging ? rollMarkup(rollLines) : "";
     const statsMarkup = `
       ${c.climate_ui === "circle" ? `<div class="t2 tempc" data-open="climate" data-ent="${esc(this._id("climate.cabin_climate"))}" data-hold="${esc(JSON.stringify({ action: "more-info", entity: this._id("sensor.inside_temperature") }))}" role="button" tabindex="0" aria-label="Climate">
         <div class="tt">Temperature</div>
@@ -2794,14 +3009,14 @@ class DeepalS05Card extends HTMLElement {
         <div class="ct"><span class="cur">${temp === null ? "--" : this._fmtNum(temp, 0) + "°"}</span><span class="lbl">Inside</span></div>
         ${tgt === null ? "" : `<div class="cstep ${climOn ? "" : "idle"}"><button class="cs" data-tp="-1" ${off ? "disabled" : ""} aria-label="Lower temperature">${ico("minus")}</button><div class="cv"><small>target</small><b>${this._fmtNum(tgtShown, 1)}°</b></div><button class="cs" data-tp="1" ${off ? "disabled" : ""} aria-label="Raise temperature">${ico("plus")}</button></div>`}
       </div>`}
-      <div class="t2 batt" data-ent="${esc(this._id("sensor.battery_level"))}"${c.energy_sheet !== false ? ` data-energy="1" data-hold="${esc(JSON.stringify({ action: "more-info", entity: this._id("sensor.battery_level") }))}"` : ""} role="button" tabindex="0">
-        <div class="tt">${fu ? "Energy" : "Battery"}</div>
-        ${v.charging ? `<div class="ts chg">${c.chg_roll !== false && leftTxt ? `<span class="cw" style="--d:0s"><b class="cf cf1">${T("Charging now")}</b><b class="cf cf2">${esc(T("{0} left", leftTxt))}</b></span>` : `<b>${T("Charging now")}</b>`}${chgSub ? `<br><span class="sub">${chgSub}</span>` : ""}</div>` : ""}
-        <div class="lg"><span style="color:rgb(${evRgb})">${ico("bolt")}<b>${num(range)}</b><small>km</small></span>${fu ? `<span style="color:rgb(${fuRgb})">${ico("fuel")}<b>${num(fuel)}</b><small>km</small></span>` : ""}</div>
+      <div class="t2 batt"${c.energy_ui === "gauge" || c.energy_ui === "capsule" ? ` data-eui="${c.energy_ui}"` : ""} data-ent="${esc(this._id("sensor.battery_level"))}"${c.energy_sheet !== false ? ` data-energy="1" data-hold="${esc(JSON.stringify({ action: "more-info", entity: this._id("sensor.battery_level") }))}"` : ""} role="button" tabindex="0">
+        ${c.energy_ui === "capsule" ? capsule : `<div class="tt">${fu ? "Energy" : "Battery"}</div>
+        ${v.charging ? `<div class="ts chg">${chgRoll}${chgSub ? `<br><span class="sub">${chgSub}</span>` : ""}</div>` : ""}
+        ${c.energy_ui === "gauge" ? halfGauge : `<div class="lg"><span style="color:rgb(${evRgb})">${ico("bolt")}<b>${num(range)}</b><small>km</small></span>${fu ? `<span style="color:rgb(${fuRgb})">${ico("fuel")}<b>${num(fuel)}</b><small>km</small></span>` : ""}</div>
         <div class="gauge"><svg viewBox="0 0 100 100" aria-hidden="true">
-          <circle class="tr" cx="50" cy="50" r="44" stroke-width="7" pathLength="360" stroke-dasharray="${f1(o1 - o0)} 360" stroke-dashoffset="-${f1(o0)}"/><circle class="ev" cx="50" cy="50" r="44" stroke-width="7" pathLength="360" stroke-dasharray="${f1(oEnd - o0)} 360" stroke-dashoffset="-${f1(o0)}"/>${flow}
-          ${fu ? `<circle class="tr" cx="50" cy="50" r="33" stroke-width="7" pathLength="360" stroke-dasharray="${f1(i1 - i0)} 360" stroke-dashoffset="-${f1(i0)}"/><circle class="fu" cx="50" cy="50" r="33" stroke-width="7" pathLength="360" stroke-dasharray="${f1(at(i0, i1, fuelPct) - i0)} 360" stroke-dashoffset="-${f1(i0)}"/>` : ""}</svg>
-          <div class="c"><span>${bat === null ? "--" : Math.round(bat)}<small>%</small></span>${fu ? `<span class="gf" style="color:rgb(${fuRgb})">${ico("fuel")}${fuelPct === null ? "--" : Math.round(cl(fuelPct))}<small>%</small></span>` : ""}</div></div></div>`;
+          <circle class="tr" cx="50" cy="50" r="44" stroke-width="8.5" pathLength="360" stroke-dasharray="${f1(o1 - o0)} 360" stroke-dashoffset="-${f1(o0)}"/><circle class="ev" cx="50" cy="50" r="44" stroke-width="8.5" pathLength="360" stroke-dasharray="${f1(oEnd - o0)} 360" stroke-dashoffset="-${f1(o0)}"/>${flow}${tgMark}
+          ${fu ? `<circle class="tr" cx="50" cy="50" r="33" stroke-width="8.5" pathLength="360" stroke-dasharray="${f1(i1 - i0)} 360" stroke-dashoffset="-${f1(i0)}"/><circle class="fu" cx="50" cy="50" r="33" stroke-width="8.5" pathLength="360" stroke-dasharray="${f1(at(i0, i1, fuelPct) - i0)} 360" stroke-dashoffset="-${f1(i0)}"/>` : ""}</svg>
+          <div class="c"><span>${bat === null ? "--" : Math.round(bat)}<small>%</small></span>${fu ? `<span class="gf" style="color:rgb(${fuRgb})">${ico("fuel")}${fuelPct === null ? "--" : Math.round(cl(fuelPct))}<small>%</small></span>` : ""}</div></div>`}`}</div>`;
 
     if(el.stats._markup !== statsMarkup){
       // Keep a running charging effect when text or percentages change.
@@ -2867,7 +3082,11 @@ class DeepalS05Card extends HTMLElement {
       const curRaw = this._chargeCurrent(), pre = (curRaw.match(/^(AC|DC)\s/) || [])[1] || "";
       const cur = curRaw ? curRaw.replace(/^(AC|DC)\s+/, "") : "", rem = left && v.charging ? this._fmtLeft(left) : "", typ = type || pre || "";
       const known = [cur, rem, typ].filter(Boolean);
-      el.charge.innerHTML = `<div><div class="l">${esc(T(v.charging?"Charging now":"Charger connected"))}</div><div class="v">${esc(typ||T("Connected"))}</div></div><div><div class="l">${esc(T("Current"))}</div><div class="v">${esc(cur||"—")}</div></div><div><div class="l">${esc(T("Remaining"))}</div><div class="v">${esc(rem||"—")}</div></div>`;
+      const tgChg = UI.chargeTarget(v.battery, v.charging, left, c.charge_target);
+      const stat = (value, label) => `<div class="cg-stat"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
+      const tgText = tgChg ? (tgChg.reached ? T("Reached") : `${tgChg.goal}%` + (tgChg.eta ? ` · ≈${UI.clock(tgChg.eta)}` : "")) : "";
+      /* header: what the car is doing and the cost of this charge (filled by the live cost module); below: the figures */
+      el.charge.innerHTML = `<div class="cg-head"><span class="cg-state">${ico("bolt")}<b>${esc(T(v.charging?"Charging now":"Charger connected"))}</b>${typ ? `<i>${esc(typ)}</i>` : ""}</span><span class="cg-cost" data-cg-cost></span></div><div class="cg-stats">${stat(cur||"—", T("Current"))}${stat(rem||"—", T("Remaining"))}${tgChg ? stat(tgText, T("Target")) : ""}</div>`;
       el.chgbox.hidden = el.chgline.hidden = !known.length; /* if there is no item we show nothing (not "--") */
       if (cst === "line") el.chgbox.innerHTML = ico("bolt") + known.map((x) => `<span>${esc(x)}</span>`).join("<i>·</i>");
       else if (cst === "big") { const m = cur && /^(.*?)\s*([A-Za-z]+)$/.exec(cur); el.chgbox.innerHTML = (cur ? `<span class="a">${esc(m ? m[1] : cur)}${m ? `<small>${esc(m[2])}</small>` : ""}</span>` : "") + `<span class="b">${esc([typ, rem].filter(Boolean).join(" · "))}${rem ? ` <em>Remaining</em>` : ""}</span>`; }
@@ -2907,6 +3126,16 @@ class DeepalS05Card extends HTMLElement {
         el.box.appendChild(d); this._nfEl = d; this._loadNotifications(d);
       }
       el.sheet.classList.add("show");
+    } else if (this._pcSheet) {
+      /* Preconditioning: the same module as Companion dashboard → Preconditioning, loaded only when it opens */
+      if (!this._pcEl || !el.box.contains(this._pcEl)) {
+        el.box.className = "box wide nfp nfl";
+        el.box.innerHTML = sheetHd("precond", "Preconditioning");
+        if ((this._rawHass || this._hass)?.user?.is_admin) el.box.querySelector(".hd [data-close]")?.insertAdjacentHTML("beforebegin", `<button class="x" data-pcmore aria-label="${esc(T("Open preconditioning settings"))}" title="${esc(T("Open preconditioning settings"))}">${ico("sliders")}</button>`);
+        const d = document.createElement("div"); d.className = "nfpanel"; d.innerHTML = loaderHtml("snow");
+        el.box.appendChild(d); this._pcEl = d; this._loadPrecondition(d);
+      }
+      el.sheet.classList.add("show");
     } else {
       el.sheet.classList.remove("show");
     }
@@ -2918,7 +3147,7 @@ class DeepalS05Card extends HTMLElement {
   _bindPress() {
     const root = this._el.card; let st = null;
     root.addEventListener("pointerdown", (e) => {
-      if (e.button > 0 || e.target.closest("[data-id],[data-tp],[data-more]")) return;
+      if (e.button > 0 || e.target.closest("[data-id],[data-tp],[data-more],[data-himore],.hpanel,[data-page]")) return;
       const t = e.target.closest("[data-ent],[data-open]"); if (!t) return;
       st = { t, x: e.clientX, y: e.clientY, held: false };
       st.timer = setTimeout(() => { if (st) { st.held = true; try { navigator.vibrate && navigator.vibrate(15); } catch (_) {} this._hold(st.t); } }, 520);
@@ -2940,6 +3169,7 @@ class DeepalS05Card extends HTMLElement {
       /* the direction locks once, after the first ~8px; small accidental movements at the start do not cut the horizontal drag (tab bar) */
       if (!axis) { if (Math.hypot(dx, dy) < 8) return; axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y"; }
       const horiz = axis === "x";
+      if (e.composedPath().some((n) => n instanceof Element && n.matches("input[type=range]"))) return; /* dragging a slider must reach the slider */
       for (const n of e.composedPath()) {
         if (n === sheet) break;
         if (!(n instanceof Element)) continue; /* the Settings shadowRoot: we continue to the host, which is what scrolls */
@@ -2998,7 +3228,8 @@ class DeepalS05Card extends HTMLElement {
     this._tap(t);
   }
   _act(cfg, ent) {
-    const a = cfg.action || "more-info", id = cfg.entity || ent;
+    const id = cfg.entity || ent, readOnly = /^(sensor|binary_sensor|weather|sun|zone|person|device_tracker|event|image|camera|calendar)\./.test(id || "");
+    const a = cfg.action === "toggle" && readOnly ? "more-info" : cfg.action || "more-info"; /* these domains cannot be toggled */
     if(cfg.confirmation&&(a==="toggle"||(["perform-action","call-service"].includes(a)&&/\.(turn_on|turn_off|press)$/.test(cfg.perform_action||cfg.service||"")))){this._confirm={id:"custom",key:"custom",customAction:{...cfg,confirmation:false},entity:ent};clearTimeout(this._confirmTimer);this._confirmTimer=setTimeout(()=>{this._confirm=null;this._force();},8000);return this._force();}
     if (a === "more-info") { if (id) this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: id } })); return; }
     if (a === "toggle") return this._hass.callService("homeassistant", "toggle", { entity_id: id }).catch((err) => this._failToast(err));
@@ -3137,7 +3368,7 @@ class DeepalS05Card extends HTMLElement {
       const inside = this._n("sensor.inside_temperature"), fanTxt = this._s("sensor.climate_fan_level"), pend = !!this._pending.climate;
       el.dov.innerHTML = `<div class="dscr"><div class="dbig">${inside === null ? "--" : this._fmtNum(inside, 1)}<small>°C</small></div>
         <div class="dst ${on ? "on" : ""}"><i></i>${esc(T(on ? "On" : "Off"))}</div></div>
-        <button class="act dpw ${on ? "on" : ""} ${pend ? "pending" : ""}" data-id="climate" aria-label="Climate on/off">${ico("power")}${pend ? RING : ""}</button>`;
+        <button class="act dpw ${on ? "on" : ""} ${pend ? "pending" : ""}" data-id="climate" aria-label="Climate on/off">${ico("power")}${pend ? RING : ""}</button>${this._hass && this._hass.companionRequest ? `<button class="act dpc" data-precondition aria-label="${esc(T("Preconditioning"))}">${ico("precond")}<span>${esc(T("Preconditioning"))}</span></button>` : ""}`;
       el.vtctl.innerHTML = "";
       const no = this._tgt();
       el.pk.hidden = !no;
@@ -3210,10 +3441,12 @@ class DeepalS05Settings extends HTMLElement {
   _orderList(all, order, hidden, labelOf, kind, unused = []) {
     return `<div class="list">${order.map((id, i) => {
       const off = hidden.includes(id), un = unused.includes(id);
-      return `<div class="row ${off ? "off" : ""} ${un ? "unused" : ""}" data-dk="${kind}"${un ? ` title="${esc(T("Not used by this card design"))}"` : ""}><i class="grip" aria-hidden="true" title="${T("Drag to reorder")}"></i><span>${esc(labelOf(id))}</span>
+      if (kind === "sec" && id === "status") return ""; /* Status is drawn on the vehicle image: it is a second line of that row, never a row of its own */
+      const parent = kind === "sec" && id === "hero", statusOff = hidden.includes("status");
+      return `<div class="row ${off ? "off" : ""} ${un ? "unused" : ""} ${parent ? "pin-parent" : ""}" data-dk="${kind}" data-id="${esc(id)}"${un ? ` title="${esc(T("Not used by this card design"))}"` : ""}><i class="grip" aria-hidden="true" title="${T("Drag to reorder")}"></i><span>${esc(labelOf(id))}</span>
         <button class="mv" data-mv="${kind}|${id}|-1" ${i === 0 ? "disabled" : ""} aria-label="Up">${ico("up")}</button>
         <button class="mv" data-mv="${kind}|${id}|1" ${i === order.length - 1 ? "disabled" : ""} aria-label="Down">${ico("down")}</button>
-        <button class="swb" data-vis="${kind}|${id}" aria-label="Show"><i class="sw ${off ? "" : "on"}"></i></button></div>`;
+        <button class="swb" data-vis="${kind}|${id}" aria-label="${T("Show")} ${esc(labelOf(id))}" aria-pressed="${!off}"><i class="sw ${off ? "" : "on"}"></i></button>${parent ? `<div class="pin-sub ${statusOff ? "off" : ""}"><span>${esc(labelOf("status"))}</span><button class="swb" data-vis="sec|status" aria-label="${T("Show")} ${esc(labelOf("status"))}" aria-pressed="${!statusOff}"><i class="sw ${statusOff ? "" : "on"}"></i></button></div>` : ""}</div>`;
     }).join("")}</div>`;
   }
   _sel(name, val, opts) { return `<select data-set="${name}">${opts.map(([v, l]) => `<option value="${v}" ${String(v) === String(val) ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`; }
@@ -3272,7 +3505,7 @@ class DeepalS05Settings extends HTMLElement {
       ${(DESIGN_UNUSED[c.companion_design] || []).length ? `<p class="hint">${T("Greyed-out sections are not used by this card design. Your choices for them are kept.")}</p>` : ""}
       ${this._orderList(SECTIONS, c.order, [...c.hidden,...(c.charge_curve?[]:['curve']),...(c.charging_reminder?[]:['reminder']),...(c.charging_cost===false?['costs']:[])], (i) => SECTION_LABELS[i], "sec", DESIGN_UNUSED[c.companion_design] || [])}
       <h4>On the image</h4>
-      <div class="list">${HERO_SHOW_OPTS.map(([k, l]) => `<button class="row tg ${(c.hero_show || []).includes(k) ? "on" : ""}" data-hs="${k}"><span>${l}</span><i class="sw ${(c.hero_show || []).includes(k) ? "on" : ""}"></i></button>`).join("")}${this._tg("show_customize", c.show_customize !== false, "Settings button")}</div>
+      <div class="list">${HERO_SHOW_OPTS.map(([k, l]) => `<button class="row tg ${(c.hero_show || []).includes(k) ? "on" : ""}" data-hs="${k}"><span>${esc(I18N.t(l, []))}</span><i class="sw ${(c.hero_show || []).includes(k) ? "on" : ""}"></i></button>`).join("")}${this._tg("show_customize", c.show_customize !== false, "Settings button")}</div>
       ${this._opt("Message under the status", this._seg("status_sub", c.status_sub === "off" || c.status_sub === "ticker" ? c.status_sub : "roll", [["off", "None"], ["roll", "Rolling"], ["ticker", "With dots"]]), "Under “Locked / Unlocked”: a rolling line (lock time, all closed) or 3 facts (time, parked, range) with dots.")}
       <h4>Top-right buttons</h4>
       <p class="hint">${T("Order (left to right) and visibility of the small buttons in the image corner.")}</p>
@@ -3281,9 +3514,9 @@ class DeepalS05Settings extends HTMLElement {
       <p class="hint">Order and visibility of the control buttons.</p>
       ${this._orderList(BUTTON_IDS, c.buttons, c.buttons_hidden, (i) => BUTTON_LABELS[i], "btn")}
       <h4>Button style</h4>
-      <label class="field inline">Layout ${this._sel("button_layout", c.button_layout, [["split", "Main buttons + “More”"], ["grid", "Rows (5 per row)"], ["scroll", "One row with scroll"], ["fit", "One row (everything fits)"]])}</label>
+      <label class="field inline">Layout ${this._sel("button_layout", c.button_layout, [["split", "Main buttons + “More”"], ["image", "Main buttons + “More” on the image"], ["imageall", "All buttons in “More” on the image"], ["swipe", "Swipe pages"], ["grid", "Rows (5 per row)"]])}</label>
       <label class="field inline">Labels ${this._sel("button_labels", c.button_labels, [["none", "No labels"], ["status", "Status only"], ["title", "Title only"], ["both", "Title + status (2 lines)"]])}</label>
-      ${c.button_layout === "split" || !c.button_layout ? `${this._opt("Main buttons", this._seg("button_primary", String(c.button_primary || 4), [["3", "3"], ["4", "4"], ["5", "5"]]), "The first buttons in the list go in the main row, the rest under “More”.")}${this._opt("The rest", this._seg("buttons_more", c.buttons_more || "collapse", [["collapse", "Hidden"], ["show", "Always visible"]]))}` : ""}
+      ${c.button_layout === "image" || c.button_layout === "swipe" ? this._opt(c.button_layout === "swipe" ? "Buttons per page" : "Main buttons", this._seg("button_primary", String(c.button_primary || 4), [["3", "3"], ["4", "4"], ["5", "5"]]), c.button_layout === "swipe" ? "Swipe left for the next buttons." : "The first buttons in the list go in the main row, the rest under “More”.") : ""}${c.button_layout === "split" || !c.button_layout ? `${this._opt("Main buttons", this._seg("button_primary", String(c.button_primary || 4), [["3", "3"], ["4", "4"], ["5", "5"]]), "The first buttons in the list go in the main row, the rest under “More”.")}${this._opt("The rest", this._seg("buttons_more", c.buttons_more || "collapse", [["collapse", "Hidden"], ["show", "Always visible"]]))}` : ""}
       ${this._opt("Size", this._seg("button_size", c.button_size, [["s", "Small"], ["m", "Medium"], ["l", "Large"]]))}
       ${this._infoHtml(c)}`;
   }
@@ -3361,16 +3594,21 @@ class DeepalS05Settings extends HTMLElement {
       <datalist id="dl-pfx">${pfxCandidates(this._hass).map((p) => `<option value="${esc(p)}"></option>`).join("")}</datalist>
       ${(() => { const e = effPrefix(this._hass, c); return e !== c.prefix ? `<p class="hint">${T("Prefix {0} was not found; {1} is being used automatically. Edit the field to save it.", `<code>${esc(c.prefix)}</code>`, `<code>${esc(e)}</code>`)}</p>` : ""; })()}
       ${this._opt("Vehicle type", this._seg("powertrain", c.powertrain || "auto", [["auto", "Automatic"], ["phev", "Plug-in hybrid"], ["ev", "Electric"]]), "“Automatic” detects the type from the fuel sensors.")}
+      ${c.energy_sheet !== false ? `${this._orow("Battery capacity (kWh)", `<input type="number" step="0.1" data-set="battery_kwh" data-num value="${Number(c.battery_kwh) > 0 ? esc(c.battery_kwh) : ""}" placeholder="${autoKwh(this._hass, c)}">`, T("Automatic: 18.4 kWh for plug-in hybrid, 68.8 kWh for electric. Enter a value only to override it; empty = automatic."))}` : ""}
       <h4>Car color</h4>
       <p class="hint">Used by the Car View image (vehicle popup and, if you choose it, the hero).</p>
       <div class="csw">${CAR_COLORS.map(([k, n, hex]) => `<button data-sset="car_color|${k}" class="${k === cc ? "on" : ""}" style="background:${hex}" title="${esc(T(n))}" aria-label="${esc(T(n))}"></button>`).join("")}</div>
       ${this._opt("Wheels (Car View)", this._seg("iso_wheels", c.iso_wheels || "cover", [["cover", "20″ with covers"], ["open", "20″ without covers"], ["pro", "18″ Pro"]]))}
-      ${c.energy_sheet !== false ? `${this._orow("Battery capacity (kWh)", `<input type="number" step="0.1" data-set="battery_kwh" data-num value="${Number(c.battery_kwh) > 0 ? esc(c.battery_kwh) : ""}" placeholder="${autoKwh(this._hass, c)}">`, T("Automatic: 18.4 kWh for plug-in hybrid, 68.8 kWh for electric. Enter a value only to override it; empty = automatic."))}
+      ${this._tabTank(c)}
+      ${c.energy_sheet !== false ? `<h4>Charging reminder</h4>
       ${this._orow("Ask for a charging profile after at least (%)", this._num("charge_prompt_min_gain", c.charge_prompt_min_gain, "1"), "A finished charge that adds at least this many battery percent asks which charging profile to use. Default 3; 0 asks after every charge.")}
       ${this._orow("Recent charges checked for the reminder", this._num("charge_prompt_recent", c.charge_prompt_recent, "1"), "How many of the latest charges the reminder looks at, so earlier ones you missed are still offered. 1 to 20, default 10.")}
+      <h4>Charge detection</h4>
       ${this._orow("Ignore one-off battery jumps above (%)", this._num("charge_spike_jump", c.charge_spike_jump, "1"), "A single reading this many percent above the charge so far is ignored until the next reading confirms it. 5 to 50, default 20.")}` : ""}
+      <h4>Charging curve</h4>
+      ${this._orow("A stop longer than this starts a new charge (min)", this._num("charge_curve_gap", c.charge_curve_gap, "1"), "In the live curve, a stop shorter than this stays part of the same charge, so a charge you stopped and restarted shows as one curve. A longer stop starts a new charge. 1 to 120, default 15.")}
       ${this._orow("Refresh the charging curve every (min)", this._num("charge_curve_refresh", c.charge_curve_refresh, "1"), "While charging, the curve's line follows the latest car report. If the car reports nothing new, the line still moves to the current time this often. 1 to 60, default 5.")}
-      ${this._tabTank(c)}
+      ${this._tg("charge_curve_missing", c.charge_curve_missing !== false, "Highlight Missing Data", "Shows gaps between readings as a lighter line with a tooltip explaining the missing data. Off keeps one plain line.")}
       <h4>Photos (hero & dashboard)</h4>
       <p class="hint">${T("Photos are loaded from the {0} folder next to the card. Here you can set another folder or another file for each photo and check that it exists.", "<code>images/car/</code>")}</p>
       <label class="field">Hero photos folder (empty = automatic)<input type="text" data-set="image_path" data-text value="${esc(c.image_path || "")}" placeholder="${esc(SCRIPT_BASE)}images/car/"></label>
@@ -3381,12 +3619,12 @@ class DeepalS05Settings extends HTMLElement {
       <h4>My diagnostics</h4>
       <p class="hint">${T("Any entity. It counts as active when it is on / problem / alarm.")}</p>
       ${this._customRows(c.diag_custom, "diag_custom")}${this._addForm("diag_custom")}
-      <h4>Entity mapping</h4>
+      <h4>${esc(I18N.t("Entity mapping", []))}</h4>
       <p class="hint">${T("If an entity has a different name than the expected {0}, choose here which one to use.", `<code>${esc(c.prefix)}_…</code>`)}</p>
-      ${ents.length ? `<div class="list">${ents.map(([k, v]) => `<div class="row"><span data-ha-name>${esc(this._entityRoleName(k,c))}<small>${esc(v)}</small></span><button class="mv" data-delent="${esc(k)}" aria-label="Remove ${esc(this._entityRoleName(k,c))} override">${ico("trash")}</button></div>`).join("")}</div>` : ""}
-      <div class="add"><label class="field">Key${this._sel("_mkey", this._form.mkey, [["", "— choose —"], ...uniq(OTHER_KEYS).map((k) => [k, this._entityRoleName(k,c)])])}</label>
-        <label class="field">Entity<ha-selector data-entity-mapping></ha-selector><small data-mapping-id>${esc(this._form.ment)}</small></label>
-        <button class="btn sm" data-addent>${ico("plus")} Map</button></div>
+      ${ents.length ? `<div class="list">${ents.map(([k, v]) => `<div class="row"><span data-ha-name>${esc(this._entityRoleName(k,c))}<small>${esc(v)}</small></span><button class="mv" data-delent="${esc(k)}" aria-label="${esc(I18N.t("Remove {0} override", [this._entityRoleName(k,c)]))}">${ico("trash")}</button></div>`).join("")}</div>` : ""}
+      <div class="add"><label class="field">${esc(I18N.t("Key", []))}${this._sel("_mkey", this._form.mkey, [["", I18N.t("— choose —", [])], ...uniq(OTHER_KEYS).map((k) => [k, this._entityRoleName(k,c)])])}</label>
+        <label class="field">${esc(I18N.t("Entity", []))}<ha-selector data-entity-mapping></ha-selector><small data-mapping-id>${esc(this._form.ment)}</small></label>
+        <button class="btn sm" data-addent>${ico("plus")} ${esc(I18N.t("Map", []))}</button></div>
       <div class="note" id="note">${esc(this._note)}</div>`;
   }
   _tabTank(c) {
@@ -3440,10 +3678,13 @@ class DeepalS05Settings extends HTMLElement {
     const fu = hasFuel(this._hass, c);
     return `<h4>Charging details</h4>
       ${this._opt("Style", this._seg("charge_style", c.charge_style || "line", [["line", "Line"], ["text", "Text"], ["big", "Large"], ["beside", "At the port"]]), "Current, time remaining and charging type as text on the image.")}
+      ${this._opt("Energy tile", this._seg("energy_ui", ["gauge", "capsule"].includes(c.energy_ui) ? c.energy_ui : "ring", [["ring", "Ring"], ["gauge", "Half gauge"], ["capsule", "Split capsules"]]), "Ring: the classic rings in the corner of the tile. Half gauge: a half circle with the battery percentage and both ranges. Split capsules: one card for the battery and one for the fuel, with a total range line.")}
       <h4>Charging effect</h4>
       <label class="field">Charging effect on the car${this._sel("charge_fx", c.charge_fx || "flow_port", [["flow_port", "Cable flow + port pulse"], ["flow", "Energy flow along the cable"], ["port", "Pulse at the charge port"], ["sweep", "Light sweep across the car"], ["none", "None"]])}</label>
       ${this._tg("energy_sheet", c.energy_sheet !== false, "“Energy” sheet on the tile", "Tapping the Energy/Battery tile opens the battery, charging and driving history. A long press opens the sensor. If you turn it off, the sensor always opens.")}
       ${this._tg("chg_roll", c.chg_roll !== false, "Alternate “Charging now” / time left", "In the Energy tile, while charging, the text rolls upward and shows the time left every few seconds.")}
+      ${this._tg("charge_cost_selector", c.charge_cost_selector !== false, "Cost selector while charging (curve off)", "When the charging curve is hidden, a small location selector appears during a charge and fades away once you save. Tap the cost in the charging block to change it later.")}
+      <div class="row tgnum"><span>${esc(T("Charging target (%)"))}<small>${esc(T("0 = off. 50 to 100 in steps of 5. Advisory only: the card cannot stop charging."))}</small></span>${this._num("charge_target", c.charge_target, "5")}</div>
 `;
   }
   _tabColours(c) {
@@ -3536,6 +3777,7 @@ class DeepalS05Settings extends HTMLElement {
       const row=g.closest('.row'),list=row?.parentElement;if(!list)return;
       startReorder(e,g,row,list,(from,to)=>{
         const rows=[...list.children],kind=row.dataset.dk,key=this._sortKey(kind),arr=[...c[key]];
+        if(kind==="sec"){const ids=rows.map(r=>r.dataset.id),[moved]=ids.splice(from,1);ids.splice(to,0,moved);return this._emit({order:keepStatus(ids,arr)});}
         const indices=kind==='info'?rows.map(r=>arr.indexOf(r.querySelector('[data-mv]').dataset.mv.split('|')[1])):rows.map((_,i)=>i);
         const values=indices.map(i=>arr[i]),[m]=values.splice(from,1);values.splice(to,0,m);indices.forEach((index,i)=>arr[index]=values[i]);this._emit({[key]:arr});
       });
@@ -3549,6 +3791,7 @@ class DeepalS05Settings extends HTMLElement {
       if (d.mv) {
         const [kind, id, dir] = d.mv.split("|");
         const key=this._sortKey(kind),arr=[...c[key]],custom=kind==='info_custom'||kind==='diag_custom';
+        if(kind==='sec'){const movable=arr.filter(x=>x!=='status'),a=movable.indexOf(id),b=a+Number(dir);if(a<0||b<0||b>=movable.length)return;[movable[a],movable[b]]=[movable[b],movable[a]];return this._emit({order:keepStatus(movable,arr)});}
         const visible=kind==='info'?[...t.closest('.list').querySelectorAll('.row')].map(row=>row.querySelector('[data-mv]').dataset.mv.split('|')[1]):null;
         const i=custom?Number(id):arr.indexOf(id),j=visible?arr.indexOf(visible[visible.indexOf(id)+Number(dir)]):i+Number(dir);
         if (i < 0 || j < 0 || j >= arr.length) return;
