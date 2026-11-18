@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/images/header.png" alt="Deepal Companion: the card standing on a stage" width="100%"></p>
 
-<table align="center"><tr><td align="center" valign="top" width="20%"><h3><br>Know it.<br>Control it.<br>Own it.</h3></td><td align="center" valign="top" width="20%"><h3><br>Γνώρισέ το.<br>Έλεγξέ το.<br>Κάν' το δικό σου.</h3></td><td align="center" valign="top" width="20%"><h3><br>Conócelo.<br>Contrólalo.<br>Hazlo tuyo.</h3></td><td align="center" valign="top" width="20%"><h3><br>Verstehen.<br>Steuern.<br>Besitzen.</h3></td><td align="center" valign="top" width="20%"><h3><br>Conoscila.<br>Controllala.<br>Falla tua.</h3></td></tr></table>
+
 
 # Deepal Companion
 
