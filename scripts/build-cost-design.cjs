@@ -1,6 +1,6 @@
 /* Compile the supplied Costs HTML locally; its demo data/handlers are never run. */
 const fs=require('fs'),path=require('path'),postcss=require('postcss'),tailwind=require('tailwindcss');
-const base=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(base,'source/cost-design.html'),'utf8'),body=source.match(/<body\b[^>]*>([\s\S]*?)<script>/i)[1];
+const base=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(base,'source/cost-design.html'),'utf8').replace(/\r\n?/g,'\n'),body=source.match(/<body\b[^>]*>([\s\S]*?)<script>/i)[1];
 const color=(role,fallback)=>`rgb(var(--cost-${role}, ${fallback}) / <alpha-value>)`;
 const config={corePlugins:{preflight:false},content:[{raw:source,extension:'html'}],theme:{extend:{colors:{emerald:{300:color('ok','99 203 163'),400:color('ok','99 203 163'),500:color('ok','99 203 163')},yellow:{400:color('warn','250 204 21')},rose:{400:color('bad','248 113 113')},blue:{400:color('info','121 173 255')},accent:{emerald:color('ok','99 203 163'),yellow:color('warn','250 204 21'),rose:color('bad','248 113 113'),blue:color('info','121 173 255')}}}}};
 const custom=source.match(/<style>([\s\S]*?)<\/style>/)[1].replace(/\bbody\s*\{/g,'.supplied-costs {').replace(/font-family:\s*'[^']+'[^;]*;/g,'font-family:inherit;');

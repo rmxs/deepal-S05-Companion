@@ -1,7 +1,7 @@
 /* Compile the user-supplied design without runtime CDNs or global demo handlers. */
 const fs=require('fs'),path=require('path'),postcss=require('postcss'),tailwind=require('tailwindcss');
 const base=path.resolve(__dirname,'..'),front=path.join(base,'custom_components/deepal_companion/frontend');
-const source=fs.readFileSync(path.join(base,'source/notification-design.html'),'utf8');
+const source=fs.readFileSync(path.join(base,'source/notification-design.html'),'utf8').replace(/\r\n?/g,'\n');
 const body=source.match(/<body\b[^>]*>([\s\S]*?)<script>/i)[1];
 let controller=[...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].at(-1)[1];
 controller=controller.replaceAll('.replace(/{name}/g, "Deepal S05")','.replace(/{name}/g, String(hooks.values().name))').replaceAll('.replace(/{battery}/g, "67%")','.replace(/{battery}/g, String(hooks.values().battery))').replaceAll('.replace(/{range}/g, "579 km")','.replace(/{range}/g, String(hooks.values().range))');
