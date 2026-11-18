@@ -103,7 +103,6 @@
 - **Session list, Deleted charges and charge dialogs translated:** the filter and sort options, Load more, the export and backup buttons, table headings, the delete confirmation, the status messages and the days-left text now follow your language, including the Delete and Change type prompts in the charging curve.
 
 ### Documentation
-- The README now opens with the slogan "Know it. Control it. Own it." in English, Greek, Spanish, German and Italian.
 - New preconditioning picture in the README and the Preconditioning guide, showing the current popup. The old links to pictures that no longer existed were removed.
 - New [Preconditioning guide](docs/PRECONDITIONING.md), with matching updates to the README, the user guide, the settings reference, the notifications guide and troubleshooting.
 - The README gallery now shows the settings pages, charging locations, charging profiles on the card and the health checks, with refreshed screenshots of the car view, confirmation window, Notifications page and Sessions page.
