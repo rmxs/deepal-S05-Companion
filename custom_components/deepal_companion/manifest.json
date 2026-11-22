@@ -4,7 +4,8 @@
   "after_dependencies": [
     "lovelace",
     "deepal",
-    "mobile_app"
+    "mobile_app",
+    "recorder"
   ],
   "codeowners": [
     "@rmxs"

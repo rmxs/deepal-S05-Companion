@@ -35,9 +35,9 @@ jobs:
           PY
       - run: npm run test:curve
       - run: npm run test:tokens
+      - run: npx playwright-core install --with-deps chromium
       - run: npm run test:plan
       - run: npm run test:neon
-      - run: npx playwright-core install --with-deps chromium
       - run: npm run test:browser
       - run: npm run test:browser
         env:
