@@ -1,0 +1,20 @@
+const assert=require('assert');
+module.exports=async page=>{
+  const panel=page.locator('deepal-companion-panel');
+  await panel.locator('.cc-profile').first().waitFor({state:'attached'});
+  const editorHandle=await panel.locator('.cc-profile').first().elementHandle();
+  await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').costs.dirty);
+  const ping=()=>page.evaluate(()=>{window.subscribers.forEach(f=>f({vehicle_id:'car'}));return new Promise(r=>setTimeout(r,300));});
+  await page.evaluate(()=>{const p=document.querySelector('deepal-companion-panel');window.__keepCosts=p.costs;p.costs.dirty=true;window.__oldNames={...window.viewNames};window.viewNames.mobile='Renamed elsewhere';});
+  await ping();
+  assert.equal(await panel.evaluate(p=>p.costs===window.__keepCosts&&p.costs.dirty),true,'A dirty editor survives an external profile change');
+  assert.equal(await editorHandle.evaluate(n=>n.isConnected),true,'The editor stays mounted (same node, still in the page)');
+  await ping();
+  assert.equal(await panel.evaluate(p=>p.costs===window.__keepCosts),true,'Repeated refreshes keep deferring without looping');
+  await page.evaluate(()=>{document.querySelector('deepal-companion-panel').costs.dirty=false;});
+  await ping();
+  await panel.locator('.cc-profile').first().waitFor({state:'attached'});
+  assert.equal(await panel.evaluate(p=>p.costs!==window.__keepCosts),true,'The deferred change rebuilds once the editor is clean');
+  await page.evaluate(()=>{window.viewNames=window.__oldNames;});await ping();
+  console.log('PASS: a dirty editor is not rebuilt by an external profile change; it rebuilds once clean.');
+};

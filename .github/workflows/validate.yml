@@ -28,12 +28,15 @@ jobs:
           import pathlib, re, sys
           root = pathlib.Path('custom_components/deepal_companion')
           revision = re.search(r'FRONTEND_REVISION = "([^"]+)"', (root / 'const.py').read_text(encoding='utf-8')).group(1)
-          stale = sorted({f"{path.name}: {found}" for path in (root / 'frontend').glob('*.js')
+          stale = sorted({f"{path.name}: {found}" for path in [*(root / 'frontend').rglob('*.js'), *(root / 'frontend').rglob('*.css')]
                           for found in re.findall(r'rev=(\d{8}-\d+)', path.read_text(encoding='utf-8')) if found != revision})
           if stale:
               sys.exit('Frontend files with a different revision than const.py (' + revision + '):\n' + '\n'.join(stale))
           PY
       - run: npm run test:curve
+      - run: npm run test:tokens
+      - run: npm run test:plan
+      - run: npm run test:neon
       - run: npx playwright-core install --with-deps chromium
       - run: npm run test:browser
       - run: npm run test:browser

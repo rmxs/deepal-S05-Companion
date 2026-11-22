@@ -38,7 +38,7 @@ class PhoneText(unittest.TestCase):
         root = Path(__file__).resolve().parents[1] / "custom_components/deepal_companion"
         used = set()
         for path in root.glob("*.py"):
-            for double, single in re.findall(r"""tr\(\s*(?:self\.hass|hass)\s*,\s*(?:"([^"]+)"|'([^']+)')""", path.read_text(encoding="utf-8")):
+            for double, single in re.findall(r"""(?<![A-Za-z_])tr\(\s*(?:self\.hass|hass)\s*,\s*(?:"([^"]+)"|'([^']+)')""", path.read_text(encoding="utf-8")):
                 used.add(double or single)
         used.discard("config")  # hass.config helpers, not phone text
         self.assertTrue(used, "no phone texts found")

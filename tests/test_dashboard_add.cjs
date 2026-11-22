@@ -17,7 +17,7 @@ module.exports=async page=>{
   await page.evaluate(()=>window.dashboardConfigs.lovelace.views[0].title='Changed elsewhere');
   await panel.locator('[data-dashboard-save]').click();await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.dashboard-add-status').textContent.includes('dashboard changed'));
   assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.type==='lovelace/config/save').length),writes,'Stale dialog must not replace concurrent dashboard changes');
-  await pick('dashboard','auto');await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.dashboard-add-status').textContent.includes('generated automatically'));
+  await pick('dashboard','auto');await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.dashboard-add-status').textContent.includes('created automatically'));
   assert.equal(await panel.locator('[data-dashboard-save]').isDisabled(),true);await panel.locator('[data-dashboard-cancel]').click();
   assert.equal(await page.evaluate(()=>window.serviceCalls.length),0);
   console.log('PASS: Add to dashboard, cancel, selected card identifiers, masonry and sections placement, generated dashboards and concurrent edit protection.');

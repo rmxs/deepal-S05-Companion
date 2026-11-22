@@ -5,11 +5,14 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
+import json
 import math
+from pathlib import Path
 import re
 import time
 import uuid
 
+from .const import update_floor
 from .phone_text import tr
 
 DEFAULT = {"enabled": False, "devices": [], "min_interval": 300,
@@ -51,6 +54,35 @@ def supported():
     return bool(match and tuple(map(int, match.groups())) >= (2026, 7))
 
 
+LEVELS = ("red", "orange", "yellow", "green")
+_COLOR = re.compile(r"#[a-fA-F0-9]{6}")
+_DEFAULTS = {}
+
+
+def card_defaults():
+    """The shipped card defaults (defaults.json, built from the card source): the one place the default colours live."""
+    if not _DEFAULTS:
+        try:
+            _DEFAULTS.update(json.loads((Path(__file__).parent / "defaults.json").read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            _DEFAULTS["_unreadable"] = True
+    return _DEFAULTS
+
+
+def palette_color(config, setting):
+    """The colour a live notification state uses: the level colour (red, orange, yellow or green) the user chose for `setting`
+    in the card's colour settings, taken from their saved palette, otherwise from the card defaults."""
+    defaults = card_defaults()
+    level = config.get(setting)
+    if level not in LEVELS:
+        level = defaults.get(setting)
+    for source in (config, defaults):
+        value = source.get("lvl_" + str(level))
+        if isinstance(value, str) and _COLOR.fullmatch(value):
+            return value
+    return defaults.get("tile_icon_color") if _COLOR.fullmatch(str(defaults.get("tile_icon_color"))) else "#63cba3"  # only if defaults.json is unreadable
+
+
 def stamp(state):
     value = getattr(state, "last_reported", None) or getattr(state, "last_updated", None)
     return value.timestamp() if isinstance(value, datetime) else 0
@@ -87,7 +119,9 @@ class LiveCharging:
         await self.owner.db("put", self.runtime.vehicle, "live_charging_state", self.state)
 
     def options(self):
-        return validate_live(self.owner.config.get("live_charging", DEFAULT))
+        options = validate_live(self.owner.config.get("live_charging", DEFAULT))
+        options["min_interval"] = max(options["min_interval"], update_floor(self.runtime))  # "Data update rate" is a lower limit
+        return options
 
     def get(self, role, logical=None):
         entity = getattr(self.runtime, "entities", {}).get(role) or getattr(self.runtime, "live_entities", {}).get(role)
@@ -161,9 +195,7 @@ class LiveCharging:
             span = f"{minutes // 60}h {minutes % 60}m" if minutes >= 60 else f"{minutes} min"
             remaining = tr(self.hass, "Est. {0} remaining").replace("{0}", span)
         parts.append(tr(self.hass, "Updated") + " " + updated)
-        color = self.runtime.config.get("lvl_green", "#63cba3")
-        if not isinstance(color, str) or not re.fullmatch(r"#[a-fA-F0-9]{6}", color):
-            color = "#63cba3"
+        color = palette_color(self.runtime.config, "notify_charge_level")
         data = {"tag": tag, "live_update": True, "progress": snapshot["battery"], "progress_max": 100,
                 "critical_text": str(snapshot["battery"]) + "%", "notification_icon": options.get("icon") or "mdi:lightning-bolt-circle",
                 "color": color, "notification_icon_color": color, "progress_bar_color": color, "text_color": "#FFFFFF",

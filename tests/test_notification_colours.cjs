@@ -1,0 +1,30 @@
+const fs=require("fs"),path=require("path"),http=require("http");
+const repo=path.resolve(__dirname,".."),outDir=process.argv[2]||null;
+const {chromium}=require(path.join(repo,"node_modules/playwright-core"));
+const base=path.join(repo,"custom_components/deepal_companion/frontend");
+const mime={".js":"text/javascript; charset=utf-8",".css":"text/css",".svg":"image/svg+xml",".webp":"image/webp",".jpg":"image/jpeg",".png":"image/png"};
+const server=http.createServer((q,r)=>{const u=new URL(q.url,"http://x");const rel=u.pathname.startsWith("/deepal_companion/frontend/")?u.pathname.slice(27):null;
+ if(rel!==null){const f=path.resolve(base,rel);if(f.startsWith(base)&&fs.existsSync(f)){r.setHeader("Content-Type",mime[path.extname(f)]||"application/octet-stream");r.end(fs.readFileSync(f));return}r.writeHead(404);r.end();return}
+ r.setHeader("Content-Type","text/html");r.end('<html><body style="margin:0;background:#17191c;color:#eee;font:14px Arial;--card-background-color:#232528;--primary-background-color:#17191c;--primary-text-color:#eee;--secondary-text-color:#aaa;--divider-color:#42464a;--primary-color:#29c99a"><div id="w" style="padding:16px;box-sizing:border-box"></div></body></html>')});
+
+(async()=>{await new Promise(r=>server.listen(0,"127.0.0.1",r));
+ const b=await chromium.launch({headless:true});const page=await b.newPage({viewport:{width:390,height:1400}});const errs=[];page.on("pageerror",e=>errs.push(e.message));
+ await page.goto("http://127.0.0.1:"+server.address().port);await page.addScriptTag({url:"/deepal_companion/frontend/companion-card.js"});
+ const defaults=JSON.parse(fs.readFileSync(path.join(base,"..","defaults.json"),"utf8"));
+ await page.evaluate((defaults)=>{const s=document.createElement("deepal-companion-settings");s.style.cssText="display:block;width:390px";window.patches=[];s.onPatch=(p)=>window.patches.push(p);
+   s.hass={locale:{language:"en"},language:"en",states:{},entities:{},devices:{},services:{},config:{time_zone:"UTC"}};s.cfg=defaults;document.getElementById("w").append(s);window.st=s;s._setTab("colours");},defaults);
+ await page.waitForTimeout(600);
+ const q=(f,a)=>page.evaluate(f,a);let fails=0;const ok=(n,c)=>{console.log(c?"ok  ":"FAIL",n);if(!c)fails++};
+ const rows=()=>q(()=>{const r=st.shadowRoot,o={};for(const k of ["notify_alert_level","notify_ok_level","notify_climate_level","notify_charge_level"])o[k]=[[...r.querySelectorAll(`[data-sset^="${k}|"]`)].map(x=>x.dataset.sset.split("|")[1]).join(","),[...r.querySelectorAll(`[data-sset^="${k}|"].on`)].map(x=>x.dataset.sset.split("|")[1]).join(",")];return o});
+ const r0=await rows();
+ ok("four rows, each offering red, orange, yellow, green", Object.values(r0).every(v=>v[0]==="red,orange,yellow,green"));
+ ok("defaults: alert red, the others green", r0.notify_alert_level[1]==="red"&&r0.notify_ok_level[1]==="green"&&r0.notify_climate_level[1]==="green"&&r0.notify_charge_level[1]==="green");
+ ok("each choice shows its palette colour", await q(()=>{const d=st.shadowRoot.querySelector('[data-sset="notify_alert_level|orange"] .ndot');return !!d&&/251, ?146, ?60|fb923c/i.test(d.style.background)}));
+ await page.evaluate(()=>st.shadowRoot.querySelector('[data-sset="notify_alert_level|orange"]').click());await page.waitForTimeout(300);
+ ok("choosing orange sends only that setting", await q(()=>window.patches.length===1&&JSON.stringify(window.patches[0])==='{"notify_alert_level":"orange"}'));
+ await q(()=>{st.cfg={...st._cfg,...window.patches[0]}});await page.waitForTimeout(300);
+ ok("and, once the card applies it, the row shows orange selected", (await rows()).notify_alert_level[1]==="orange");
+ ok("no horizontal overflow", await q(()=>{const r=st.shadowRoot.querySelector(".nlv");return r.scrollWidth<=r.clientWidth+1}));
+ if(process.argv[2])await page.locator("deepal-companion-settings").screenshot({path:process.argv[2]+"/notify_colours.png"});
+ ok("no page errors",errs.length===0);if(errs.length)console.log(errs);
+ await b.close();server.close();process.exit(fails?1:0);})();

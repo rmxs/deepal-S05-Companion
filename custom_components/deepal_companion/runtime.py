@@ -18,7 +18,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.util import dt as dt_util
 
 from .charging import ChargingEngine, OFFLINE_LIMIT, number
-from .const import DEFAULT_PROFILES, DEFAULT_SPIKE_JUMP, DOMAIN, ENERGY_KEYS, RANGES, SIGNAL
+from .const import DEFAULT_PROFILES, DEFAULT_SPIKE_JUMP, DOMAIN, ENERGY_KEYS, RANGES, SIGNAL, update_floor
 from .pricing import calculate
 from .health import BACKLOG_LIMIT
 
@@ -123,6 +123,15 @@ class VehicleRuntime:
         self._stop_unsub = self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, self._shutdown)
         self.unsubs.append(self._stop_unsub)
         self._tick(dt_util.utcnow())
+        from .plan_health import PlanLog
+        self.plan_log = PlanLog(self)
+        await self.plan_log.start()
+        from .car_log import CarLog
+        self.car_log = CarLog(self)
+        try:
+            await self.car_log.start()
+        except Exception:  # the log must never block the vehicle
+            _LOGGER.exception("Car log for %s could not start", self.vehicle)
         from .notifications import NotificationEngine
         self.notifications = NotificationEngine(self)
         await self.notifications.start()
@@ -177,6 +186,10 @@ class VehicleRuntime:
             self.state_unsub()
         ids = list(set(self.entities.values()) | self.charger_entities)
         self.state_unsub = async_track_state_change_event(self.hass, ids, self._event)
+        if getattr(self, "plan_log", None) is not None:
+            self.plan_log.refresh()
+        if getattr(self, "car_log", None) is not None:
+            self.car_log.refresh()
         try:
             good = await self.hub.db("last_good_readings", self.vehicle, [e for e in self.entities.values() if e])
             for role, entity in self.entities.items():
@@ -286,7 +299,12 @@ class VehicleRuntime:
         # State changes suffice for vehicle history. Charger readings also keep a
         # five-minute heartbeat so constant power/energy can be integrated safely.
         changed = previous is None or previous[:2] != (str(state), unit)
-        heartbeat = entity in self.charger_entities and (previous is None or now - previous[2] >= 300)
+        # "Data update rate": with 5 or 10 minutes a reading is saved at most that often. A change that has to wait is not lost:
+        # it is still different from the saved one, so the next one-minute pass saves it once the time has passed.
+        floor = update_floor(self)
+        if changed and floor and previous is not None and now - previous[2] < floor:
+            changed = False
+        heartbeat = entity in self.charger_entities and (previous is None or now - previous[2] >= max(300, floor))
         if changed or heartbeat:
             samples.append((entity, now, state, unit))
             pending[entity] = (str(state), unit, now)
@@ -453,6 +471,10 @@ class VehicleRuntime:
         if self._refresh_task and not self._refresh_task.done():
             self._refresh_task.cancel()
         self._refresh_task = None
+        if getattr(self, "plan_log", None) is not None:
+            await self.plan_log.stop()
+        if getattr(self, "car_log", None) is not None:
+            await self.car_log.stop()
         if hasattr(self, "preconditioning"):
             try:
                 await asyncio.wait_for(self.preconditioning.stop(), self.stop_timeout)

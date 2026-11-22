@@ -515,3 +515,11 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((result["verdict"], result["steps"][-1]["id"]), ("waiting", "repeat"))
         self.engine.state["battery"] = {"since": 1, "count": 0, "last": self.time.return_value - 10}
         self.assertEqual((await self.engine.explain("battery"))["steps"][-1]["id"], "cooldown")
+
+
+class SavedDelayIsKept(unittest.TestCase):
+    def test_startup_migration_does_not_change_the_saved_wait_before_showing(self):
+        for value in (0, 60, 120, 300):
+            config = {"live_open": {"start_delay": value}, "rules": []}
+            self.assertFalse(mod.migrate_parked(config, {"prefix": "s05"}, lambda entity: False))
+            self.assertEqual(config["live_open"]["start_delay"], value)

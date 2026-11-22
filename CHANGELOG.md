@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.0.0 — Charge plan, Car logs, statistics, theme colour and notification colours
+
+> **Before you update:** upgrade [Deepal Alternative to v1.9.0](https://github.com/Sunek0/ha-deepal-alternative/releases/tag/v1.9.0) first. Some card functions, such as the Charge plan, need it.
+
+A big update: a Charge plan, Car logs, a statistics window for your sensors, one new look on every page, and live notifications that follow your card colours. After updating, restart Home Assistant and refresh the dashboard (Ctrl+F5).
+
+### New
+- **Charge plan:** set the car's charging schedule from a clock button on the Energy tile, or add a Charge plan tile to the Information row. The **Until full** pill next to the end time removes the cut-off ("Until battery full"). Needs the schedule entities from Deepal Alternative.
+- **Charge plan health check:** the Health tab shows whether the plan is on, its times, the plans the car reports and the last 7 days of plan activity, and warns when the switch and the car disagree. It updates by itself.
+- **Car logs:** a new page that lists what happened to the car in plain language, newest first, grouped by day: Security (locks, doors, windows, "Left unlocked"), Charging (cable and every charge) and Others (warnings, key fob battery, tyre alarms, preconditioning). Tap a tile to filter. Nothing is sent to the car.
+- **Statistics window:** tap Odometer, Fuel, Inside, Humidity or another number tile for a chart (7 days, 30 days, 12 months) and compact figures: distance today, this week and this month; fuel used and the last refuel; average, lowest and highest temperature. Sensors without long-term statistics show up to 30 days of history.
+- **Notification colours:** in the Colours tab choose Red, Orange, Yellow or Green for each live notification state (left open or unlocked, closed and locked, climate, charging). The colour comes from your level colours.
+- **Theme colour:** pick the card's main colour from nine colours in Card Settings → Appearance. It follows through the card, Energy sheet, Notifications, Costs and Preconditioning.
+- **Neon city background:** a palm-lined coastal city for Car View that changes between day, afternoon and night, with a matching neon glow and a real shadow under the car that falls the same way as the palm shadows on the road.
+- **Data update rate:** Live, 5 min or 10 min (Card Settings → Advanced) for saved readings and live notification refreshes.
+- **Waiting effect:** while a command waits for the car the button shows Sending…, Car waking up or Confirming…; pick Spinning arc, Soft pulse or Neon ring in Card Settings → Controls.
+
+### Improvements
+- **One look everywhere:** buttons, switches, tiles, chips and fields share the same shapes, sizes and colours on the card and every Companion page, with press feedback and spring motion (off with reduced motion). Popups on the card are drawers you can drag closed.
+- **Card Settings:** options moved to the menu they belong to (nothing is reset), choices are tiles, colour dots and pictures, reorder lists use two columns, and all controls have one height.
+- **Live notifications:** redesigned pages with tiles, steppers, icon presets and a "Try it on your phone" bar; phones are picked from a tile grid.
+- **Preconditioning:** a redesigned page with state, setup summary and Start/Stop; times follow your Home Assistant clock and time zone.
+- **Connection recovery:** if Home Assistant does not reconnect about 10 seconds after you return to the app, the card reloads itself. It never does this with unsaved changes, and at most once a minute.
+- **Texts:** about 120 descriptions were rewritten shorter and clearer, and everything is translated in English, Greek, German, Spanish and Italian.
+- **Colours:** status colours come from one shared definition, separate from the theme colour; Costs and Preconditioning use the same interface colours as the other pages.
+
+### Fixes
+- **Live notifications:** "Left open or unlocked" now ends on iPhone after you lock the car (the end is sent again if iOS misses it) and also when the car has not reported its odometer for a while; it is red when open or unlocked instead of green; the wait time you set (even 0) is kept after a restart.
+- **Charge plan:** the window opens only when the car has the plan entities, needs at least 30 minutes between start and end, and has equal-size Start and End fields on a phone, and explains when a plan set in the Deepal app or on the car (S05 PHEV) cannot be changed from here. The health check follows the plan the car actually uses and no longer shows false warnings. The clock button sits beside the Energy tile and works with the keyboard.
+- **Statistics:** Last refuel shows the real amount (it was smeared by daily averages), and all figure tiles have the same height.
+- **Menus and layout:** the phone menu fits all pages from 320 px up and keeps its place; Companion pages are at most 1200 px wide; Card Settings keep their scroll position; the Health dot is amber for warnings and red only for problems.
+- **Card:** no false drop to 0 % in the battery chart; the Energy tile can no longer go blank; waiting buttons are no longer cut off; the page loader and Charging Profiles icons are visible; Enter and Space open the tiles; repeated redraws no longer pile up touch handlers.
+- **Companion panel:** unsaved edits are kept when the profile list refreshes in the background, and deleting a profile asks in the same themed window as the rest of the app.
+- **Translations:** the green "Active" chip reads Activo / Ενεργό in Spanish and Greek.
+
 ## 1.0.0 — Remote preconditioning, complete translations, button layouts and a fuller gallery
 
 ### Updating

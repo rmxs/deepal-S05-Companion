@@ -152,7 +152,7 @@ DeepalS05Card.prototype._loadRemote = async function() {
     if(generation!==this._compGeneration)return;
     if (!this._c) {
       console.error("Deepal Companion could not load", error);
-      this.shadowRoot.innerHTML = '<ha-card style="padding:18px"><p style="margin:0 0 12px">Deepal Companion could not load. Check that Home Assistant is reachable, then try again.</p><button class="companion-retry" style="padding:8px 14px;cursor:pointer">Try again</button></ha-card>';
+      this.shadowRoot.innerHTML = '<ha-card style="padding:18px"><p style="margin:0 0 12px">Deepal Companion couldn’t load. Check that Home Assistant is reachable and try again.</p><button class="companion-retry" style="padding:8px 14px;cursor:pointer">Try again</button></ha-card>';
       this.shadowRoot.querySelector(".companion-retry")?.addEventListener("click", () => this._loadRemote());
     }
     else this._toast(readableError(error).message, "error");
@@ -189,7 +189,7 @@ DeepalS05Card.prototype._doSaveYaml = async function() {
     if(/changed elsewhere/i.test(error.message||"")){
       // Another editor saved first: drop this stale copy and show what is stored now.
       this._local={};this._compDirty=false;this._compReset=false;this._remoteErr=false;this._compConfigSignature=null;
-      this._toast(T("Settings were changed elsewhere. The latest settings were loaded; repeat your change."), "error");
+      this._toast(T("Settings changed elsewhere and were reloaded. Please repeat your change."), "error");
       queueMicrotask(()=>this._loadRemote());
     } else {
     this._remoteErr = true; this._compDirty = true;
@@ -204,7 +204,11 @@ DeepalS05Card.prototype._saveRemote = function() { this._saveYaml(); };
 DeepalS05Card.prototype.connectedCallback = function() {
   companionOriginalConnected.call(this);
   if (this._rawHass) this._loadRemote();
-  this._compUnwatch?.(); this._compUnwatch = window.__DEEPAL_COMPANION_UI.watchConnection(() => this._rawHass, () => { if (!this._compDirty && !this._compSaving) this._loadRemote(); });
+  this._compUnwatch?.(); this._compUnwatch = window.__DEEPAL_COMPANION_UI.watchConnection(() => this._rawHass, () => { this._force?.(); if (!this._compDirty && !this._compSaving) this._loadRemote(); }, () => {
+    if (this._compDirty || this._compSaving) return; /* never drop unsaved changes */
+    try { const k = "deepal_companion_reload_at", last = Number(sessionStorage.getItem(k)) || 0; if (Date.now() - last < 60000) return; sessionStorage.setItem(k, String(Date.now())); } catch (_) { return; } /* at most once a minute, shared by every card */
+    location.reload();
+  });
 };
 DeepalS05Card.prototype.disconnectedCallback = function() {
   this._compEnergyHost?.energyCleanup?.();this._compEnergyHost=null;

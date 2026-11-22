@@ -67,8 +67,9 @@ Simulated states use the same card display with example vehicle readings. Demo c
 3. Adjust image zoom, aspect ratio and space around the car.
 4. Choose a plain background, an automatic day/night background, or a fixed time of day. Morning and afternoon show a deeper blue sky that suits the dark theme, the evening shows a dusk sky, and the night keeps the moon and stars.
 5. Set margins and on-screen messages.
-6. Open **Card Settings → Colours**. Choose Green, Grey or Blue tile icons, or select **Custom** and pick a colour. Set airflow colours and battery/fuel level colours here too.
-7. Open **Card Settings → Advanced** to change paint, wheels or custom photos.
+6. Open **Card Settings → Colours**. Choose Green, Grey or Blue tile icons, or select **Custom** and pick a colour. Set airflow colours, battery/fuel level colours and the colour of each live notification state here too.
+7. In **Appearance**, pick a **Theme colour** from nine colours. In Car View, **Neon city** is a background that changes between day, afternoon and night.
+8. Open **Card Settings → Advanced** to change paint, wheels, custom photos or the **Data update rate** (Live, 5 min or 10 min).
 
 Card appearance changes update the preview as you work. Check the save feedback before leaving a page. Where **Save** and **Cancel changes** are shown, save to keep edits or cancel to return to the saved values.
 
@@ -212,6 +213,7 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 4. Send a test and confirm it reaches the phone.
 5. Configure quiet hours and save.
 6. Follow the [notification guide](NOTIFICATIONS.md) to customise individual alerts and enable Live notifications.
+7. In **Card Settings → Colours**, choose Red, Orange, Yellow or Green for each live notification state.
 
 ## 13. Warm or cool the car before you leave
 
@@ -223,7 +225,24 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 
 The box at the top of the page, **Your setup in short**, explains your choices in plain words. The car allows remote climate for 15 minutes and only while it is parked and switched off. Read the [Preconditioning guide](PRECONDITIONING.md) for every option.
 
-## 14. Check that everything works
+## 14. Set the charging schedule (Charge plan)
+
+1. Tap the clock button on the **Energy** tile, or the **Charge plan** tile if you added it to the Information row.
+2. Turn **Plan is on**, then choose the **Start** and **End** times. The end must be at least 30 minutes after the start.
+3. To charge without a cut-off, press **Until full** next to End. The field then reads **Until battery full / No cutoff**.
+4. Press **Save plan**. The tile shows the plan and the Health tab checks that the car agrees.
+
+The window opens only when the car has the schedule entities from Deepal Alternative. A plan set in the Deepal app or on the car (S05 PHEV) cannot be changed here: turn it off there first.
+
+## 15. Read the car logs
+
+Open **Car logs** in the Companion dashboard. Events are listed in plain language, newest first, grouped by day: **Security** (locks, doors, windows, left unlocked), **Charging** (cable and every charge) and **Others** (warnings, key fob battery, tyre alarms, preconditioning). Tap a tile to filter the list. The page only reads what Companion has recorded; nothing is sent to the car.
+
+## 16. Open a statistics window
+
+Tap a number tile on the card, such as **Odometer**, **Fuel**, **Inside** or **Humidity**. Choose **7 days**, **30 days** or **12 months** for the chart. The figures below show distance (today, this week, this month), fuel used and the last refuel, or the average, lowest and highest value. Sensors without long-term statistics show up to 30 days.
+
+## 17. Check that everything works
 
 Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. A problem says what is wrong and what to do, in the Home Assistant language where a translation exists. Electric cars are not checked for fuel sensors. A pulsing red dot on the tab means a warning or error. The page only reads; it never changes settings or sends a notification.
 

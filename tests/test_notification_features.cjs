@@ -17,9 +17,9 @@ module.exports = async page => {
   await panel.evaluate(p => p.navigateMode('notifications'));
   const board = panel.locator('.supplied-notification-design'); await board.waitFor();
   const themeColors=await board.evaluate(host=>{const row=host.shadowRoot.querySelector('[data-alert-id][data-enabled=true]'),sample=scheme=>{row.style.transition='none';host.style.setProperty('--deepal-scheme',scheme);host.style.colorScheme=scheme;return getComputedStyle(row).backgroundColor;};const colors={light:sample('light'),dark:sample('dark')};host.style.removeProperty('--deepal-scheme');return colors;});
-  assert.equal(themeColors.light,'rgb(230, 245, 236)');assert.equal(themeColors.dark,'rgb(23, 57, 45)');
+  /* the enabled row is a translucent tint of the theme colour (accent), not a fixed opaque green */const tint=/^rgba\(\d+, \d+, \d+, 0\.\d+\)$/;assert.match(themeColors.light,tint);assert.match(themeColors.dark,tint);
   const selectedButtons=await board.evaluate(host=>{const button=host.shadowRoot.querySelector('[data-live-card-tap]'),old=button.className;button.classList.add('bg-emerald-400');const style=getComputedStyle(button),result={border:style.borderTopColor,radius:style.borderTopLeftRadius,shadow:style.boxShadow};button.className=old;return result;});
-  assert.equal(selectedButtons.border,'rgba(0, 0, 0, 0)');assert.equal(selectedButtons.radius,'10px');assert.notEqual(selectedButtons.shadow,'none');
+  assert.equal(selectedButtons.border,'rgba(0, 0, 0, 0)');assert.equal(selectedButtons.radius,'12px');assert.notEqual(selectedButtons.shadow,'none');
   await panel.evaluate(p=>p.setHealthResult({status:'error'}));assert(await panel.locator('[data-mode=health]').evaluate(button=>getComputedStyle(button,'::after').animationName==='health-dot-pulse'));
   await panel.evaluate(p=>p.setHealthResult({status:'ok'}));assert.equal(await panel.locator('[data-mode=health]').evaluate(button=>button.classList.contains('health-attention')),false);
   const inactive=await board.locator('[data-alert-id]').evaluateAll(rows=>{const row=rows.find(r=>!r.querySelector('input').checked);if(!row)return null;const style=getComputedStyle(row.firstElementChild),track=getComputedStyle(row.querySelector("input").nextElementSibling);return {opacity:Number(style.opacity),filter:style.filter,track:track.backgroundColor};});

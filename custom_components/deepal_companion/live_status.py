@@ -8,7 +8,8 @@ import hashlib
 import re
 import time
 
-from .live_charging import local_time, number, stamp, supported
+from .const import update_floor
+from .live_charging import local_time, number, palette_color, stamp, supported
 from .phone_text import tr
 
 OPEN_ITEMS = {
@@ -113,7 +114,9 @@ class LiveStatus:
 
     def options(self, kind):
         spec = KINDS[kind]
-        return validate_status(kind, self.owner.config.get(spec["key"], spec["default"]))
+        options = validate_status(kind, self.owner.config.get(spec["key"], spec["default"]))
+        options["min_interval"] = max(options["min_interval"], update_floor(self.runtime))  # "Data update rate" is a lower limit
+        return options
 
     def entity(self, logical):
         mapped = self.runtime.config.get("entities", {}).get(logical)
@@ -187,8 +190,7 @@ class LiveStatus:
         if not self.connected(now, options):
             return None
         odo = self.get("sensor.total_odometer")
-        if options["only_parked"] and odo is not None and not self.fresh(odo, now, options):
-            return None  # Missing movement evidence is not proof of parking.
+        stale_odo = bool(options["only_parked"] and odo is not None and not self.fresh(odo, now, options))
         if options["only_parked"] and self.running(options):
             # Open windows while driving are normal: nothing to report, and a running notification ends.
             lock = self.get("lock.doors")
@@ -221,7 +223,10 @@ class LiveStatus:
         if not known:
             return None
         stamps = [stamp(self.get(OPEN_ITEMS[key][0])) for key in options["items"] if self.get(OPEN_ITEMS[key][0]) is not None]
-        return {"active": bool(items or unlocked), "items": items, "unlocked": unlocked, "updated": max(stamps + [stamp(lock) if lock else 0])}
+        snap = {"active": bool(items or unlocked), "items": items, "unlocked": unlocked, "updated": max(stamps + [stamp(lock) if lock else 0])}
+        # A parked car does not report its odometer, so an old report is normal. It cannot prove the car is parked, so it never
+        # starts an alert, but it must not keep a running one alive once fresh reports show everything closed and locked.
+        return None if stale_odo and snap["active"] else snap
 
     def end_reason(self, kind, options):
         """The plain reason a live notification ended because its condition stopped."""
@@ -254,10 +259,8 @@ class LiveStatus:
     def color(self, kind, options, snap):
         if options["color"]:
             return options["color"]
-        config = self.runtime.config
-        name = ("lvl_green" if kind == "climate" else "lvl_red" if snap.get("unlocked") or snap.get("items") else "lvl_green")
-        value = config.get(name)
-        return value if isinstance(value, str) and COLOR.fullmatch(value) else "#63cba3"
+        setting = "notify_climate_level" if kind == "climate" else "notify_alert_level" if snap.get("unlocked") or snap.get("items") else "notify_ok_level"
+        return palette_color(self.runtime.config, setting)
 
     def payload(self, kind, snap, options, tag, since, test=False):
         spec = KINDS[kind]
@@ -339,11 +342,29 @@ class LiveStatus:
         return [sorted(snap["items"]), snap["unlocked"]]
 
     # ---- engine -------------------------------------------------------------------------------------------------
+    async def end_on_phone(self, device, tag, kind, now):
+        """iOS ends a Live Activity with its own command, and the silent push behind a clear can be dropped, so the end is
+        repeated twice more (30 s and 60 s later) unless a new notification took over the tag in the meantime."""
+        if getattr(self.owner, "recipient_os", lambda _device: "")(device) == "ios":
+            await self.send(device, {"message": "end_live_activity", "data": {"tag": tag}})
+        self.repeats = [*getattr(self, "repeats", []), *((device, tag, kind, now + delay) for delay in (30, 60))]
+
+    async def repeat_ends(self, now):
+        due = [item for item in getattr(self, "repeats", []) if item[3] <= now]
+        self.repeats = [item for item in getattr(self, "repeats", []) if item[3] > now]
+        for device, tag, kind, _ in due:
+            if self.state.get(kind, {}).get("active", {}).get(device):
+                continue  # a new notification is showing: it must stay
+            await self.send(device, {"message": "clear_notification", "data": {"tag": tag}})
+            if getattr(self.owner, "recipient_os", lambda _device: "")(device) == "ios":
+                await self.send(device, {"message": "end_live_activity", "data": {"tag": tag}})
+
     async def tick(self, now=None):
         now = time.time() if now is None else now
         before = deepcopy(self.state)
         for kind in KINDS:
             await self.tick_kind(kind, now)
+        await self.repeat_ends(now)  # after the kinds, so a notification that just started keeps its tag
         for kind in list(self.state):
             if not self.state[kind].get("active"):
                 self.state[kind].pop("active", None)
@@ -388,6 +409,7 @@ class LiveStatus:
                 self.last_attempt[device] = now
                 if result["status"] == "accepted":
                     del active[device]
+                    await self.end_on_phone(device, state["tag"], kind, now)
         if not active and (not enabled or stop):
             kept = {key: state[key] for key in ("test_devices", "expired") if state.get(key)}
             if state.get("logged"):

@@ -1,0 +1,251 @@
+{
+  "_note": "Single source of the colours. Status colours: [R,G,B]. accents: the card's theme colour options (dark/light shade, text colour on it, hue shift and optional saturation for the baked green charging images). Edit here, then run npm run build; scripts/build-tokens.cjs writes them into the card and tests/test_accent_contrast.cjs checks readability.",
+  "ok": [
+    52,
+    211,
+    153
+  ],
+  "warn": [
+    250,
+    204,
+    21
+  ],
+  "bad": [
+    248,
+    113,
+    113
+  ],
+  "info": [
+    121,
+    173,
+    255
+  ],
+  "accents": [
+    {
+      "id": "green",
+      "label": "Green",
+      "dark": [
+        52,
+        211,
+        153
+      ],
+      "light": [
+        52,
+        211,
+        153
+      ],
+      "ink": [
+        11,
+        21,
+        16
+      ],
+      "inkLight": [
+        11,
+        21,
+        16
+      ],
+      "hue": 0,
+      "lightLegacy": true
+    },
+    {
+      "id": "blue",
+      "label": "Ocean blue",
+      "dark": [
+        0,
+        145,
+        255
+      ],
+      "light": [
+        0,
+        92,
+        190
+      ],
+      "ink": [
+        6,
+        26,
+        40
+      ],
+      "inkLight": [
+        255,
+        255,
+        255
+      ],
+      "hue": 48
+    },
+    {
+      "id": "violet",
+      "label": "Violet",
+      "dark": [
+        160,
+        105,
+        255
+      ],
+      "light": [
+        105,
+        35,
+        210
+      ],
+      "ink": [
+        26,
+        14,
+        52
+      ],
+      "inkLight": [
+        255,
+        255,
+        255
+      ],
+      "hue": 104
+    },
+    {
+      "id": "amber",
+      "label": "Amber",
+      "dark": [
+        255,
+        191,
+        0
+      ],
+      "light": [
+        200,
+        120,
+        0
+      ],
+      "ink": [
+        38,
+        24,
+        4
+      ],
+      "inkLight": [
+        38,
+        24,
+        4
+      ],
+      "hue": -113
+    },
+    {
+      "id": "rose",
+      "label": "Rose",
+      "dark": [
+        255,
+        50,
+        125
+      ],
+      "light": [
+        205,
+        15,
+        95
+      ],
+      "ink": [
+        46,
+        10,
+        28
+      ],
+      "inkLight": [
+        255,
+        255,
+        255
+      ],
+      "hue": 180
+    },
+    {
+      "id": "cyan",
+      "label": "Cyan",
+      "dark": [
+        0,
+        200,
+        235
+      ],
+      "light": [
+        0,
+        115,
+        140
+      ],
+      "ink": [
+        4,
+        30,
+        36
+      ],
+      "inkLight": [
+        255,
+        255,
+        255
+      ],
+      "hue": 31
+    },
+    {
+      "id": "lime",
+      "label": "Lime",
+      "dark": [
+        130,
+        225,
+        0
+      ],
+      "light": [
+        95,
+        155,
+        0
+      ],
+      "ink": [
+        20,
+        32,
+        4
+      ],
+      "inkLight": [
+        20,
+        32,
+        4
+      ],
+      "hue": -73
+    },
+    {
+      "id": "coral",
+      "label": "Coral",
+      "dark": [
+        255,
+        99,
+        71
+      ],
+      "light": [
+        200,
+        55,
+        20
+      ],
+      "ink": [
+        46,
+        16,
+        8
+      ],
+      "inkLight": [
+        255,
+        255,
+        255
+      ],
+      "hue": -149
+    },
+    {
+      "id": "orange",
+      "label": "Orange",
+      "dark": [
+        255,
+        140,
+        0
+      ],
+      "light": [
+        190,
+        84,
+        0
+      ],
+      "ink": [
+        40,
+        18,
+        0
+      ],
+      "inkLight": [
+        255,
+        255,
+        255
+      ],
+      "hue": -125
+    }
+  ]
+}

@@ -17,6 +17,7 @@ from test_api import module, identity, ROOT
 clock = [datetime.now(timezone.utc)]
 listeners = []
 module("homeassistant.const", Platform=types.SimpleNamespace(SENSOR="sensor"), EVENT_HOMEASSISTANT_STOP="stop",
+       EVENT_CALL_SERVICE="call_service",
        EntityCategory=types.SimpleNamespace(DIAGNOSTIC="diagnostic"))
 def remove_panel(hass, url_path, warn_if_unknown=True):
     hass.panels[:] = [p for p in hass.panels if p["frontend_url_path"] != url_path]
@@ -37,7 +38,7 @@ module("homeassistant.helpers.entity_registry", async_get=lambda hass: hass.regi
 module("homeassistant.helpers.config_validation", config_entry_only_config_schema=lambda domain: {"config_entry_only": domain})
 module("homeassistant.helpers.device_registry", DeviceInfo=lambda **kwargs: kwargs, async_get=lambda hass: getattr(
     hass, "device_registry", types.SimpleNamespace(async_get=lambda ident: None)))
-module("homeassistant.helpers.event", async_track_state_change_event=lambda *args: lambda: None,
+module("homeassistant.helpers.event", async_track_state_change_event=lambda *args: lambda: None, async_call_later=lambda *args: lambda: None,
        async_track_time_interval=lambda *args: lambda: None)
 module("homeassistant.util.dt", utcnow=lambda: clock[0], as_local=lambda value: value, parse_datetime=lambda s: datetime.fromisoformat(s.replace("Z", "+00:00")))
 sys.modules["homeassistant.util"].dt = sys.modules["homeassistant.util.dt"]
@@ -75,6 +76,8 @@ class Store:
         return Store.saved.get(self.key)
     async def async_save(self, data):
         Store.saved[self.key] = json.loads(json.dumps(data))
+    def async_delay_save(self, producer, delay=0):
+        """Delayed saves are not run in tests; the real Store schedules them."""
 module("homeassistant.helpers.storage", Store=Store)
 module("homeassistant.helpers.selector", EntitySelectorConfig=lambda **kwargs: kwargs,
        EntitySelector=lambda cfg: str, SelectSelectorConfig=lambda **kwargs: kwargs,
@@ -389,7 +392,6 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
         self.runtime = self.entry.runtime_data
         self.assertIsNotNone(hub.archive.get(vehicle, "archive_incomplete_shutdown"))
-        self.runtime = None
 
     async def test_late_commit_after_shutdown_keeps_batch_and_checkpoint_consistent(self):
         self.assertTrue(await integration.async_setup(self.hass, {}))
@@ -478,7 +480,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_setup_resources_and_backend_start_stop(self):
         self.assertTrue(await integration.async_setup(self.hass, {}))
-        self.assertEqual(len(self.hass.commands), 3)
+        self.assertEqual(len(self.hass.commands), 5)  # request, card panel, live updates, charge plan, car log
         self.assertEqual(len(self.hass.panels), 2)
         self.assertEqual(self.hass.panels[1]["frontend_url_path"], "deepal-companion-card")
         self.assertEqual(len(self.hass.data["lovelace"].resources.items), 1)

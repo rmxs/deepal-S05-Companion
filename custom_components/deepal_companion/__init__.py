@@ -35,6 +35,8 @@ class Hub:
         self._card_panel_registered = False
         self._card_panel_store = None
         self._language_store = None
+        self._rate_store = None
+        self.update_rate = 0  # seconds; 0 = live. Spacing of saved readings and live notification refreshes, for every vehicle
         self.card_panel_pin = {"vehicle_id": "", "view_id": "", "design": ""}  # profile and design fixed for the card page
 
     async def set_card_panel_pin(self, pin):
@@ -51,6 +53,16 @@ class Hub:
         if self._language_store is not None:
             await self._language_store.async_save({"language": choice})
         return language_choice(self.hass)
+
+    async def set_update_rate(self, seconds):
+        """How often Companion saves readings and refreshes live notifications: live (0), 5 minutes or 10 minutes."""
+        from .const import UPDATE_RATES
+        if type(seconds) is not int or seconds not in UPDATE_RATES:
+            raise ValueError("Unknown update rate")
+        self.update_rate = seconds
+        if self._rate_store is not None:
+            await self._rate_store.async_save({"seconds": seconds})
+        return seconds
 
     async def set_card_panel(self, visible):
         """Show or hide the card-only page in the sidebar. The page itself stays reachable by its address."""
@@ -122,6 +134,14 @@ async def async_setup(hass, config):
         set_language(hass, saved.get("language") if isinstance(saved, dict) else "auto")
     except Exception:
         _LOGGER.exception("Could not read the notification language; following the Home Assistant language")
+    try:
+        from homeassistant.helpers.storage import Store
+        hub._rate_store = Store(hass, 1, DOMAIN + ".update_rate")
+        saved = await hub._rate_store.async_load()
+        if isinstance(saved, dict) and type(saved.get("seconds")) is int and saved["seconds"] in (0, 300, 600):
+            hub.update_rate = saved["seconds"]
+    except Exception:
+        _LOGGER.exception("Could not read the data update rate; using live")
     await _register_card_panel(hass, hub)
     # Register the bundled card in Lovelace's resource collection when using storage mode.
     from homeassistant.components.lovelace.const import LOVELACE_DATA

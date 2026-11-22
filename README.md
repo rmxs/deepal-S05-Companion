@@ -15,7 +15,24 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
-## What’s new in 1.0.0
+## What’s new in 2.0.0
+
+> [!IMPORTANT]
+> **Before you update:** upgrade [Deepal Alternative to v1.9.0](https://github.com/Sunek0/ha-deepal-alternative/releases/tag/v1.9.0) first. Some card functions, such as the Charge plan, need it.
+
+- **Charge plan:** set the car’s charging schedule from a clock button on the Energy tile or from a Charge plan tile. The **Until full** pill removes the cut-off. The Health tab checks that the plan and the car agree.
+- **Car logs:** a new page that tells you in plain language what happened to the car, newest first: locks, doors and windows, “left unlocked”, charging, warnings and preconditioning.
+- **Statistics window:** tap Odometer, Fuel, Inside, Humidity or another number tile for a chart (7 days, 30 days, 12 months) and compact figures such as distance, last refuel and temperature range.
+- **Theme colour and one look everywhere:** pick the main colour from nine colours; buttons, switches, tiles and fields now look the same on the card and on every Companion page.
+- **Neon city background:** a coastal city for Car View that follows day, afternoon and night.
+- **Notification colours:** choose Red, Orange, Yellow or Green for each live notification state in the Colours tab. “Left open or unlocked” is red by default and now ends on your iPhone after you lock the car.
+- **Waiting effect and data update rate:** see which step a command is waiting on, and choose Live, 5 min or 10 min for saved readings and live notification refreshes.
+- **Connection recovery:** the card and the dashboard reconnect or reload by themselves after the app was in the background.
+- **Fixes:** the real refuel amount in the statistics, equal-height figure tiles, a more reliable phone menu, and saved profile edits that are no longer lost when the list refreshes. See the [changelog](CHANGELOG.md).
+
+After updating, restart Home Assistant and refresh the dashboard (Ctrl+F5).
+
+## Earlier highlights from 1.0.0
 
 - **Remote climate preconditioning:** start or stop the climate from the card or the dashboard, or set schedules (once, daily, Mon–Fri, custom days, or “ready by” a time). Companion refreshes the car’s data before and after every start and stop, and counts a command as done only when the car reports it. Add battery protection with your own minimum level, and get phone messages with a Stop button. If someone drives the car, the climate is handed over to the driver. Scheduling is off until you turn it on. See the [Preconditioning guide](docs/PRECONDITIONING.md).
 - **Complete translations on the Sessions page:** the heading, counts, chart, tooltips, period tiles and session cards now read fully in Spanish, Greek, German and Italian.
@@ -57,6 +74,8 @@ Earlier highlights from 0.2.0:
 <tr><td width="50%"><img src="docs/images/feature-controls-state.png" alt="Buttons that show the state"></td><td width="50%"><img src="docs/images/feature-climate.png" alt="Climate controls"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-tyres-warnings.png" alt="Tyre pressure and warnings"></td><td width="50%"><img src="docs/images/feature-diagnostics.png" alt="Diagnostic warnings"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-card-only-phone.png" alt="Deepal Card page filling a phone screen"></td><td width="50%"><img src="docs/images/feature-confirm-window.png" alt="One confirmation window for every command"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-statistics.png" alt="Statistics window for info tiles"></td><td width="50%"><img src="docs/images/feature-command-feedback.png" alt="Waiting effects on control buttons"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-button-layouts.png" alt="Button layouts: More on the image and swipe pages"></td></tr>
 </table>
 
 ### Car view and interior
@@ -65,17 +84,21 @@ Earlier highlights from 0.2.0:
 <tr><td width="50%"><img src="docs/images/presentation-car-colour.png" alt="Car colours"></td><td width="50%"><img src="docs/images/presentation-climate.png" alt="Cabin climate"></td></tr>
 <tr><td width="50%"><img src="docs/images/presentation-seats.png" alt="Seat heating and ventilation"></td><td width="50%"><img src="docs/images/presentation-custom.png" alt="Custom sensors and buttons"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-car-view-day.png" alt="Car View with a day sky"></td><td width="50%"><img src="docs/images/feature-car-view-dusk.png" alt="Car View with a dusk sky"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-neon-city.png" alt="Neon city background by day, afternoon and night"></td><td width="50%"><img src="docs/images/feature-theme-colour.png" alt="Theme colour"></td></tr>
 </table>
 
 ### Preconditioning
 
 <p align="center"><img src="docs/images/feature-preconditioning.png" alt="Preconditioning on the card: temperature, duration, Start, schedules and notifications" width="100%"></p>
 
+<p align="center"><img src="docs/images/feature-preconditioning-schedules.png" alt="Preconditioning schedules and battery protection" width="100%"></p>
+
 ### Charging and costs
 
 <table>
 <tr><td width="50%"><img src="docs/images/feature-charging.png" alt="Charging on the card"></td><td width="50%"><img src="docs/images/presentation-charging.png" alt="Assign a charging profile"></td></tr>
 <tr><td width="50%"><img src="docs/images/presentation-curve.png" alt="Saved charging curve"></td><td width="50%"><img src="docs/images/presentation-live-curve.png" alt="Live charging curve"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-charge-plan.png" alt="Charge plan"></td></tr>
 </table>
 
 ### Live notifications and alerts
@@ -88,18 +111,19 @@ Earlier highlights from 0.2.0:
 ### Control panel
 
 <table>
-<tr><td width="50%"><img src="docs/images/control-panel-feature.png" alt="Set up the card and see it live"></td><td width="50%"><img src="docs/images/feature-panel-layout.png" alt="Layout settings"></td></tr>
-<tr><td width="50%"><img src="docs/images/feature-panel-advanced.png" alt="Vehicle setup and sensors"></td><td width="50%"><img src="docs/images/feature-panel-charging-profiles.png" alt="Charging profiles"></td></tr>
-<tr><td width="50%"><img src="docs/images/feature-sessions-page.png" alt="Sessions page with the battery and petrol history"></td><td width="50%"><img src="docs/images/feature-notifications-page.png" alt="Notifications page"></td></tr>
+<tr><td width="50%"><img src="docs/images/control-panel-feature.png" alt="Set up the card and see it live"></td><td width="50%"><img src="docs/images/feature-panel-layout.png" alt="Layout: choose what the card shows"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-panel-advanced.png" alt="Advanced: vehicle setup and sensors, with the live preview"></td><td width="50%"><img src="docs/images/feature-panel-charging-profiles.png" alt="Charging profiles: locations and tariffs"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-sessions-page.png" alt="Sessions page with the battery and petrol history"></td><td width="50%"><img src="docs/images/feature-notifications-page.png" alt="Notifications: alerts, devices and quiet hours"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-car-logs.png" alt="Car logs timeline"></td></tr>
 </table>
 
 ### Settings and health
 
 <table>
-<tr><td width="50%"><img src="docs/images/feature-settings-appearance.png" alt="Appearance settings"></td><td width="50%"><img src="docs/images/feature-settings-colours.png" alt="Colour settings"></td></tr>
-<tr><td width="50%"><img src="docs/images/feature-settings-controls.png" alt="Controls settings"></td><td width="50%"><img src="docs/images/feature-settings-diagnostics.png" alt="Diagnostics settings"></td></tr>
-<tr><td width="50%"><img src="docs/images/feature-settings-charging.png" alt="Charging settings"></td><td width="50%"><img src="docs/images/feature-card-profiles.png" alt="Charging profiles on the card"></td></tr>
-<tr><td width="50%"><img src="docs/images/feature-charging-locations.png" alt="Charging locations"></td><td width="50%"><img src="docs/images/feature-health.png" alt="Health checks"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-settings-appearance.png" alt="Appearance: car image, Car View and spacing"></td><td width="50%"><img src="docs/images/feature-settings-colours.png" alt="Colours: tiles, air flow and level colours"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-settings-controls.png" alt="Controls: climate tile and confirmations"></td><td width="50%"><img src="docs/images/feature-settings-diagnostics.png" alt="Diagnostics and tyres: warnings and pressure unit"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-settings-charging.png" alt="Charging: details, effect and energy tile"></td><td width="50%"><img src="docs/images/feature-card-profiles.png" alt="Charging profiles on the card"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-charging-locations.png" alt="Charging profile with its own tariff"></td><td width="50%"><img src="docs/images/feature-health.png" alt="Health checks"></td></tr>
 </table>
 
 ## How it started
@@ -116,9 +140,9 @@ Made for my car, shared for yours.
 [![Open your Home Assistant instance and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rmxs&repository=deepal-S05-Companion&category=integration)
 
 
-## Version 1.0.0
+## Version 2.0.0
 
-This release adds remote climate preconditioning with schedules, battery protection and phone notifications, completes the translations on the Sessions page and adds new screenshots to the gallery. See [CHANGELOG.md](CHANGELOG.md) for release notes. After updating, restart Home Assistant and hard-refresh the browser. Saved settings and charging records are kept.
+This release adds a Charge plan, Car logs, a statistics window, a theme colour, live notification colours and a unified look. Version 1.0.0 added remote climate preconditioning with schedules, battery protection and phone notifications, completes the translations on the Sessions page and adds new screenshots to the gallery. See [CHANGELOG.md](CHANGELOG.md) for release notes. After updating, restart Home Assistant and hard-refresh the browser. Saved settings and charging records are kept.
 
 ## Features
 
@@ -129,7 +153,10 @@ This release adds remote climate preconditioning with schedules, battery protect
 - Climate temperature controls, seat heating and ventilation, and steering-wheel heating where available.
 - Tyre pressures in bar, kPa or psi, with vehicle warnings and adjustable pressure limits.
 - Vehicle diagnostics, selectable warning indicators and custom sensor tiles.
-- Car View with five paint colours, three wheel choices, and 3/4 or top views.
+- Statistics window for number tiles: chart for 7 days, 30 days or 12 months, with distance, fuel used, last refuel and temperature range.
+- **Charge plan:** set the charging schedule (start, end or **Until full**) from the Energy tile or a Charge plan tile, with a health check on the Health tab.
+- **Car logs:** plain-language list of locks, doors, windows, charging, warnings and preconditioning, grouped by day, with filters.
+- Car View with five paint colours, three wheel choices, 3/4 or top views, and a neon city background that follows the time of day.
 - Vehicle images that reflect doors, windows, bonnet, tailgate, lights and charging state.
 
 ### Make the card your own
@@ -142,6 +169,8 @@ This release adds remote climate preconditioning with schedules, battery protect
 - Choose button layouts, sizes, labels and action confirmations.
 - Select Photos or Car View, backgrounds, image zoom, spacing, aspect ratio and custom photos.
 - Green, Grey and Blue tile icon presets, plus a custom colour picker.
+- A theme colour (nine choices) that follows through the card, Energy sheet, Notifications, Costs and Preconditioning.
+- A waiting effect for commands (Spinning arc, Soft pulse or Neon ring) and a data update rate of Live, 5 min or 10 min.
 - Custom airflow colours, battery/fuel colours and percentage thresholds.
 - Interactive preview with live data and simulated vehicle states, including a charging-detected reminder demo.
 - Settings updates shared between Companion and cards using the same profile.
@@ -211,21 +240,21 @@ If something does not work, see [Preconditioning troubleshooting](docs/TROUBLESH
 - Alert text, buttons and Live notifications follow the Home Assistant language (English, Italian, Spanish, German, Greek).
 - Supported action buttons, including Lock vehicle and Dismiss.
 - Test notifications and recent activity with Load more, Delete and Delete all.
-- Live charging, Live climate and Left open or unlocked as Live Activities on iPhone and Live Updates on supported Android devices.
+- Live charging, Live climate and Left open or unlocked as Live Activities on iPhone and Live Updates on supported Android devices, each in a Red, Orange, Yellow or Green you choose in the Colours tab.
 
 ## Live notifications on your phone
 
 > [!IMPORTANT]
 > **Keep the car on your Lock Screen.** Open **Deepal Companion → Notifications**, select your receiving phone and open one of the three **Live notifications**: **Live charging**, **Live climate** or **Left open or unlocked**. Turn on **Alert enabled**, adjust the options and use **Send test** to check your phone. iPhone Live Activities and Android Live Updates keep working while the dashboard is closed.
 >
-> Updates follow the car’s reported readings. These settings control notification updates; vehicle polling is configured in your vehicle integration, and the car’s cloud is read about every 5 minutes.
+> Updates follow the car’s reported readings. These settings control notification updates; how often the car is read is configured in your vehicle integration (live connection when available, otherwise about every 5 minutes). **Data update rate** in Card Settings → Advanced can slow saving and live updates to every 5 or 10 minutes.
 >
 > Live notifications require **Home Assistant 2026.7.0 or newer**, a compatible Companion App, and **iOS/iPadOS 17.2+** or **Android 16+**. [Full setup and test instructions](docs/NOTIFICATIONS.md#live-notifications-on-the-lock-screen).
 
 ## Requirements
 
 - Home Assistant **2026.7.0 or newer**.
-- [**Deepal Alternative**](https://github.com/Sunek0/ha-deepal-alternative), configured with your vehicle and its entities enabled.
+- [**Deepal Alternative**](https://github.com/Sunek0/ha-deepal-alternative) **v1.9.0 or newer** ([release](https://github.com/Sunek0/ha-deepal-alternative/releases/tag/v1.9.0)), configured with your vehicle and its entities enabled.
 - **Marketplace** on Home Assistant 2026.11 or newer, or **HACS** on earlier supported versions.
 - The **Home Assistant Companion App** for phone notifications.
 - Administrator access for integration setup and notification configuration.

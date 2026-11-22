@@ -61,11 +61,13 @@ const server=http.createServer((req,res)=>{
      if(m.type==='lovelace/config')return structuredClone(window.dashboardConfigs[m.url_path||'lovelace']);
      if(m.type==='lovelace/config/save'){window.dashboardConfigs[m.url_path||'lovelace']=structuredClone(m.config);return {};}
      if(m.type!=="deepal_companion/request")return {};
-     if(m.op==="notifications_get"&&window.notificationUnavailable)throw Error("Unknown Companion operation");
+     if(window.pageMocks?.[m.op])return window.pageMocks[m.op](m.data||{});if(m.op==="notifications_get"&&window.notificationUnavailable)throw Error("Unknown Companion operation");
      if(!window.activityRows)window.activityRows=Array.from({length:12},(_,i)=>({id:i.toString(16).padStart(32,'0'),time:Date.now()/1000-i*3600,rule_id:'charge_done',name:'Charging complete',title:'Deepal S05 · Charging complete',message:'Battery 67%, range 81 km.',icon:'mdi:battery-check-outline',status:'test',deliveries:[{device:'notify.replacement_phone',status:'accepted'}]}));
      const activityPage=(limit=5,before=null)=>{const start=before?window.activityRows.findIndex(row=>row.id===before)+1:0,rows=structuredClone(window.activityRows.slice(start,start+limit)),has_more=start+rows.length<window.activityRows.length;return {rows,total:window.activityRows.length,has_more,next_before:has_more?rows.at(-1)?.id:null};};
      if(m.op==='notifications_unread'){(window.unreadCalls??=[]).push(m.data||{});if(m.data?.mark)window.unread=0;return {unread:window.unread??2};}
      if(m.op==='notifications_explain'){(window.explainCalls??=[]).push(m.data);return {rule_id:m.data.rule_id,name:'Unlocked vehicle',verdict:'waiting',summary:'Not sent yet: a condition is not true.',retry_in:null,checked:1,steps:[{id:'check0',status:'pass',title:'Doors are unlocked',detail:'Now: unlocked (changed 3 min ago)',help:'Help for the doors line.'},{id:'check1',status:'block',title:'Power status is off',detail:'Now: on (changed 12 min ago)',help:'Help for the power line.'},{id:'delay',status:'wait',title:'Delay',detail:'2 min left'}]};}
+     if(m.op==="update_rate_get")return {seconds:window.updateRate||0};
+     if(m.op==="update_rate_set"){if(!window.testHass.user.is_admin)throw Error("Administrator access is required to change the data update rate");if(![0,300,600].includes(m.data?.seconds))throw Error("Unknown update rate");window.updateRate=m.data.seconds;return {seconds:window.updateRate};}
      if(m.op==="notification_language_get")return {language:window.notificationLanguage||"auto"};
      if(m.op==="notification_language_set"){if(!window.testHass.user.is_admin)throw Error("Administrator access is required to change the notification language");const allowed=["auto","en","el","de","es","it"];if(!allowed.includes(m.data?.language))throw Error("Unknown language");window.notificationLanguage=m.data.language;return {language:window.notificationLanguage};}
      if(m.op==="notifications_get"){const activity=activityPage();return {live_supported:true,value:structuredClone(window.localNotifications||{enabled:false,rules:[]}),history:activity.rows,activity,recipients:[{svc:'notify.replacement_phone',name:'Current iPhone',tracker:'device_tracker.current_phone',legacy_service:'mobile_app_phone'},{svc:'notify.another_users_android',name:'Another user’s Android',tracker:'',legacy_service:'mobile_app_android'}]};}
@@ -183,7 +185,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{
     const editor=document.getElementById("full-editor");window.testHass.locale.language="el";editor.hass=window.testHass;window.testHass.locale.language="en";editor.hass=window.testHass;
   });
-  await page.waitForFunction(()=>document.getElementById("full-editor")._s.shadowRoot.textContent.includes("If an entity has a different name"));
+  await page.waitForFunction(()=>document.getElementById("full-editor")._s.shadowRoot.textContent.includes("If an entity is not named"));
   assert.equal(await page.evaluate(()=>[...document.getElementById("full-editor")._s.shadowRoot.querySelectorAll('select[data-set="_mkey"] option')].find(n=>n.value==="binary_sensor.charger_plugged").textContent),"S05 Charger plugged in");
   await page.evaluate(()=>{
     if(!customElements.get("ha-selector"))customElements.define("ha-selector",class extends HTMLElement{});
@@ -235,6 +237,7 @@ const server=http.createServer((req,res)=>{
   if(process.env.CHARGE_COST_ONLY){await require('./test_charge_cost_live.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.PRECOND_UI_ONLY){runStandalone('test_preconditioning_ui.cjs');return;}
   if(process.env.CHARGE_TARGET_ONLY){await require('./test_charge_target.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.UPDATE_RATE_ONLY){await require('./test_update_rate_box.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_LANGUAGE_ONLY){await require('./test_notification_language.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_MOBILE_ONLY){await require('./test_notification_mobile.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_PERSISTENCE_ONLY){await require('./test_notification_persistence.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
@@ -242,11 +245,14 @@ const server=http.createServer((req,res)=>{
   if(process.env.CHARGING_EDITS_ONLY){await require('./test_charging_edits.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.FIRST_RUN_ONLY){await require('./test_first_run.cjs')(page);await require('./test_image_loading.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.TILE_ONLY){await require('./test_tile_settings.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.STAT_ONLY){await require('./test_stat_history.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.ACCENT_ONLY){await require('./test_accent_colour.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.SETTINGS_ONLY){await require('./settings_roundtrip.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.MEMORY_ONLY){await require('./test_memory.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.MOBILE_SHELL_ONLY){await require('./test_mobile_shell.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.FEATURE_ONLY){await require('./test_feature_updates.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.QA_ONLY){await runModule(page,"test_field_choices.cjs");await runModule(page,"test_end_user_qa.cjs");return;}
-  if(process.env.LANG_ONLY){await require('./test_language_sweep.cjs')(page);return;}
+  if(process.env.LANG_ONLY){await page.addScriptTag({path:__dirname+'/page_mocks.js'});await require('./test_language_sweep.cjs')(page);return;}
   if(process.env.NAV_ONLY){await runModule(page,"test_boot_loading.cjs");await runModule(page,"test_preview_controls.cjs");await runModule(page,"test_tab_navigation.cjs");await runModule(page,"test_local_notifications.cjs");await require("./layout_validation.cjs")(page);return;}
   if(process.env.NOTIFY_FEATURES_ONLY){await require('./test_notification_features.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_ONLY){await runModule(page,"test_local_notifications.cjs");return;}
@@ -255,6 +261,7 @@ const server=http.createServer((req,res)=>{
   if(process.env.FIELD_ONLY){await runModule(page,"test_field_choices.cjs");return;}
   await require("./settings_menus.cjs")(page);
   await runModule(page,"test_tile_settings.cjs");
+  await runModule(page,"test_accent_colour.cjs");
   await runModule(page,"test_preview_controls.cjs");
   const controls=await p.locator(".profile-controls").evaluate(row=>({fields:[...row.querySelectorAll('input')].filter(n=>n.getClientRects().length).length,name:row.querySelector('.profile-name').getBoundingClientRect().bottom,actions:row.querySelector('.actions').getBoundingClientRect().top}));
   assert(controls.fields===1&&controls.actions>=controls.name,"One editable profile field sits above its actions");
@@ -284,6 +291,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await p.locator(".cc-profile").count(),5);
   assert.equal(await p.locator(".cc-location-details[open]").count(),0,"Locations initially collapsed");
   await runModule(page,"test_charger_cancel.cjs");
+  await runModule(page,"test_panel_dirty_refresh.cjs");
   const work=p.locator('.cc-profile[data-index="1"]');
   await work.locator('..').locator('summary').click();
   assert.equal(await work.locator(".cc-paid").isVisible(),false);
@@ -399,6 +407,8 @@ const server=http.createServer((req,res)=>{
   await runModule(page,"test_notification_persistence.cjs");
   await runModule(page,"test_notification_mobile.cjs");
   await runModule(page,"test_notification_language.cjs");
+  await runModule(page,"test_update_rate_box.cjs");
+  await runModule(page,"test_stat_history.cjs");
   await runModule(page,"test_field_choices.cjs");
   await runModule(page,"test_energy_loading.cjs");
   await runModule(page,"test_end_user_qa.cjs");

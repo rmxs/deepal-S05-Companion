@@ -43,7 +43,10 @@ The **Profile** box starts closed. Use the arrow next to the connection badge to
 | Image zoom | Adjust the car image size |
 | Aspect ratio | Automatic or a ratio such as 16 / 9 |
 | Space around the car | Compact, Standard or Roomy |
-| Car View background | Black, Automatic, Morning, Afternoon, Evening or Night. Morning and afternoon are a deeper blue sky, evening is a dusk sky, night keeps the moon and stars. Automatic follows the sun. |
+| Car View background | Black, Automatic, Neon city, Morning, Afternoon, Evening or Night. Neon city is a palm-lined coastal city that follows day, afternoon and night. Morning and afternoon are a deeper blue sky, evening is a dusk sky, night keeps the moon and stars. Automatic follows the sun. |
+| Theme colour | Green, Blue, Violet, Amber, Rose, Cyan, Lime, Coral or Silver. Colours buttons, bars, selected pills and icons; status colours (OK, warning, error) stay the same |
+| Paint colour | Black, blue, grey, silver or white |
+| Wheels | 20-inch with covers, 20-inch without covers or 18-inch Pro |
 | Card margins | Normal, Half or None |
 | Popup margins | Normal, Half or None |
 | On-screen messages | On/off |
@@ -59,8 +62,9 @@ The view button changes the view on the device you are using. The default view s
 | Climate tile | Target with − / +, or Large circle |
 | Temperature selector | Wheel or Bar |
 | Climate on-mode | HVAC mode used when turning climate on |
-| Confirm temperature change while climate is off | On/off |
 | Action confirmations | Choose confirmation for Lock, Unlock, Open windows, Open trunk, Climate, Lights, Horn, Locate and Refresh data |
+| Confirm temperature change while climate is off | On/off |
+| Waiting effect | Spinning arc, Soft pulse or Neon ring while a command waits for the car |
 
 ## Card Settings → Charging
 
@@ -70,6 +74,12 @@ The view button changes the view on the device you are using. The default view s
 | Charging effect | Cable flow + port pulse, cable flow, port pulse, light sweep or None |
 | Energy sheet on the tile | Open energy history when tapping the Energy tile |
 | Alternate charging text | Alternate Charging now and reported time left |
+| Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
+| Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
+| Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
+| A stop longer than this starts a new charge (min) | In the live curve, a stop shorter than this stays part of the same charge, so a charge you stopped and restarted shows as one curve. It is also the silent time after which a stretch with no battery progress counts as missing data. 1–120, default 15 |
+| Refresh the charging curve every (min) | While charging, the curve's line follows the latest car report. When the car reports nothing new, the line still moves to the current time this often. 1–60, default 5 |
+| Highlight Missing Data | On by default. Gaps between readings where the car reported no battery progress are joined by a lighter grey line and shaded area, and hovering or touching one explains that data is missing with its start, end and duration. Off keeps one plain continuous line. Applies to the card and to saved charges |
 
 The image’s charging details remain visible when the separate Charging section is hidden. The charging-curve switch is in **Layout → Sections**.
 
@@ -87,6 +97,7 @@ The image’s charging details remain visible when the separate Charging section
 | Mild airflow | Colour and upper temperature limit |
 | Warm airflow | Colour above the mild limit |
 | Level colours | Red, Orange, Yellow and Green |
+| Notification colours | For each live notification state (Left open or unlocked, Closed and locked, Climate, Charging) choose Red, Orange, Yellow or Green. The colour comes from your level colours |
 | Battery thresholds | Three percentage boundaries for the four level colours |
 | Fuel thresholds | Three percentage boundaries for the four level colours, on plug-in hybrids only; electric cars show only the battery thresholds |
 
@@ -98,11 +109,12 @@ The image’s charging details remain visible when the separate Charging section
 | All / None | Enable or disable the diagnostic selection together |
 | Tyre unit | bar, kPa or psi |
 | Pressure check | From the vehicle, My own limits or Both |
+| My diagnostics | Add, reorder or remove custom entities; choose labels, icons and tap actions. Long press always opens entity info |
 | Minimum / Maximum pressure | Custom limits in the selected unit |
 
 Built-in indicators include Airbag, ABS, Brakes, Brake fluid, 12V battery, Low traction battery, Power system, Power limited, Power steering, Tyre pressure, the four individual tyre alarms and Key battery.
 
-New warning sensors and custom diagnostic indicators are managed in Advanced.
+New warning sensors are managed in Advanced.
 
 ## Card Settings → Advanced
 
@@ -112,20 +124,11 @@ New warning sensors and custom diagnostic indicators are managed in Advanced.
 | Show “Deepal Card” in the sidebar | Lists the **Deepal Card** page (just the card) in the sidebar. Off by default; an administrator changes it, then reloads the browser. The page keeps working from its address (`/deepal-companion-card`) and from notifications while hidden |
 | Entity prefix | Vehicle entity prefix |
 | Vehicle type | Automatic, Plug-in hybrid or Electric. Automatic treats the car as a hybrid when it has a fuel level, fuel range or fuel volume sensor, and as electric otherwise. Electric hides fuel tiles, fuel colour settings, fuel history and fuel health checks. See [Vehicle type](#vehicle-type) |
-| Paint colour | Black, blue, grey, silver or white |
-| Wheels | 20-inch with covers, 20-inch without covers or 18-inch Pro |
 | Battery capacity | Automatic capacity (18.4 kWh for plug-in hybrids, 68.8 kWh for electric cars) or a kWh override, when Energy history is enabled |
-| Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
-| Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
-| Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
-| A stop longer than this starts a new charge (min) | In the live curve, a stop shorter than this stays part of the same charge, so a charge you stopped and restarted shows as one curve. It is also the silent time after which a stretch with no battery progress counts as missing data. 1–120, default 15 |
-| Refresh the charging curve every (min) | While charging, the curve's line follows the latest car report. When the car reports nothing new, the line still moves to the current time this often. 1–60, default 5 |
-| Highlight Missing Data | On by default. Gaps between readings where the car reported no battery progress are joined by a lighter grey line and shaded area, and hovering or touching one explains that data is missing with its start, end and duration. Off keeps one plain continuous line. Applies to the card and to saved charges |
 | Full-tank fuel range | Automatic 940 km for hybrids, or a positive override |
 | Hero photos folder | Automatic image folder or a custom folder |
 | State-specific photos | Replace individual available vehicle-state images and check their previews |
 | New sensors | Discover, add, add all, ignore or restore ignored diagnostic suggestions |
-| My diagnostics | Add, reorder or remove custom entities; choose labels, icons and tap actions. Long press always opens entity info |
 | Entity mapping | Choose a sensor role, select its HA entity and add/remove the mapping |
 
 Empty numeric fields display the default as a hint. Enter your own value to override it. Clearing an override restores the default. For hybrid range, 0 selects the automatic value. Fuel litres are read from the fuel-volume sensor; there is no tank-capacity setting.
@@ -257,10 +260,37 @@ Alert titles and messages, the Live charging, Live climate and Left open or unlo
 At the top of the Notifications page, **Notification language** sets the language of every notification Companion writes: alerts, charging and live updates, and preconditioning. **Automatic** (the default) follows the Home Assistant language; you can also pick English, Greek, German, Spanish or Italian. Only administrators can change it. Texts you wrote yourself are sent as written.
 
 
+### Data update rate
+
+In **Card Settings → Advanced**, **Data update rate** sets how often Companion saves the car's readings and refreshes live notifications. It applies to every vehicle and to the whole integration, and only an administrator can change it.
+
+- **Live** (the default): every change the car reports is saved and shown. Notifications follow their own **Update at most every** setting.
+- **5 min** or **10 min**: a reading is saved at most once in that time, and live notifications are never sent more often than that. A change that arrives sooner is not lost; it is saved as soon as the time has passed. Charging curves and history become coarser, but use less storage.
+
+This does not change how often the car itself is read. That is set in the Deepal Alternative integration: with its live connection (MQTT) the car reports within seconds, and the scan interval (300 seconds by default) is the fallback and refreshes the readings that only come from the periodic scan.
+
+## Fixed times
+
+These times are built in because they protect against false alarms and wrong charge records, and they stay correct whether the car reports live or every 5 minutes. They are not settings.
+
+| Time | What it does |
+| --- | --- |
+| 15 seconds | How often Companion checks your alerts. Delays, repeats and cooldowns you set are counted from these checks. |
+| 30 seconds | Live charging ends this long after the car stops charging, so a short pause does not end the notification. |
+| 5 minutes | A charger reading that does not change is still saved at least this often (every 10 minutes with the 10 min update rate), so the energy of a long constant charge is counted correctly. |
+| 5 and 10 minutes | A live notification whose content has not changed is refreshed at most this often when the car reports newer readings: 5 minutes for Live charging, 10 minutes for Live climate and Left open or unlocked. The data update rate and **Update at most every** can only make this slower. |
+| 10 minutes | A DC current reading that starts within 10 minutes of AC current is ignored unless the battery then rises, because some cars report a false DC current when an AC charge ends. |
+| 15 minutes | A charge is finished when charging has been off for 15 minutes, and a charge is closed when readings stop for 15 minutes (for example while Home Assistant is off). A shorter stop stays part of the same charge. |
+| 6 hours | An unreachable car keeps its charge open and its last value for up to 6 hours. After that the outage is shown as it is and the charge is closed at its last reading. The Health page also marks a battery reading older than 6 hours. |
+| 2 minutes | Car logs: door, window and lock changes within 2 minutes form one entry, "data unavailable" is logged only after 2 minutes without a battery reading, and a charge shorter than 2 minutes that added nothing is ignored. |
+| 15 and 45 seconds | Preconditioning: **Refresh vehicle data** can be pressed once in 15 seconds, and a start or stop waits up to 45 seconds for a newer report before it decides. |
+
+Times you can change have their own settings, for example **Wait before showing**, **Count as parked after**, **Update at most every**, the reading age limit and the repeat and cooldown of alerts.
+
 ### Chart navigation
 
 Pinch with two fingers to zoom the Energy history, energy-delivery and charging-curve time axes. Move both fingers together to pan while zoomed, and use the small reset icon to show the full range. Ctrl/Command + mouse wheel also zooms. One finger inspects readings; zooming changes the view without changing saved data or period totals.
 
-Live notification activity combines each start/end lifecycle into one entry. Expand its details to inspect triggering openings/unlocked state, captured sensor values and report times, and the end reason. “Only when parked” currently infers stationary status from an odometer report older than two minutes; it does not confirm gear P. A long stop or delayed API reports may therefore qualify. Without an odometer, engine/power status is used. Historical entries cannot recover trigger evidence that was never recorded.
+Live notification activity combines each start/end lifecycle into one entry. Expand its details to inspect triggering openings/unlocked state, captured sensor values and report times, and the end reason. “Only when parked” counts the car as parked when its odometer has stayed the same for **Count as parked after** (6 minutes by default, 1–60 minutes); it does not confirm gear P. A long stop or delayed API reports may therefore qualify. Without an odometer, engine/power status is used. Historical entries cannot recover trigger evidence that was never recorded.
 
-For live left-open/unlocked alerts, **Wait before showing** is the full continuous delay (5 min = 300 seconds) after the condition first qualifies. Before delivery, clearing the condition, detected movement (when parking filtering is enabled), disconnection, stale or unknown evidence resets the timer. HA restart also restarts a pending wait. A zero-minute setting skips this delay, but still requires a qualifying fresh condition. The separate two-minute odometer-report heuristic only decides moving versus stationary; it is not subtracted from your delay. Existing live activities keep their end-delay behavior.
+For live left-open/unlocked alerts, **Wait before showing** is the full continuous delay (5 min = 300 seconds) after the condition first qualifies. Before delivery, clearing the condition, detected movement (when parking filtering is enabled), disconnection, stale or unknown evidence resets the timer. HA restart also restarts a pending wait. A zero-minute setting skips this delay, but still requires a qualifying fresh condition. **Count as parked after** only decides moving versus stationary; it is not subtracted from your delay. Existing live activities keep their end-delay behavior.

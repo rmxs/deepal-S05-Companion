@@ -15,7 +15,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 
-from .const import CARD_PANEL_URL, DEFAULT_PROFILES, DOMAIN, RANGES, SIGNAL
+from .const import CAR_LOG_SIGNAL, CARD_PANEL_URL, DEFAULT_PROFILES, DOMAIN, PLAN_SIGNAL, RANGES, SIGNAL
 from .database import UNDO_DAYS
 
 _LOGGER = logging.getLogger(__name__)
@@ -145,6 +145,13 @@ async def request(hass, connection, msg):
                 await hub.set_language(data.get("language"))
             connection.send_result(msg["id"], {"language": language_choice(hass)})
             return
+        if op in {"update_rate_get", "update_rate_set"}:
+            if op == "update_rate_set":
+                if not connection.user.is_admin:
+                    raise PermissionError("Administrator access is required to change the data update rate")
+                await hub.set_update_rate(data.get("seconds"))
+            connection.send_result(msg["id"], {"seconds": hub.update_rate})
+            return
         runtime = hub.vehicles.get(vehicle)
         if runtime is None:
             raise ValueError("Vehicle is not loaded")
@@ -234,6 +241,12 @@ async def request(hass, connection, msg):
         elif op == "health_get":
             from .health import build_health
             result = await build_health(runtime)
+        elif op == "car_log_get":
+            from .car_log import view as car_log_view
+            result = await car_log_view(runtime, data)
+        elif op == "plan_debug_get":
+            from .plan_health import debug_view
+            result = debug_view(runtime)
         elif op == "config_get":
             result = await hub.read_db(lambda snap: snap.config(vehicle, msg.get("view_id")))
             result["charge_prompt"] = await hub.db("charge_prompt", vehicle, str(connection.user.id))
@@ -260,6 +273,9 @@ async def request(hass, connection, msg):
             for key, (low, high) in RANGES.items():
                 if key in patch and (isinstance(patch[key], bool) or not isinstance(patch[key], (int, float)) or not low <= patch[key] <= high):
                     raise ValueError("%s must be between %s and %s" % (key.replace("_", " "), low, high))
+            for key in patch:
+                if key.startswith("notify_") and key.endswith("_level") and patch[key] not in ("red", "orange", "yellow", "green"):
+                    raise ValueError("Choose red, orange, yellow or green")
             expected_revision = data.get("expected_revision")
             if not isinstance(expected_revision, list) or len(expected_revision) != 2 or any(isinstance(n, bool) or not isinstance(n, int) for n in expected_revision):
                 raise ValueError("Settings revision missing. Reload before saving.")
@@ -487,7 +503,43 @@ async def card_panel(hass, connection, msg):
     connection.send_result(msg["id"], {"sidebar": hub.card_panel_in_sidebar, "url": "/" + CARD_PANEL_URL, **hub.card_panel_pin})
 
 
+@websocket_api.websocket_command({vol.Required("type"): DOMAIN + "/subscribe_plan"})
+@callback
+def subscribe_plan(hass, connection, msg):
+    """Push a message whenever a vehicle's charge plan or its plan activity changes."""
+    @callback
+    def changed(vehicle):
+        runtime = hass.data[DOMAIN].vehicles.get(vehicle)
+        if runtime:
+            try:
+                authorize(connection, runtime)
+                connection.send_event(msg["id"], {"vehicle_id": vehicle})
+            except PermissionError:
+                pass
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, PLAN_SIGNAL, changed)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command({vol.Required("type"): DOMAIN + "/subscribe_car_log"})
+@callback
+def subscribe_car_log(hass, connection, msg):
+    """Push a message whenever a vehicle's car log changes."""
+    @callback
+    def changed(vehicle):
+        runtime = hass.data[DOMAIN].vehicles.get(vehicle)
+        if runtime:
+            try:
+                authorize(connection, runtime)
+                connection.send_event(msg["id"], {"vehicle_id": vehicle})
+            except PermissionError:
+                pass
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, CAR_LOG_SIGNAL, changed)
+    connection.send_result(msg["id"])
+
+
 def register(hass):
     websocket_api.async_register_command(hass, request)
     websocket_api.async_register_command(hass, card_panel)
     websocket_api.async_register_command(hass, subscribe)
+    websocket_api.async_register_command(hass, subscribe_plan)
+    websocket_api.async_register_command(hass, subscribe_car_log)

@@ -14,7 +14,7 @@ module.exports=async function imageLoading(page){
    await page.waitForFunction(()=>{const card=document.querySelector('#cold-image-test deepal-companion-card');const imgs=[...card.shadowRoot.querySelectorAll('#cva img.on')];return imgs.length>0&&imgs.every(img=>img.complete&&img.naturalWidth>0);},{},{timeout:15000});
    assert([...attempts.values()].some(count=>count>=3),'Cold-cache test must exercise repeated image failures');
    assert.equal(await page.evaluate(()=>!!document.querySelector('#cold-image-test deepal-companion-card')._cvFail),false);
-   await page.locator('#cold-image-test').screenshot({path:path.resolve(__dirname,'../../cold-image-recovery.png')});
+   await page.locator('#cold-image-test').screenshot({path:path.resolve(__dirname,'../cold-image-recovery.png')});
    console.log('PASS: cold-cache Car View recovers base and overlays after two temporary failures without refreshing.');
  }finally{
    await page.evaluate(()=>document.querySelector('#cold-image-test')?.remove());

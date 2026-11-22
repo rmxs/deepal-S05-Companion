@@ -4,7 +4,7 @@
 
 ## Before you start
 
-1. Install and configure [**Deepal Alternative**](https://github.com/Sunek0/ha-deepal-alternative) in Home Assistant.
+1. Install and configure [**Deepal Alternative**](https://github.com/Sunek0/ha-deepal-alternative) **v1.9.0 or newer** ([release](https://github.com/Sunek0/ha-deepal-alternative/releases/tag/v1.9.0)) in Home Assistant. Older versions miss entities that some card functions, such as the Charge plan, need.
 2. Confirm that your vehicle’s battery sensor and other entities appear in **Settings → Devices & services**.
 3. Sign in to Home Assistant as an administrator.
 

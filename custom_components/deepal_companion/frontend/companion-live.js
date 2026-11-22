@@ -24,15 +24,28 @@ export const LIVE_DEFAULTS = {
   open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 300, end_delay: 10, parked_after: 360, items: OPEN_ITEMS, include_unlocked: true, only_parked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
 };
 const GROUPS = {doors: OPEN_ITEMS.slice(0, 4), windows: OPEN_ITEMS.slice(4, 8), hood: ['hood'], trunk: ['trunk']};
+// Each page is built from titled sections. A row names its section ('watch', 'show' or 'timing'): switches become option tiles, numbers become stepper cards.
+const SECTIONS = {
+  watch: ['mdi:eye-outline', 'What to watch', 'Choose what triggers the notification'],
+  show: ['mdi:tune-variant', 'Notification components', 'Choose what appears on the Lock Screen card'],
+  timing: ['mdi:clock-fast', 'Timing & limits', 'Save battery and skip brief triggers'],
+};
+const sw = (key, label, desc, badge, s = 'show') => ({kind: 'switch', key, label, desc, badge, s});
+const grp = (key, label, desc) => ({kind: 'group', key, label, desc, s: 'watch'});
+const num = (key, label, desc, unit, scale, low, high) => ({kind: 'number', key, label, desc, unit, scale, low, high, s: 'timing'});
 const KINDS = {
   charging: {name: 'Live charging', icon: 'mdi:lightning-bolt-circle', sub: 'Battery and time left while charging', info: 'Shows the battery level and time left on the Lock Screen while the car charges.',
-    rows: [['switch', 'show_timer', 'Show time remaining'], ['number', 'min_interval', 'Update at most every', 'min', 60, 1, 60], ['number', 'battery_step', 'Update every', '%', 1, 1, 20]]},
-  climate: {name: 'Live climate', icon: 'mdi:fan', sub: 'Cabin temperature while the climate is on', info: 'Appears when the climate turns on and shows the cabin temperature against the target. It disappears when the climate stops.',
-    rows: [['switch', 'show_target', 'Show target temperature'], ['switch', 'show_outside', 'Show outside temperature'], ['switch', 'show_progress', 'Show progress bar'], ['switch', 'show_timer', 'Show running time'],
-      ['switch', 'turn_off_button', '“Turn off” button', 'Android only'], ['number', 'min_interval', 'Update at most every', 'min', 60, 1, 60], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 10]]},
-  open: {name: 'Left open or unlocked', icon: 'mdi:car-door-lock-open', sub: 'Open doors, windows and an unlocked car', info: 'One notification lists what is open or unlocked. Items drop off as they are closed, and it disappears when everything is secure.',
-    rows: [['group', 'doors', 'Doors'], ['group', 'windows', 'Windows'], ['group', 'hood', 'Bonnet'], ['group', 'trunk', 'Trunk'], ['switch', 'include_unlocked', 'Unlocked car'], ['switch', 'only_parked', 'Only when the car is parked', 'Nothing while driving'], ['switch', 'show_count', 'Show item count'], ['switch', 'show_timer', 'Show time open'],
-      ['switch', 'lock_button', '“Lock vehicle” button', 'Android only'], ['number', 'parked_after', 'Count as parked after', 'min', 60, 1, 60], ['number', 'start_delay', 'Wait before showing', 'min', 60, 0, 60]]},
+    presets: ['mdi:lightning-bolt-circle', 'mdi:ev-station', 'mdi:battery-charging', 'mdi:power-plug'],
+    rows: [sw('show_timer', 'Show time remaining', 'Time left until the charge finishes'), num('min_interval', 'Update at most every', 'Shortest time between Lock Screen updates', 'min', 60, 1, 60), num('battery_step', 'Update every', 'Refresh when the battery changes by this much', '%', 1, 1, 20)]},
+  climate: {name: 'Live climate', icon: 'mdi:fan', sub: 'Cabin temperature while the climate is on', info: 'Shown while the climate is on, with the cabin temperature against the target.',
+    presets: ['mdi:fan', 'mdi:air-conditioner', 'mdi:thermometer-lines', 'mdi:snowflake'],
+    rows: [sw('show_target', 'Show target temperature', 'The temperature the climate is heading to'), sw('show_outside', 'Show outside temperature', 'Outdoor reading next to the cabin value'), sw('show_progress', 'Show progress bar', 'How close the cabin is to the target'), sw('show_timer', 'Show running time', 'How long the climate has been on'),
+      sw('turn_off_button', '“Turn off” button', 'Stop the climate from the notification', 'Android only'), num('min_interval', 'Update at most every', 'Shortest time between Lock Screen updates', 'min', 60, 1, 60), num('start_delay', 'Wait before showing', 'Skip short runs by waiting first', 'min', 60, 0, 10)]},
+  open: {name: 'Left open or unlocked', icon: 'mdi:car-door-lock-open', sub: 'Open doors, windows and an unlocked car', info: 'One notification lists what is open or unlocked. Items drop off as they close; it disappears when all is secure.',
+    presets: ['mdi:car-door-lock-open', 'mdi:lock-open-variant-outline', 'mdi:window-open', 'mdi:shield-lock'],
+    rows: [grp('doors', 'Doors', 'All four doors'), grp('windows', 'Windows', 'All four windows'), grp('hood', 'Bonnet', 'The front bonnet'), grp('trunk', 'Trunk', 'The rear trunk'), sw('include_unlocked', 'Unlocked car', 'Also alert when the car is unlocked', null, 'watch'), sw('only_parked', 'Only when the car is parked', 'Nothing while driving', null, 'watch'),
+      sw('show_count', 'Show item count', 'How many items are open'), sw('show_timer', 'Show time open', 'How long something has been open'), sw('lock_button', '“Lock vehicle” button', 'Lock the car from the notification', 'Android only'),
+      num('parked_after', 'Count as parked after', 'Time stopped before the car counts as parked', 'min', 60, 1, 60), num('start_delay', 'Wait before showing', 'Time to close things before the alert', 'min', 60, 0, 60)]},
 };
 // Phones only show Material Design icons, so the choices are mdi: names (others are refused).
 const ICONS = ['mdi:lightning-bolt-circle', 'mdi:ev-station', 'mdi:battery-charging', 'mdi:battery-charging-high', 'mdi:battery-charging-medium', 'mdi:battery-charging-low', 'mdi:battery-high', 'mdi:battery-alert', 'mdi:flash', 'mdi:flash-outline', 'mdi:lightning-bolt', 'mdi:power-plug', 'mdi:power-plug-outline', 'mdi:ev-plug-type2', 'mdi:fan', 'mdi:air-conditioner', 'mdi:thermometer', 'mdi:thermometer-lines', 'mdi:snowflake', 'mdi:weather-sunny', 'mdi:sun-thermometer', 'mdi:radiator', 'mdi:hvac', 'mdi:car', 'mdi:car-electric', 'mdi:car-side', 'mdi:car-door', 'mdi:car-door-lock', 'mdi:car-door-lock-open', 'mdi:car-key', 'mdi:car-off', 'mdi:car-battery', 'mdi:car-seat-heater', 'mdi:car-seat-cooler', 'mdi:car-emergency', 'mdi:lock', 'mdi:lock-open', 'mdi:lock-open-variant-outline', 'mdi:lock-alert', 'mdi:shield-car', 'mdi:shield-lock', 'mdi:garage-open', 'mdi:window-open', 'mdi:window-closed', 'mdi:alert', 'mdi:alert-circle', 'mdi:bell', 'mdi:bell-ring', 'mdi:information', 'mdi:check-circle', 'mdi:timer-outline', 'mdi:clock-outline', 'mdi:gauge', 'mdi:speedometer', 'mdi:engine', 'mdi:steering', 'mdi:wiper', 'mdi:car-wireless', 'mdi:broadcast', 'mdi:fire'];
@@ -45,9 +58,10 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
   const supported = response.live_supported === true, active = {charging: !!response.live_test_active, ...response.live_status_test_active};
   // The LIVE tag is yellow while a notification is on and grey while it is off.
   const tags = [];
-  const tag = (id) => { const node = el('span', '', 'LIVE'); node.dataset.liveTag = id || ''; node.style.cssText = 'margin-left:8px;font-size:9px;font-weight:700;letter-spacing:.06em;padding:1px 6px;border-radius:999px;vertical-align:middle'; tags.push(node); return node; };
+  const tag = (id) => { const node = el('span', 'live-tag', T('LIVE')); node.dataset.liveTag = id || ''; tags.push(node); return node; };
   const clean = (root) => { for (const node of [root, ...root.querySelectorAll('*')]) for (const name of ['onclick', 'onchange', 'oninput', 'data-design-click', 'data-alert-open', 'data-alert-id', 'data-alert-toggle']) node.removeAttribute(name); return root; };
   const icon = (name) => { const node = document.createElement('ha-icon'); node.setAttribute('icon', name); return node; };
+  const TILE_ICONS = {doors: 'mdi:car-door', windows: 'mdi:car-windshield-outline', hood: 'mdi:car-select', trunk: 'mdi:car-back', include_unlocked: 'mdi:lock-open-variant-outline', only_parked: 'mdi:parking', show_count: 'mdi:counter', show_timer: 'mdi:timer-outline', lock_button: 'mdi:lock-outline', show_target: 'mdi:target', show_outside: 'mdi:weather-partly-cloudy', show_progress: 'mdi:progress-check', turn_off_button: 'mdi:power'};
   const toggle = (data) => { const label = clean(q('#master-toggle').closest('label').cloneNode(true)), input = label.querySelector('input'); input.removeAttribute('id'); input.checked = false; Object.assign(input.dataset, data); return label; };
   // Overview: its own box at the top, separate from the other alerts, with one row per live notification.
   const alerts = firstCategory.closest('.ha-card') || firstCategory, box = alerts.cloneNode(false), category = firstCategory.cloneNode(false), heading = firstCategory.firstElementChild.cloneNode(false), grid = firstGrid.cloneNode(false);
@@ -55,6 +69,27 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
   const stepRow = q('#input-delay').closest('.flex.items-center.justify-between'), pages = {}, rows = {};
   const group = (cfg, id) => GROUPS[id].every((item) => cfg.items.includes(item));
   const summary = (id, cfg) => (cfg.enabled ? 'On · ' : 'Off · ') + KINDS[id].sub;
+  // Building blocks for the live pages; every look comes from notification-layout.js (no inline styling).
+  const head = (iconName, title, sub, extra) => { const box = el('div', 'live-head'), text = el('div', 'live-ht'), mark = icon(iconName); mark.classList.add('live-hi'); text.append(el('h3', '', T(title)), el('p', '', T(sub))); box.append(mark, text); if (extra) box.append(extra); return box; };
+  const caption = (row) => { const text = el('span', 'live-tx'), title = el('span', 'live-tt', T(row.label)); if (row.badge) title.append(el('span', 'live-badge', T(row.badge))); text.append(title, el('small', 'live-td', T(row.desc))); return text; };
+  // A switch as a tile: tap anywhere; the real checkbox stays (hidden) for the keyboard and for saving.
+  const tile = (row) => {
+    const item = el('div', 'live-tile'), holder = el('div', 'live-sw'), mark = icon(TILE_ICONS[row.key] || 'mdi:toggle-switch-outline');
+    mark.classList.add('live-ic'); mark.setAttribute('aria-hidden', 'true'); item.setAttribute('role', 'presentation');
+    holder.append(toggle(row.kind === 'group' ? {liveGroup: row.key} : {liveSwitch: row.key}));
+    item.append(mark, caption(row), holder, el('i', 'live-tk'));
+    item.addEventListener('click', (event) => { if (event.target.closest('label')) return; const input = item.querySelector('input'); if (input && !input.disabled) input.click(); });
+    return item;
+  };
+  // A number as a card: title and hint above, the same − value + pill as the alert pages below.
+  const stepper = (row) => {
+    const item = clean(stepRow.cloneNode(true)), holder = item.lastElementChild;
+    item.removeAttribute('data-parameter'); for (const node of item.querySelectorAll('[id]')) node.removeAttribute('id');
+    item.querySelector('span').replaceWith(caption(row)); item.classList.add('compact-control-row', 'live-stepper');
+    const input = item.querySelector('input'); Object.assign(input, {min: row.low, max: row.high, required: true}); input.dataset.liveNumber = row.key; input.dataset.scale = row.scale; input.nextElementSibling.textContent = row.unit;
+    const [minus, plus] = holder.querySelectorAll('button'); minus.dataset.liveStep = '-1'; plus.dataset.liveStep = '1'; minus.type = plus.type = 'button';
+    return item;
+  };
   const build = (id) => {
     const spec = KINDS[id], row = clean(template.cloneNode(true));
     for (const node of [row.querySelector('div.cursor-pointer'), row.querySelector('button')]) node.dataset.liveOpen = id;
@@ -67,34 +102,34 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
     back.dataset.liveBack = ''; iconBox.replaceChildren(icon(spec.icon)); text.firstElementChild.firstElementChild.textContent = spec.name; text.firstElementChild.firstElementChild.append(tag(id));
     text.firstElementChild.children[1]?.remove(); const status = text.querySelector('p'); status.children[1].textContent = 'Live notification'; status.children[2].textContent = '• Lock Screen';
     const power = right.querySelector('input'), pill = power.closest('label').parentElement; pill.classList.add('design-alert-switch'); pill.querySelector('span').textContent = 'Alert enabled'; power.dataset.liveToggle = id; right.querySelectorAll('button').forEach((button) => button.remove());
-    const body = el('div', 'p-4 space-y-4'), info = el('aside', 'notification-info'), infoText = el('div'); info.setAttribute('role', 'note');
+    const body = el('div', 'p-4 space-y-4'), info = el('aside', 'notification-info live-info'), infoText = el('div'); info.setAttribute('role', 'note');
     infoText.append(el('p', '', spec.info), el('p', '', supported ? 'Needs iOS 17.2+ or Android 16+ with Live Activities / Live Updates enabled in the Companion app.' : T('Needs Home Assistant 2026.7 or newer and a restart of Home Assistant.')));
     info.append(icon('mdi:information-outline'), infoText);
-    // Rows are copies of the alert pages' own rows (label left, switch or stepper right), three to a line.
-    const options = el('div', 'ha-inner-box p-3.5'); options.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(max(220px,30%),1fr));gap:8px';
-    for (const [kind, key, label, extra, scale, low, high] of spec.rows) {
-      const item = clean(stepRow.cloneNode(true)), words = item.querySelector('span'), holder = item.lastElementChild;
-      item.removeAttribute('data-parameter'); for (const node of item.querySelectorAll('[id]')) node.removeAttribute('id'); words.textContent = label;
-      if (kind === 'number') {
-        const input = item.querySelector('input'); Object.assign(input, {min: low, max: high, required: true}); input.dataset.liveNumber = key; input.dataset.scale = scale; input.nextElementSibling.textContent = extra;
-        const [minus, plus] = holder.querySelectorAll('button'); minus.dataset.liveStep = '-1'; plus.dataset.liveStep = '1'; minus.type = plus.type = 'button';
-      } else {
-        if (extra) { const chip = el('span', 'text-[9px] font-semibold', extra); chip.style.cssText = 'margin-left:8px;color:rgb(var(--design-warn,250 204 21));background:rgb(var(--design-warn,250 204 21)/.12);border-radius:999px;padding:1px 6px;white-space:nowrap'; words.append(chip); }
-        holder.replaceChildren(toggle(kind === 'group' ? {liveGroup: key} : {liveSwitch: key}));
-      }
-      options.append(item);
-    }
-    const look = el('div', 'ha-inner-box p-3.5'), picker = document.createElement('ha-selector'); picker.className = 'design-icon-picker'; picker.hass = getHass(); picker.selector = {select: {options: ICONS, custom_value: true, mode: 'dropdown'}}; picker.label = ''; picker.required = false;
-    const field = el('label', 'block text-[11px] text-gray-300 space-y-1'); field.append(document.createTextNode('Icon (mdi: only)'), picker); look.append(field);
-    const actions = el('div', 'flex flex-wrap gap-2'), test = q('[data-command=test]').cloneNode(true), end = q('[data-command=test]').cloneNode(true), feedback = el('p', 'design-test-feedback ha-inner-box p-3'); feedback.hidden = true;
-    for (const [button, label, stop] of [[test, 'Send test', false], [end, 'End test', true]]) { delete button.dataset.command; button.textContent = label; button.dataset.liveTest = stop ? 'stop' : 'start'; button.type = 'button'; actions.append(button); }
-    body.append(info, options, look, actions, feedback);
+    const sections = ['watch', 'show', 'timing'].filter((name) => spec.rows.some((row) => row.s === name)).map((name) => {
+      const [sectionIcon, title, sub] = SECTIONS[name], rowsHere = spec.rows.filter((row) => row.s === name), tiles = rowsHere.some((row) => row.kind !== 'number');
+      const box = el('section', 'ha-inner-box live-section'), grid = el('div', tiles ? 'live-grid' : 'live-grid live-steppers'), count = tiles && rowsHere.length > 1 ? el('span', 'live-count') : null;
+      box.dataset.liveSection = name; if (count) count.dataset.liveCount = name;
+      box.append(head(sectionIcon, title, sub, count), grid);
+      for (const row of rowsHere) grid.append(row.kind === 'number' ? stepper(row) : tile(row));
+      return box;
+    });
+    const look = el('section', 'ha-inner-box live-section'), picker = document.createElement('ha-selector'), preview = el('span', 'live-prev'), previewIcon = icon(spec.icon), field = el('div', 'live-iconrow'), presets = el('div', 'live-presets');
+    picker.className = 'design-icon-picker'; picker.hass = getHass(); picker.selector = {select: {options: ICONS, custom_value: true, mode: 'dropdown'}}; picker.label = ''; picker.required = false; picker.setAttribute('aria-label', T('Notification icon'));
+    preview.append(previewIcon); field.append(preview, picker); presets.append(el('span', 'live-presets-l', T('Quick presets')));
+    for (const name of spec.presets) { const chip = el('button', 'live-chip'); chip.type = 'button'; chip.dataset.livePreset = name; chip.setAttribute('aria-pressed', 'false'); chip.append(icon(name), document.createTextNode(name.slice(4))); presets.append(chip); }
+    look.append(head('mdi:palette-swatch-outline', 'Notification icon', 'Any Material Design icon (mdi:) works on your phone'), field, presets);
+    const actions = el('section', 'ha-inner-box live-section'), bar = el('div', 'live-actions'), test = el('button', 'live-btn live-btn-primary'), end = el('button', 'live-btn'), feedback = el('p', 'design-test-feedback ha-inner-box p-3'); feedback.hidden = true;
+    for (const [button, mark, caption2, stop] of [[test, 'mdi:send-check', 'Send test', false], [end, 'mdi:stop-circle-outline', 'End test', true]]) { button.type = 'button'; button.dataset.liveTest = stop ? 'stop' : 'start'; button.append(icon(mark), document.createTextNode(T(caption2))); bar.append(button); }
+    actions.append(head('mdi:cellphone-message', 'Try it on your phone', 'Sends a sample now. Your real notification stays unchanged.'), bar, feedback);
+    body.append(info, ...sections, look, actions);
     const shell = q('#main-card').cloneNode(false); shell.removeAttribute('id'); shell.append(header, body);
-    const wrap = el('div', 'space-y-3'); wrap.hidden = true; wrap.dataset.livePage = id; wrap.append(shell); overview.after(wrap); pages[id] = {wrap, power, picker, test, end, feedback};
+    const wrap = el('div', 'space-y-3'); wrap.hidden = true; wrap.dataset.livePage = id; wrap.append(shell); overview.after(wrap); pages[id] = {wrap, power, picker, test, end, feedback, preview: previewIcon, chips: [...presets.querySelectorAll('button')]};
   };
   for (const id of Object.keys(KINDS)) build(id);
   let current = '';
-  const show = (id) => { current = id; overview.classList.toggle('hidden', !!id); for (const [key, page] of Object.entries(pages)) page.wrap.hidden = key !== id; if (id) pages[id].wrap.scrollIntoView?.({block: 'start'}); };
+  const show = (id) => { current = id; overview.classList.toggle('hidden', !!id); for (const [key, page] of Object.entries(pages)) page.wrap.hidden = key !== id; if (id) { pages[id].wrap.scrollIntoView?.({block: 'start'}); pages[id].picker.style.setProperty('--notification-navigation-height', '44px'); alignNavigationField(pages[id].picker); } };
+  const syncLook = (id) => { const page = pages[id], shown = getState()[id].icon || KINDS[id].icon; page.preview.setAttribute('icon', shown); for (const chip of page.chips) chip.setAttribute('aria-pressed', String(chip.dataset.livePreset === shown)); };
+  const setIcon = (id, value) => { getState()[id].icon = value === KINDS[id].icon ? '' : value || ''; pages[id].picker.value = value || KINDS[id].icon; syncLook(id); changed(); };
   const refresh = () => {
     const state = getState();
     for (const [id, page] of Object.entries(pages)) {
@@ -103,7 +138,8 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
       for (const input of page.wrap.querySelectorAll('[data-live-switch]')) input.checked = !!cfg[input.dataset.liveSwitch];
       for (const input of page.wrap.querySelectorAll('[data-live-group]')) input.checked = group(cfg, input.dataset.liveGroup);
       for (const input of page.wrap.querySelectorAll('[data-live-number]')) input.value = Math.round(cfg[input.dataset.liveNumber] / Number(input.dataset.scale));
-      const shown = cfg.icon || KINDS[id].icon; if ((page.picker.value || '') !== shown) page.picker.value = shown;
+      const shown = cfg.icon || KINDS[id].icon; if ((page.picker.value || '') !== shown) page.picker.value = shown; syncLook(id);
+      for (const badge of page.wrap.querySelectorAll('[data-live-count]')) { const boxes = [...badge.closest('[data-live-section]').querySelectorAll('input[type=checkbox]')]; badge.textContent = T('{0} of {1} active', boxes.filter((box) => box.checked).length, boxes.length); }
       page.test.disabled = !!busy() || !supported; page.end.disabled = !!busy() || !supported || !active[id];
     }
     for (const node of tags) { const on = node.dataset.liveTag ? state[node.dataset.liveTag].enabled : Object.keys(KINDS).some((id) => state[id].enabled), tone = on ? '--design-warn' : '--design-muted'; node.style.background = `rgb(var(${tone})/.15)`; node.style.color = `rgb(var(${tone}))`; }
@@ -127,7 +163,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
   const tapPicker = document.createElement('ha-selector'), tapPanel = el('div', 'space-y-3');
   tapPicker.hass = getHass(); tapPicker.selector = {navigation: {}}; tapPicker.label = ''; tapPicker.required = false; tapPicker.className = 'design-navigation-picker'; tapPicker.style.cssText='display:block;width:100%;min-width:0;height:var(--notification-navigation-height,60px);min-height:var(--notification-navigation-height,60px);--ha-select-height:var(--notification-navigation-height,60px);--ha-color-form-background:var(--design-inner)';
   tapPicker.addEventListener('value-changed', (event) => { event.stopPropagation(); if (busy() || typeof event.detail?.value !== 'string' && event.detail?.value != null) return; setUrl(event.detail.value || ''); changed(); });
-  tapPanel.append(el('div', 'font-bold text-[11px] text-gray-300', 'When you tap a notification'), el('p', 'text-[11px] text-gray-400 leading-relaxed', 'The dashboard page the phone opens. Empty opens the page the Home Assistant app shows by default. Alerts and live notifications use the same page.'), tapPicker);
+  tapPanel.append(el('div', 'font-bold text-[11px] text-gray-300', 'When you tap a notification'), el('p', 'text-[11px] text-gray-400 leading-relaxed', 'The dashboard page opened when you tap a notification. Empty opens the app’s default page.'), tapPicker);
   // The page that shows only the card: one button to choose it as the tap target.
   const CARD_PAGE = '/deepal-companion-card';
   const cardTap = el('button', 'px-3.5 py-1.5 rounded-full text-[11px] border');
@@ -149,6 +185,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
     if (target.closest?.('[data-design-click],[data-live-back]')) { if (current) show(''); return; }
     if (busy()) return;
     const step = target.closest?.('[data-live-step]'); if (step) { const input = step.parentElement.querySelector('input'); input.value = Math.min(Number(input.max), Math.max(Number(input.min), Number(input.value) + Number(step.dataset.liveStep))); input.dispatchEvent(new Event('input', {bubbles: true})); return; }
+    const preset = target.closest?.('[data-live-preset]'); if (preset) { setIcon(preset.closest('[data-live-page]').dataset.livePage, preset.dataset.livePreset); return; }
     const open = target.closest?.('[data-live-open]'); if (open) { show(open.dataset.liveOpen); return; }
     const test = target.closest?.('[data-live-test]'); if (test) run(test.closest('[data-live-page]').dataset.livePage, test.dataset.liveTest === 'stop');
   }, true);
@@ -168,7 +205,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
   for (const [id, page] of Object.entries(pages)) page.picker.addEventListener('value-changed', (event) => {
     event.stopPropagation(); if (busy()) { refresh(); return; } const value = event.detail?.value; if (typeof value !== 'string' && value != null) return;
     if (value && !value.startsWith('mdi:')) { toast('Phones only show mdi: icons. Pick an mdi: icon.', true); page.picker.value = getState()[id].icon || KINDS[id].icon; return; }
-    getState()[id].icon = value === KINDS[id].icon ? '' : value || ''; changed();
+    getState()[id].icon = value === KINDS[id].icon ? '' : value || ''; syncLook(id); changed();
   });
   refresh();
   return {refresh};

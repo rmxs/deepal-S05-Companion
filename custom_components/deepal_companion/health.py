@@ -147,8 +147,12 @@ async def build_health(runtime):
     async def pricing():
         return pricing_checks(await hub.db("get", vehicle, "costs", {}))
 
+    async def plan():
+        from .plan_health import plan_checks, plan_info
+        return plan_checks(plan_info(runtime))
+
     for name, produce in (("sensors", sensors), ("recorder", backend), ("storage", storage),
-                          ("notifications", notifications), ("pricing", pricing)):
+                          ("notifications", notifications), ("pricing", pricing), ("plan", plan)):
         await section(name, produce)
     status = max((c["status"] for c in checks), key=RANK.get, default="ok")
     return {"status": status, "version": VERSION, "checked": int(now),

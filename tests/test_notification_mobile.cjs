@@ -13,7 +13,7 @@ module.exports=async page=>{
   await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').scrollTop===0);
   const pills=board.locator('button[data-indicator].active');assert((await pills.count())>=3);
   const colors=await board.evaluate(n=>{const r=n.shadowRoot,primary=getComputedStyle(r.querySelector('#view-detail [data-command=save]')).color;return [...r.querySelectorAll('button[data-indicator].active')].map(b=>({primary,text:getComputedStyle(b).color,label:getComputedStyle(b.querySelector('span')).color}));});
-  assert(colors.every(c=>c.text===c.primary&&c.label===c.primary),'Selected diagnostic buttons and labels must match the primary button foreground');
+  assert(colors.every(c=>c.text===c.label&&c.text!==c.primary),'Selected diagnostic buttons use the shared selected-tile colour for button and label');
   assert((await board.locator('#main-card').boundingBox()).y<240,'Mobile alert configuration opens at its header');
   await panel.evaluate(async p=>{if(p.localBoard)p.localBoard.dirty=false;await p.navigateMode('settings');});
  }finally{await page.evaluate(ids=>{for(const id of ids)delete window.testHass.states[id];},added);await page.setViewportSize({width:1440,height:1050});}

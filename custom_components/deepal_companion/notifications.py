@@ -26,9 +26,6 @@ def migrate_parked(config, vehicle_config, has_entity):
     the car is off, or it is on but the odometer has not changed. Nothing has to be saved again by hand. Only the saved
     condition changes; the user's times, texts and switches stay as they are. Returns True when something changed."""
     changed = False
-    live = config.get("live_open")
-    if isinstance(live, dict) and type(live.get("start_delay")) is int and live["start_delay"] < 300:
-        live["start_delay"], changed = 300, True  # the old 1-minute default is shorter than the car's update interval
     prefix, mapped = vehicle_config.get("prefix", "s05"), vehicle_config.get("entities", {})
     power = mapped.get("sensor.power_status") or f"sensor.{prefix}_power_status"
     odo = mapped.get("sensor.total_odometer") or f"sensor.{prefix}_total_odometer"
@@ -243,6 +240,16 @@ class NotificationEngine:
             rows.append({"svc": entity.entity_id, "name": entity.name or (device.name_by_user or device.name if device else None) or entry.title,
                          "tracker": tracker, "legacy_service": "mobile_app_" + slugify(entry.data.get("device_name", entry.title))})
         return sorted(rows, key=lambda row: (row["name"].casefold(), row["svc"]))
+
+    def recipient_os(self, recipient):
+        """The phone's platform ("ios" or "android"), or "" when it cannot be told."""
+        try:
+            from homeassistant.helpers import entity_registry as er
+            entity = er.async_get(self.hass).async_get(recipient)
+            entry = self.hass.config_entries.async_get_entry(entity.config_entry_id) if entity else None
+            return str((entry.data if entry else {}).get("os_name", "")).lower()
+        except Exception:
+            return ""
 
     async def send_to_recipient(self, recipient, payload):
         """Use the entity's current registration for rich Mobile App notifications."""

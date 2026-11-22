@@ -42,7 +42,7 @@ module.exports=async page=>{
       await page.evaluate(t=>{const s=document.querySelector('deepal-companion-panel').settings.shadowRoot;s.querySelector('[data-tab="'+t+'"]')?.click();s.querySelectorAll('details').forEach(d=>d.open=true);},tab);
       await page.waitForTimeout(150);await snap();
     }
-    for(const mode of ['notifications','history','chargers','preconditioning','health']){where='page '+mode;
+    for(const mode of ['notifications','history','chargers','preconditioning','logs','health']){where='page '+mode;
       await page.evaluate(m=>{const p=document.querySelector('deepal-companion-panel');p.shadowRoot.querySelector('nav [data-mode="'+m+'"]')?.click();},mode);
       await page.waitForTimeout(700);
       await page.evaluate(()=>{const walk=r=>{r.querySelectorAll?.('details').forEach(d=>d.open=true);r.querySelectorAll?.('*').forEach(e=>e.shadowRoot&&walk(e.shadowRoot));};walk(document.body);});

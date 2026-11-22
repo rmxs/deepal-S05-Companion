@@ -4,8 +4,10 @@
 const assert=require('assert'),fs=require('fs'),path=require('path'),http=require('http');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright-core');
 const ROOT=path.resolve(__dirname,'..');
-const PAGE=`<!doctype html><meta charset=utf-8><body style="background:#121316;color:#eee;font-family:sans-serif;margin:0">
-<div id=card></div><div id=settings></div><div id=notifications></div><div id=quick style="width:440px"></div>
+/* the shared interface tokens and rules that the panel and the card always provide */
+const SHARED=(()=>{const css=fs.readFileSync(path.join(__dirname,'../custom_components/deepal_companion/frontend/companion-panel.css'),'utf8');const cp=(css.match(/\/\*cp:begin\*\/([\s\S]*?)\/\*cp:end\*\//)||[])[1]||'';const ui=(css.match(/\/\*ui:begin\*\/([\s\S]*?)\/\*ui:end\*\//)||[])[1]||'';return ':root{'+cp+'}'+ui;})();
+const PAGE=`<!doctype html><meta charset=utf-8><style>${SHARED}</style><body style="background:#121316;color:#eee;font-family:sans-serif;margin:0">
+<div id=card></div><div id=settings></div><div id=notifications></div><div id=quick style="width:440px"></div><div id=f24></div><div id=f12></div><div id=fde></div><div id=fen></div>
 <script type=module>
 import {mountPrecondition} from '/custom_components/deepal_companion/frontend/companion-precondition.js';
 const now=()=>Date.now()/1000;
@@ -27,6 +29,10 @@ async function request(op,data={}){backend.calls.push(op);await new Promise(r=>s
   if(op==='precondition_clear_history'){backend.history=[];return snap();}
   if(op==='precondition_stop'){backend.state={status:'INACTIVE',owner:null};return {accepted:true,...snap()};}
   throw Error('Unknown Companion operation');}
+/* time format: one fixed report time (15:05 UTC) shown for different Home Assistant profiles */
+const FIXED=Date.UTC(2026,10,22,15,5)/1000;
+async function fixedRequest(op,data){const r=await request(op,data);if(r&&r.climate)r.climate.report=FIXED;return r;}
+for(const [id,locale] of [['f24',{language:'en',time_format:'24'}],['f12',{language:'de',time_format:'12'}],['fde',{language:'de',time_format:'language'}],['fen',{language:'en',time_format:'language'}]])mountPrecondition(document.getElementById(id),{request:fixedRequest,mode:'quick',getHass:()=>({locale,config:{time_zone:'Europe/Athens'}})});
 window.toasts=[];
 window.views={};
 window.moreClicks=0;window.moreArgs=[];
@@ -46,10 +52,17 @@ window.ready=true;
     await page.goto('http://127.0.0.1:'+server.address().port+'/');
     await page.waitForFunction(()=>window.ready&&document.querySelectorAll('.pc section').length>=6);
     const card=page.locator('#card'),settings=page.locator('#settings'),notes=page.locator('#notifications');
+    // times follow the Home Assistant 12/24 h setting and time zone, not the browser language
+    const flat=t=>t.replace(/[\s\u202f\u00a0]+/g,' ');
+    for(const [id,re] of [['f24',/Report: 17:05(?!\s?[AP]M)/],['f12',/Report: 5:05 PM/],['fde',/Report: 17:05(?!\s?[AP]M)/],['fen',/Report: 05:05 PM/]]){
+      await page.waitForFunction(i=>/Report: /.test(document.getElementById(i).textContent),id);
+      assert.match(flat(await page.locator('#'+id+' .q-rep').textContent()),re,'time format in '+id);
+    }
     // the 15-minute vehicle limit is visible and runtime is labelled as estimated
     assert.match(await card.textContent(),/within 15 minutes/);
     assert.deepEqual(await card.locator('input[type=range][data-ui=duration]').evaluate(r=>[r.min,r.max]),['1','15'],'durations 1–15 only');
-    assert.match(await settings.locator('.summary').textContent(),/No automatic starts/);
+    await settings.locator('[data-act=summary-toggle]').click();assert.match(await settings.locator('.pg-sum').textContent(),/No automatic starts/);
+    if(process.env.PC_SHOT){const vs=page.viewportSize();for(const w of [390,1100]){await page.setViewportSize({width:w,height:900});await page.waitForTimeout(400);await settings.screenshot({path:process.env.PC_SHOT+'-'+w+'.png'});}await page.setViewportSize(vs);}
     // stepper: + raises attempts? already at max 3; − lowers to 2 and saves
     await settings.locator('details summary').first().click();
     await settings.locator('.stp:has(input[data-cfg=max_attempts]) [data-stp="-1"]').click();
@@ -103,22 +116,22 @@ window.ready=true;
       await page.evaluate(()=>Promise.all(Object.values(window.views).map(v=>v.refresh())));
     }
     // one notification preference, three places
-    await card.locator('input[data-k="notify.enabled"]').click({force:true});
+    await card.locator('label:has(input[data-k="notify.enabled"])').first().click();
     await page.waitForFunction(()=>backend.config.notify.enabled===true);
     for(const view of ['settings','notifications'])await page.evaluate(v=>views[v].refresh(),view);
     await page.waitForFunction(()=>document.querySelector('#settings input[data-k="notify.enabled"]').checked&&document.querySelector('#notifications input[data-k="notify.enabled"]').checked);
-    await notes.locator('input[data-k="notify.enabled"]').click({force:true});
+    await notes.locator('label:has(input[data-k="notify.enabled"])').first().click();
     await page.waitForFunction(()=>backend.config.notify.enabled===false);
     await page.evaluate(()=>views.card.refresh());
     await page.waitForFunction(()=>!document.querySelector('#card input[data-k="notify.enabled"]').checked);
     // regression: notifications off then on keeps the phone list
     await page.evaluate(()=>views.settings.refresh());await page.waitForFunction(()=>!document.querySelector("#settings input[data-k=\"notify.enabled\"]").checked);
-    await settings.locator('input[data-k="notify.enabled"]').click({force:true});await page.waitForFunction(()=>backend.config.notify.enabled===true);
-    await settings.locator('input[data-k="notify.enabled"]').click({force:true});await page.waitForFunction(()=>backend.config.notify.enabled===false);
+    await settings.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===true);
+    await settings.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===false);
     await page.waitForFunction(()=>document.querySelectorAll('#settings button.pill').length===1);
     // phones are pills, shared with Live climate
     assert.equal(await page.evaluate(()=>{const g=document.querySelector('#settings .subgrp');return g.classList.contains('off')&&g.inert;}),true,'everything below the switch is grey and inert while notifications are off');
-    await settings.locator('input[data-k="notify.enabled"]').click({force:true});await page.waitForFunction(()=>backend.config.notify.enabled===true);
+    await settings.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===true);
     await page.waitForFunction(()=>{const g=document.querySelector('#settings .subgrp');return g&&!g.classList.contains('off')&&!g.inert;});
     await settings.locator('button.pill[data-dev="notify.mobile_app_phone"]').click();
     await page.waitForFunction(()=>JSON.stringify(backend.config.notify.devices)==='["notify.mobile_app_phone"]');
@@ -186,7 +199,7 @@ window.ready=true;
       assert(await page.evaluate(()=>!document.querySelector('#settings [data-act=clear-hist]')),'no button when empty');}
     await page.evaluate(()=>{backend.globalOff=true;return views.settings.refresh();});
     await page.waitForFunction(()=>document.querySelector('#settings [data-pc=notifications] .info-box.warn'));
-    assert.equal(await page.evaluate(()=>{const sec=document.querySelector('#settings [data-pc=notifications]');const g=sec.querySelector('.subgrp.off');return !!g&&g.inert&&/Global notifications are off/.test(sec.textContent);}),true,'global notifications off: section is grey, inert and explains why');
+    assert.equal(await page.evaluate(()=>{const sec=document.querySelector('#settings [data-pc=notifications]');const g=sec.querySelector('.subgrp.off');return !!g&&g.inert&&/Notifications are off/.test(sec.textContent);}),true,'global notifications off: section is grey, inert and explains why');
     await page.evaluate(()=>{backend.globalOff=false;return views.settings.refresh();});
     await page.waitForFunction(()=>!document.querySelector('#settings [data-pc=notifications] .info-box.warn'));
     await page.evaluate(()=>window.dispatchEvent(new CustomEvent('deepal-companion-master',{detail:{on:false}})));

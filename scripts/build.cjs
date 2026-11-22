@@ -2,6 +2,7 @@ const fs=require("fs"),vm=require("vm"),cp=require("child_process"),assert=requi
 const root="custom_components/deepal_companion",front=root+"/frontend";
 const version=JSON.parse(fs.readFileSync(root+"/manifest.json","utf8")).version;
 const revision=fs.readFileSync(root+"/const.py","utf8").match(/FRONTEND_REVISION = "([^"]+)"/)[1];
+cp.execFileSync(process.execPath,["scripts/build-tokens.cjs"],{stdio:"inherit"});
 cp.execFileSync(process.execPath,["scripts/build-notification-design.cjs"],{stdio:"inherit"});
 cp.execFileSync(process.execPath,["scripts/build-cost-design.cjs"],{stdio:"inherit"});
 const original=fs.readFileSync("source/card.js","utf8");
@@ -38,7 +39,7 @@ energy=energy.replace('if (off === 0) run(false);','if (costView || off === 0) r
 energy=energy.replace('if(g.pricing&&JSON.stringify(g.assignment||null)===JSON.stringify(r||null))','if(g.pricing&&JSON.stringify(g.assignment||null)===JSON.stringify(r||null))');
 energy=energy.replace('this.sensorHistory={};','if(this.archiveOnly)return;\n    this.sensorHistory={};');
 fs.writeFileSync(front+"/energy/energy.js",energy);
-for(const file of ["charging-curve.js","companion-card.js","energy/energy.js","notification-rules.js","companion-panel.js","companion-dashboard.js","companion-notifications.js","companion-health.js","companion-live.js","companion-card-panel.js","companion-notifications-design.js","notification-design.js","profile-field.js","notification-layout.js","notification-activity.js","cost-design.js","companion-cost-design.js","loader.js",...fs.readdirSync(front+"/lang").filter(x=>x.endsWith(".js")).map(x=>"lang/"+x)]){
+for(const file of ["charging-curve.js","companion-card.js","energy/energy.js","notification-rules.js","companion-panel.js","companion-dashboard.js","companion-notifications.js","companion-health.js","companion-car-log.js","companion-live.js","companion-card-panel.js","companion-notifications-design.js","notification-design.js","profile-field.js","notification-layout.js","notification-activity.js","cost-design.js","companion-cost-design.js","loader.js",...fs.readdirSync(front+"/lang").filter(x=>x.endsWith(".js")).map(x=>"lang/"+x)]){
  if(file.startsWith("lang/"))fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replaceAll("__DEEPAL_S05_","__DEEPAL_COMPANION_"));
  fs.writeFileSync(front+"/"+file,fs.readFileSync(front+"/"+file,"utf8").replace(/\?v=\d+\.\d+\.\d+(?:&rev=[\w.-]+)?/g,'?v='+version+'&rev='+revision).replaceAll('?v=${CARD_VERSION}', '?v=${CARD_VERSION}&rev='+revision));
  cp.execFileSync(process.execPath,["--check",front+"/"+file]);
@@ -53,3 +54,4 @@ for(const f of walk(front).filter(x=>x.endsWith(".js"))){
  if(!z.gunzipSync(fs.readFileSync(f+".gz")).equals(fs.readFileSync(f)))throw new Error("Compressed copy differs from "+f);
 }
 console.log("Companion bundles built; all JavaScript syntax checks passed; every .gz matches its .js.");
+require("child_process").execFileSync(process.execPath,["tests/test_accent_contrast.cjs"],{stdio:"inherit"});

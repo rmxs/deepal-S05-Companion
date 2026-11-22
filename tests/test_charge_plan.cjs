@@ -1,0 +1,65 @@
+const fs=require("fs"),path=require("path"),http=require("http");
+const repo=path.resolve(__dirname,".."),outDir=process.argv[2]||null;
+const {chromium}=require(path.join(repo,"node_modules/playwright-core"));
+const base=path.join(repo,"custom_components/deepal_companion/frontend");
+const mime={".js":"text/javascript; charset=utf-8",".css":"text/css",".svg":"image/svg+xml",".webp":"image/webp",".jpg":"image/jpeg",".png":"image/png"};
+const server=http.createServer((q,r)=>{const u=new URL(q.url,"http://x");const rel=u.pathname.startsWith("/deepal_companion/frontend/")?u.pathname.slice(27):null;
+ if(rel!==null){const f=path.resolve(base,rel);if(f.startsWith(base)&&fs.existsSync(f)){r.setHeader("Content-Type",mime[path.extname(f)]||"application/octet-stream");r.end(fs.readFileSync(f));return}r.writeHead(404);r.end();return}
+ r.setHeader("Content-Type","text/html");r.end('<html><body style="margin:0;background:#17191c;color:#eee;font:14px Arial;--card-background-color:#232528;--primary-background-color:#17191c;--primary-text-color:#eee;--secondary-text-color:#aaa;--divider-color:#42464a;--primary-color:#29c99a"><div id="w" style="padding:16px;box-sizing:border-box"></div></body></html>')});
+
+(async()=>{await new Promise(r=>server.listen(0,"127.0.0.1",r));
+ const b=await chromium.launch({headless:true});const page=await b.newPage({viewport:{width:422,height:1000}});const errs=[];page.on("pageerror",e=>errs.push(e.message));
+ await page.goto("http://127.0.0.1:"+server.address().port);await page.addScriptTag({url:"/deepal_companion/frontend/companion-card.js"});
+ await page.evaluate(({vw})=>{
+    const now=new Date().toISOString(),st=(v,a={})=>({state:String(v),attributes:a,last_changed:now,last_updated:now});
+    const s={};for(const [k,v] of Object.entries({battery_level:79,remaining_range:95,fuel_range:498,fuel_level:53,total_odometer:2811,inside_temperature:26,outside_temperature:22,power_status:"off",license_plate:"TEST"}))s["sensor.s05_"+k]=st(v);
+    s["lock.s05_doors"]=st("locked");s["cover.s05_windows"]=st("closed");s["cover.s05_trunk"]=st("closed");
+    for(const k of ["front_left_door","front_right_door","rear_left_door","rear_right_door","hood","trunk","charger_plugged","charging","cloud_connection","climate_on","position_lamp","low_beam","high_beam"])s["binary_sensor.s05_"+k]=st(k==="cloud_connection"?"on":"off");
+    s["sun.sun"]=st("above_horizon",{elevation:45});s["switch.s05_charge_schedule"]=st("on");s["time.s05_charge_schedule_start"]=st("23:00:00",{time_zone:"GMT+02:00"});s["time.s05_charge_schedule_end"]=st("07:00:00");window.calls=[];for(const [id,o] of Object.entries(s))o.entity_id=id;
+    const hass={locale:{language:"en"},language:"en",user:{id:"a",is_admin:true},states:s,entities:{},devices:{},services:{},config:{time_zone:"UTC",unit_system:{temperature:"°C"}},connection:{subscribeMessage:async()=>()=>{}},callService:async(d,sv,x)=>{window.calls.push([d,sv,x])},callApi:async()=>({}),callWS:async m=>{if(m.type==="deepal_companion/request"&&m.op==="sessions")return [];if(m.type!=="deepal_companion/request")return {};if(m.op==="list")return [{id:"car",name:"Deepal S05"}];if(m.op==="config_get")return {vehicle_id:"car",view_id:"shot",view_name:"shot",revision:[1,1],config:{prefix:"s05",hero_style:"carview",hero_sky:"neon",car_color:"silver"},charge_prompt:null};return {};},themes:{darkMode:true}};
+    const c=document.createElement("deepal-companion-card");c.style.display="block";c.style.width=vw+"px";document.getElementById("w").append(c);
+    c.setConfig({type:"custom:deepal-companion-card",view_id:"shot",info:["odometer","charge_plan"]});c.hass=hass;window.card=c;
+   },{vw:390});
+ await page.waitForTimeout(2000);
+ const q=(f)=>page.evaluate(f);let fails=0;const ok=(n,c)=>{console.log(c?"ok  ":"FAIL",n);if(!c)fails++};
+ ok("the plan button sits beside the Energy tile, not inside it", await q(()=>{const b=card.shadowRoot.querySelector(".t2w > .cpb");const t=card.shadowRoot.querySelector(".t2.batt");return !!b&&!!t&&!t.contains(b)&&!b.closest("[role=button]")&&b.parentElement===t.parentElement}));
+ ok("the plan button does not cover the ranges or the gauge", await q(()=>{const r=e=>e.getBoundingClientRect(),b=r(card.shadowRoot.querySelector(".t2w > .cpb")),t=card.shadowRoot.querySelector(".t2.batt");const hit=x=>!(b.right<=x.left||b.left>=x.right||b.bottom<=x.top||b.top>=x.bottom);return [...t.querySelectorAll(".lg,.gauge,.hg,.tt")].every(e=>!hit(r(e)))}));
+ for(const w of [360,900,1400]){await page.setViewportSize({width:w,height:1000});await page.waitForTimeout(250);
+  ok("the plan button stays clear of the tile content at "+w+" px", await q(()=>{const r=e=>e.getBoundingClientRect(),b=r(card.shadowRoot.querySelector(".t2w > .cpb")),t=card.shadowRoot.querySelector(".t2.batt"),tr=r(t);const hit=x=>!(b.right<=x.left||b.left>=x.right||b.bottom<=x.top||b.top>=x.bottom);return b.left>=tr.left&&b.bottom<=tr.bottom+1&&[...t.querySelectorAll(".lg,.gauge,.hg,.tt")].every(e=>!hit(r(e)))}));}
+ await page.setViewportSize({width:422,height:1000});await page.waitForTimeout(250);
+ ok("tile button + dot", await q(()=>!!card.shadowRoot.querySelector(".t2w > .cpb.on .cpd")));
+ await q(()=>{card._c.info=["odometer","charge_plan"];card._force()});await page.waitForTimeout(500);
+ ok("info tile shows plan", await q(()=>{const t=card.shadowRoot.querySelector(".tile[data-plan]");return !!t&&t.textContent.includes("23:00–07:00")&&!!t.querySelector(".cpd")}));
+ await page.evaluate(()=>card.shadowRoot.querySelector(".tile[data-plan]").click());await page.waitForTimeout(400);
+ ok("info tile opens plan popup only", await q(()=>card._planSheet===true&&!card._enSheet&&!!card.shadowRoot.querySelector(".cpp input[data-plan-t=start]")));
+ ok("popup prefilled", await q(()=>card.shadowRoot.querySelector("[data-plan-t=start]").value==="23:00"&&card.shadowRoot.querySelector("[data-plan-t=end]").value==="07:00"));
+ await page.evaluate(()=>{card.shadowRoot.querySelector("[data-plan-sw]").click()});
+ await page.evaluate(()=>{const i=card.shadowRoot.querySelector("[data-plan-t=end]");i.value="06:30";i.dispatchEvent(new Event("input"))});
+ await page.evaluate(()=>card.shadowRoot.querySelector("[data-plan-save]").click());await page.waitForTimeout(300);
+ ok("service called with draft, no other calls", await q(()=>JSON.stringify(window.calls)===JSON.stringify([["deepal","set_charge_schedule",{start_time:"23:00",end_time:"06:30",enabled:false}]])));
+ ok("popup closed after save", await q(()=>card._planSheet===false));
+ await page.evaluate(()=>card.shadowRoot.querySelector(".t2w > .cpb").click());await page.waitForTimeout(300);
+ ok("tile button opens popup, not Energy", await q(()=>card._planSheet===true&&!card._enSheet));
+ await q(()=>card._closeSheet());
+ ok("button hidden when plan_button is false", await q(()=>{card._c.plan_button=false;card._force();return true}) && await page.waitForTimeout(300).then(()=>q(()=>!card.shadowRoot.querySelector(".t2w > .cpb"))));
+ await q(()=>{card._c.plan_button=true;card._planSheet=true;card._planDraft=null;card._force()});await page.waitForTimeout(400);
+ ok("label says Plan is on + sub", await q(()=>{const r=card.shadowRoot.querySelector(".cpr");return r.textContent.includes("Plan is on")&&r.textContent.includes("Charging 23:00–07:00")}));
+ await q(()=>{const st=document.createElement("style");st.textContent="input[type=time]::-webkit-datetime-edit{min-width:120px}";card.shadowRoot.append(st)});
+ ok("fields do not overlap", await q(()=>{const [a,b]=[...card.shadowRoot.querySelectorAll(".cpq input")].map(i=>i.getBoundingClientRect());return a.right<=b.left&&b.right<=card.shadowRoot.querySelector(".cpp").getBoundingClientRect().right+1}));
+ await q(()=>{card._planSheet=false;card._enSheet=false;card._force()});await page.waitForTimeout(300);
+ const press=async(sel,key)=>{await q(()=>{window.moreInfo=0;card.addEventListener("hass-more-info",()=>window.moreInfo++)});await page.evaluate(s=>card.shadowRoot.querySelector(s).focus(),sel);await page.keyboard.press(key);await page.waitForTimeout(250)};
+ await press(".tile[data-plan]","Enter");
+ ok("Enter on the Charge plan tile opens the plan window", await q(()=>card._planSheet===true&&!card._enSheet));
+ await q(()=>{card._planSheet=false;card._force()});await page.waitForTimeout(300);
+ await press(".t2.batt","Enter");
+ ok("Enter on the Energy tile opens the Energy sheet", await q(()=>card._enSheet===true&&!card._planSheet));
+ await q(()=>{card._enSheet=false;card._force()});await page.waitForTimeout(300);
+ await press(".t2.batt"," ");
+ ok("Space on the Energy tile opens the Energy sheet", await q(()=>card._enSheet===true));
+ await q(()=>{card._enSheet=false;card._force()});await page.waitForTimeout(300);
+ await press(".tile[data-ent]:not([data-plan]):not([data-open]):not([data-energy])","Enter");
+ ok("Enter on an info tile asks for more info", await q(()=>window.moreInfo>=1&&!card._planSheet&&!card._enSheet));
+ ok("the card sheet does not capture Enter on a button", await q(()=>{card._planSheet=false;card._force();return true})&&await page.waitForTimeout(300).then(async()=>{await page.evaluate(()=>card.shadowRoot.querySelector(".t2w > .cpb").focus());await page.keyboard.press("Enter");await page.waitForTimeout(250);return q(()=>card._planSheet===true&&!card._enSheet)}));
+ ok("no page errors", errs.length===0);if(errs.length)console.log(errs);
+ if(outDir){await page.screenshot({path:outDir+"/plan_real.png"});}
+ await b.close();server.close();process.exit(fails?1:0);})();

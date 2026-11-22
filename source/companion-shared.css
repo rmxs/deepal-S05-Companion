@@ -1,0 +1,49 @@
+/* Deepal Companion shared interface.
+   One definition of press feedback, switches, selected states, blocks, inner items and buttons.
+   scripts/build-tokens.cjs copies this file into every style root (card, card settings, panel, notifications page).
+   Edit only here, then run npm run build. Sizes and colours come from the --cp-* tokens. */
+
+/* Press: everything pressable (buttons, rows, tiles, and the card's tappable values and hotspots) shrinks the moment it is pressed and springs back on release.
+   It uses the scale property, so an element's own transform (centring, rotation) is kept. */
+:where(button,[role=button],summary,label.ptile,.cp-press,[data-ent],.t2[data-open],.spot){-webkit-tap-highlight-color:transparent;touch-action:manipulation;transition:scale .32s var(--cp-spring),background-color .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease,opacity .18s ease,transform .2s ease,filter .18s ease}
+:where(summary,.cp-row){--cp-press:.985}
+:where(button,[role=button],summary,label.ptile,.cp-press,[data-ent],.t2[data-open],.spot):not(:disabled,[aria-disabled=true]):active{scale:var(--cp-press);transition:scale 70ms ease-out,background-color .18s ease,border-color .18s ease,color .18s ease}
+
+/* Switch: the same track and knob everywhere. The knob springs across and stretches while pressed. */
+.sw,.pcsw>i,.preview-click-toggle input,.design-root label>input.peer+div{--k:var(--cp-sw-k);position:relative!important;display:block!important;box-sizing:border-box!important;flex:none!important;width:var(--cp-sw-w)!important;min-width:var(--cp-sw-w)!important;height:var(--cp-sw-h)!important;min-height:var(--cp-sw-h)!important;margin:0!important;padding:0!important;border:0!important;border-radius:999px!important;background:var(--cp-track)!important;box-shadow:inset 0 0 0 1px var(--cp-off-line)!important;transition:background-color .22s ease,box-shadow .22s ease!important}
+.pcsw{position:relative;display:block;flex:none;width:var(--cp-sw-w);height:var(--cp-sw-h);cursor:pointer}
+.pcsw>i{position:absolute!important;inset:0!important;pointer-events:none}
+.pcsw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:1}
+.preview-click-toggle input{-webkit-appearance:none;appearance:none;cursor:pointer}
+.sw::after,.pcsw>i::after,.preview-click-toggle input::after,.design-root label>input.peer+div::after{content:""!important;display:block!important;position:absolute!important;top:calc((var(--cp-sw-h) - var(--cp-sw-k)) / 2)!important;left:calc((var(--cp-sw-h) - var(--cp-sw-k)) / 2)!important;right:auto!important;width:var(--k)!important;height:var(--cp-sw-k)!important;margin:0!important;border:0!important;border-radius:999px!important;background:#fff!important;box-shadow:0 1px 3px rgba(0,0,0,.35)!important;transform:translateX(0)!important;transition:transform .38s cubic-bezier(.3,1.3,.5,1),width .16s ease!important}
+.on>.sw,.sw.on,.pcsw input:checked+i,.preview-click-toggle input:checked,.design-root label>input.peer:checked+div{background:var(--cp-accent)!important;box-shadow:none!important}
+:is(.on>.sw,.sw.on,.pcsw input:checked+i,.preview-click-toggle input:checked,.design-root label>input.peer:checked+div)::after{transform:translateX(calc(var(--cp-sw-w) - var(--k) - var(--cp-sw-h) + var(--cp-sw-k)))!important}
+:is(button,label):active>.sw,:is(button,label):active .sw,.pcsw:active>i,.preview-click-toggle:active input,.design-root label:active>input.peer+div{--k:calc(var(--cp-sw-k) + 5px)}
+.pcsw input:disabled+i,.preview-click-toggle input:disabled,.design-root label>input.peer:disabled+div,[disabled]>.sw{opacity:.45}
+.pcsw input:focus-visible+i,.preview-click-toggle input:focus-visible,.design-root label>input.peer:focus-visible+div,:focus-visible>.sw{outline:2px solid var(--cp-accent)!important;outline-offset:2px}
+
+/* Segmented controls and chips: the chosen option is filled with the theme colour. */
+.seg:not(.hp)>button.on,.seg.hp>.vpill,.enpanel .en-period button[aria-pressed="true"],.pc .pill[aria-pressed=true],.carlog-chip[aria-pressed=true],.design-root button.live-chip[aria-pressed=true]{background:var(--cp-accent)!important;border-color:transparent!important;color:var(--cp-ink)!important}
+.seg.hp>button.on,.seg.hp>button.on .i{color:var(--cp-ink)}
+
+/* Main actions and picked options in the supplied page designs follow the theme colour, not the fixed status green. */
+.design-root button.bg-emerald-400,.supplied-costs button.bg-emerald-400{background-color:var(--cp-accent)!important;border-color:transparent!important;color:var(--cp-ink)!important}
+.design-root #master-power-icon.bg-emerald-400{background-color:var(--cp-accent)!important;color:var(--cp-ink)!important}
+.design-root button.bg-emerald-400 :is(span,i,svg,ha-icon),.supplied-costs button.bg-emerald-400 :is(span,i,svg,ha-icon){color:inherit!important}
+
+/* Tabs, picked tiles and picked icons: a light tint of the theme colour. */
+.tabs:not(.hp)>button.on,.tabs.hp>.vpill,.icons button.on,.tile.on{background:var(--cp-on-bg)!important;border-color:var(--cp-on-line)!important;color:var(--cp-accent)}
+
+/* Picked-tile tick: the circle fills with the theme colour with a small pop and the tick draws itself. */
+.tile .tk,.pc .ptk{flex:none;position:relative;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--cp-off-line);box-sizing:border-box;transition:background-color .2s ease,border-color .2s ease,transform .38s cubic-bezier(.2,.9,.3,1.5)}
+.tile .tk::after,.pc .ptk::after{content:"";position:absolute;left:5.5px;top:2.5px;width:4px;height:8px;border:solid var(--cp-ink);border-width:0 2px 2px 0;transform:rotate(45deg);clip-path:inset(0 100% 100% 0);transition:clip-path .28s ease-out}
+.tile.on .tk,.pc .ptile:has(input:checked) .ptk{background:var(--cp-accent);border-color:transparent;transform:scale(1.08)}
+.tile.on .tk::after,.pc .ptile:has(input:checked) .ptk::after{clip-path:inset(0);transition-delay:.06s}
+.tile:active .tk,.pc .ptile:active .ptk{transform:scale(.88)}
+
+/* Blocks: every page section has the same corners, padding, frame and background. */
+.cp-block{box-sizing:border-box;border:1px solid var(--cp-off-line);border-radius:var(--cp-block-r);padding:var(--cp-block-p);background:var(--cp-block-bg)}
+/* Inner items: rows and cards inside a block. */
+.cp-item{box-sizing:border-box;border:1px solid var(--cp-off-line);border-radius:var(--cp-item-r);padding:var(--cp-item-p);background:var(--cp-off-bg)}
+
+ @media (prefers-reduced-motion:reduce){.tile .tk,.pc .ptk,.tile .tk::after,.pc .ptk::after{transition:none}:where(button,[role=button],summary,label.ptile,.cp-press,[data-ent],.t2[data-open],.spot):active{scale:none}.sw::after,.pcsw>i::after,.preview-click-toggle input::after,.design-root label>input.peer+div::after{transition:none!important}}

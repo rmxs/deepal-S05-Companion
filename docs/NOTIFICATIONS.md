@@ -74,7 +74,7 @@ The car does not switch itself off when you leave, so its power status often sta
 - The power status is **off**, and the alert’s **Before first alert** time has passed.
 - The power status is **on** and the odometer has not changed for **Car on, not moving for** (the first-alert time is part of this wait; never less than 2 minutes).
 
-While you drive the odometer keeps changing, so nothing is sent. The car reports about every 5 minutes (about every 2 while driving), so alerts can be a few minutes late. Both times follow what you set; nothing is fixed. Alerts from older versions are updated automatically.
+While you drive the odometer keeps changing, so nothing is sent. With the live connection of Deepal Alternative the car reports within seconds; when it is only polled it reports about every 5 minutes (about every 2 while driving), so alerts can be a few minutes late. Both times follow what you set. A few protective times are built in; see [Fixed times](SETTINGS.md#fixed-times). Alerts from older versions are updated automatically.
 
 ### Advanced conditions
 
@@ -126,7 +126,7 @@ A test does not turn the alert on or operate the car. Quiet alerts use sound for
 > [!IMPORTANT]
 > **Live notifications stay visible on your phone while the dashboard is closed.** Companion supports iPhone **Live Activities** and Android **Live Updates**. They have their own box at the top of **Notifications**, separate from the other alerts, and every one is **off by default**.
 >
-> Updates use the car’s last reported readings. A faster setting does not make the vehicle integration poll the car faster, and the car’s cloud is read about every 5 minutes, so very short events can be missed.
+> Updates use the car’s last reported readings. A faster setting does not make the vehicle integration poll the car faster, and without the live connection the car’s cloud is read about every 5 minutes, so very short events can be missed. **Data update rate** (Card Settings → Advanced) can only make updates slower, never faster than the car reports.
 
 There are three Live notifications. Each opens its own page, so you only see the options that belong to it.
 
@@ -136,7 +136,7 @@ There are three Live notifications. Each opens its own page, so you only see the
 | **Live climate** | Cabin temperature against the target while the climate is on. It disappears when the climate stops | Show target temperature; Show outside temperature; Show progress bar; Show running time; “Turn off” button; Update at most every (minutes); Wait before showing (minutes) |
 | **Left open or unlocked** | One list of the doors, windows, bonnet, trunk or unlocked car. Items drop off as they are closed, and it disappears when everything is secure | Doors, Windows, Bonnet and Trunk switches; Unlocked car; Only when the car is parked; Show item count; Show time; “Lock vehicle” button; Wait before showing (minutes) |
 
-- **Only when the car is parked** (on by default) keeps *Left open or unlocked* quiet while you drive, and ends a running notification when you drive off. The car counts as parked when it is off, or on with the odometer unchanged for about 2 minutes, so it does not flicker while you drive. **Wait before showing** defaults to 5 minutes, because the car reports about every 5 minutes; a lower saved value is raised to 5.
+- **Only when the car is parked** (on by default) keeps *Left open or unlocked* quiet while you drive, and ends a running notification when you drive off. The car counts as parked when it is off, or on with the odometer unchanged for **Count as parked after** (6 minutes by default), so it does not flicker while you drive. **Wait before showing** defaults to 5 minutes and keeps the value you set, including 0. With the live connection of Deepal Alternative the car reports within seconds, so shorter values work; when the car is only polled it reports about every 5 minutes, so keep it at 5 minutes or more.
 - **Live charging** ends on your phone when the car stays unreachable longer than the reading age limit.
 - Each live notification adds one **started** and one **ended** entry to Recent activity.
 - Live notification text uses the same colour as the icon and progress bar from the card palette, including when the timer is off.
@@ -145,7 +145,8 @@ Every page also has an **Alert enabled** switch, a **Title**, an **Icon**, a **S
 
 - The notification title shows only the useful information, for example “72% · 1 h 20 min left”.
 - **Icon** accepts Material Design icons only (names starting with `mdi:`). The phone app cannot show other icon sets, so other names are refused. The list offers the most useful ones and highlights the one in use.
-- Colours follow the card palette on the progress bar, the timer and the icon. Doors, windows and an unlocked car show in red.
+- Colours follow the card palette on the progress bar, the timer and the icon. In **Card Settings → Colours → Notification colours** you choose Red, Orange, Yellow or Green for each state: Left open or unlocked (red by default), Closed and locked, Climate and Charging (green by default).
+- When you lock the car, the notification ends on iPhone and Android. On iPhone the end command is sent again if iOS misses it.
 - The **Turn off** and **Lock vehicle** buttons are marked **Android only**, because iPhone Live Activities cannot show action buttons.
 - **When you tap a notification** sits in the same box as **Old data protection**. Choose the dashboard page the phone opens, or leave it empty to open the page the Home Assistant app shows by default. To open Companion, choose its page here. The **Card only page** button opens just the card (press it again to clear it). New installations use this page by default; an existing choice, including empty, is kept. The page works even when its sidebar entry is hidden. To show it in the sidebar, use **Card Settings → Advanced → Sidebar**.
 

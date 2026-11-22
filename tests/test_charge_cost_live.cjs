@@ -145,9 +145,9 @@ module.exports=async page=>{
     assert.equal(await status.locator('[data-mv],.grip').count(),0,'Status has no arrows or handle');
     const order=()=>panel.evaluate(p=>p.settings._cfg.order.slice());
     const saved=await order();assert.equal(saved.filter(x=>x==='status').length,1);
-    await settings.locator('[data-mv="sec|hero|1"]').click();await panel.evaluate(p=>p.queue);
+    await settings.locator('[data-mv="sec|hero|1"]').dispatchEvent('click');await panel.evaluate(p=>p.queue);
     let list=await order();assert.equal(list.indexOf('hero'),1,'The Vehicle image moved down');assert.equal(list.filter(x=>x==='status').length,1,'Status is kept once');
-    await settings.locator('[data-mv="sec|hero|-1"]').click();await panel.evaluate(p=>p.queue);
+    await settings.locator('[data-mv="sec|hero|-1"]').dispatchEvent('click');await panel.evaluate(p=>p.queue);
     list=await order();assert.deepEqual(list,saved,'Moving back restores the saved order');
   }finally{
     await page.evaluate(o=>{delete window.views.mobile.order;

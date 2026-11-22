@@ -20,14 +20,15 @@ module.exports=async function firstRun(page){
  assert.equal(await panel.locator('.setup-actions a').getAttribute('href'),'/config/integrations/dashboard?add=deepal_companion');
  await panel.locator('[data-action=retry-setup]').click();
  await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').fetching);
- assert(await page.evaluate(()=>window.firstRunCalls.every(op=>op==='list')),'Empty state must not request vehicle configuration or history');
+ const firstRunOps=await page.evaluate(()=>window.firstRunCalls);
+ assert(firstRunOps.every(op=>op==='list'),'Empty state must not request vehicle configuration or history; got: '+[...new Set(firstRunOps)].join(', '));
  assert.equal(await panel.evaluate(root=>Object.keys(root.selected).length),0,'Stale vehicle selection cleared');
  await panel.evaluate(root=>{window.firstRunAdmin=root._hass.user.is_admin;root._hass.user.is_admin=false;root.render();});
  assert.equal(await panel.locator('.setup-actions a').count(),0);
  assert((await panel.locator('.vehicle-setup').innerText()).includes('administrator'));
  await panel.evaluate(async root=>{root._hass.user.is_admin=window.firstRunAdmin;window.noVehicle=false;root.mode='settings';await root.refresh();});
  await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').settings);
- assert.equal(await panel.locator('nav [data-mode]').count(),6,'Setup success restores the working dashboard');
+ assert.equal(await panel.locator('nav [data-mode]').count(),7,'Setup success restores the working dashboard');
  await page.evaluate(()=>{window.firstRunHass.callWS=window.firstRunWS;delete window.firstRunWS;delete window.firstRunHass;});
  await page.setViewportSize({width:1440,height:1050});
  console.log('PASS: first-run instructions, hidden controls on all tabs, no invalid vehicle requests, access-aware setup and automatic recovery.');

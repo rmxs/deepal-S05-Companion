@@ -53,9 +53,9 @@
             border-radius: 4px;
         }
         .ha-card {
-            background-color: #1b1d20;
-            border: 1px solid #32353b;
-            border-radius: 20px;
+            background-color: var(--cp-block-bg, #1b1c20);
+            border: 1px solid var(--cp-off-line, #282a30);
+            border-radius: var(--cp-block-r, 20px);
         }
         .ha-inner-box {
             background-color: #222428;
@@ -103,7 +103,7 @@
                 <div class="bg-[#1b1d20] border border-[#32353b] px-3 py-1.5 rounded-xl flex items-center gap-2">
                     <i class="fa-solid fa-coins text-yellow-400"></i>
                     <div>
-                        <span class="text-[9px] text-gray-500 font-bold uppercase block">Total Cost</span>
+                        <span class="text-[9px] text-gray-500 font-bold uppercase block">Total cost</span>
                         <span class="text-xs font-mono font-bold text-gray-100">€24.60</span>
                     </div>
                 </div>
@@ -579,7 +579,7 @@
 
             <div class="flex justify-end gap-2 pt-2 border-t border-[#32353b]">
                 <button onclick="closeModal()" class="px-4 py-1.5 rounded-full bg-[#222428] border border-[#32353b] text-gray-300 text-xs font-medium">Cancel</button>
-                <button onclick="saveModal()" class="px-4 py-1.5 rounded-full bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-400/20">Save Changes</button>
+                <button onclick="saveModal()" class="px-4 py-1.5 rounded-full bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-400/20">Save changes</button>
             </div>
         </div>
     </div>

@@ -28,6 +28,8 @@ module.exports=async page=>{
   await panel.locator('[data-action=session-view-grid]').click();await page.setViewportSize({width:1600,height:1100});
   const grid=await panel.locator('.charge-session-list').evaluate(list=>{const rows=[...list.children].filter(node=>node.matches('.charge-session'));return {columns:getComputedStyle(list).gridTemplateColumns.split(' ').length,first:rows.slice(0,3).map(node=>node.getBoundingClientRect().top),second:rows.slice(3,6).map(node=>node.getBoundingClientRect().top)};});
   assert.equal(grid.columns,3);assert(grid.first.every(top=>Math.abs(top-grid.first[0])<1));assert(grid.second.every(top=>Math.abs(top-grid.second[0])<1));assert(grid.second[0]>grid.first[0]);
+  /* Buttons fade their colours (shared press feedback): compare only after the transitions have finished */
+  await panel.evaluate(root=>Promise.all([...root.shadowRoot.querySelectorAll('[data-action=load-sessions],[data-action=edit-session]')].flatMap(button=>button.getAnimations().map(animation=>animation.finished.catch(()=>{})))));
   const style=await panel.locator('[data-action=load-sessions]').evaluate(button=>({background:getComputedStyle(button).backgroundColor,color:getComputedStyle(button).color}));
   const edit=await panel.locator('[data-action=edit-session]').first().evaluate(button=>({background:getComputedStyle(button).backgroundColor,color:getComputedStyle(button).color}));assert.deepEqual(style,edit,'Load more reuses the card action palette');
   await page.setViewportSize({width:1100,height:1000});assert.equal(await panel.locator('.charge-session-list').evaluate(list=>getComputedStyle(list).gridTemplateColumns.split(' ').length),2);

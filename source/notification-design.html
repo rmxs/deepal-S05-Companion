@@ -53,9 +53,9 @@
             border-radius: 4px;
         }
         .ha-card {
-            background-color: #1b1c20;
-            border: 1px solid #282a30;
-            border-radius: 20px;
+            background-color: var(--cp-block-bg, #1b1c20);
+            border: 1px solid var(--cp-off-line, #282a30);
+            border-radius: var(--cp-block-r, 20px);
         }
         .ha-inner-box {
             background-color: #151619;
@@ -90,7 +90,7 @@
                 <!-- View Switcher Tabs -->
                 <div class="bg-[#1b1c20] p-1 rounded-full border border-[#282a30] flex items-center gap-1">
                     <button onclick="switchView('overview')" id="tab-overview" class="px-3 py-1 rounded-full font-bold text-[10px] bg-emerald-400 text-slate-950 transition-all">Overview</button>
-                    <button onclick="switchView('detail')" id="tab-detail" class="px-3 py-1 rounded-full font-bold text-[10px] text-gray-400 hover:text-gray-200 transition-all">Alert Config</button>
+                    <button onclick="switchView('detail')" id="tab-detail" class="px-3 py-1 rounded-full font-bold text-[10px] text-gray-400 hover:text-gray-200 transition-all">Alert settings</button>
                 </div>
                 <span class="text-gray-400 hidden sm:inline"><i class="fa-solid fa-car text-emerald-400"></i> DEEPAL</span>
             </div>
@@ -110,7 +110,7 @@
                             <h2 class="font-bold text-gray-100 text-sm">Notifications Master Control</h2>
                             <span id="master-status-badge" class="px-2 py-0.5 rounded-md bg-emerald-400/20 text-emerald-400 font-mono font-bold text-[10px] uppercase">ACTIVE</span>
                         </div>
-                        <p class="text-[11px] text-gray-400 mt-0.5">Runs in the Home Assistant background, even when the dashboard card is closed.</p>
+                        <p class="text-[11px] text-gray-400 mt-0.5">Runs in Home Assistant, even when the card is closed.</p>
                     </div>
                 </div>
 
@@ -130,7 +130,7 @@
                 <div class="ha-card p-4 space-y-3 flex flex-col justify-between">
                     <div class="flex items-center justify-between">
                         <span class="font-bold text-[11px] uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
-                            <i class="fa-solid fa-mobile-screen text-emerald-400"></i> Devices To Notify
+                            <i class="fa-solid fa-mobile-screen text-emerald-400"></i> Devices to notify
                         </span>
                         <span class="text-[10px] text-emerald-400 font-mono font-bold" id="device-count">1 Active</span>
                     </div>
@@ -165,7 +165,7 @@
                     </div>
 
                     <p class="text-[10px] text-gray-500 italic">
-                        <i class="fa-solid fa-circle-info text-emerald-400 mr-1"></i> Only users' phones (Home Assistant app) are listed. Notifications go to picked ones.
+                        <i class="fa-solid fa-circle-info text-emerald-400 mr-1"></i> Only phones with the Home Assistant app are listed. Notifications go to the ones you pick.
                     </p>
                 </div>
 
@@ -173,7 +173,7 @@
                 <div class="ha-card p-4 space-y-3 flex flex-col justify-between">
                     <div class="flex items-center justify-between">
                         <span class="font-bold text-[11px] uppercase tracking-wider text-gray-300 flex items-center gap-1.5">
-                            <i class="fa-solid fa-moon text-emerald-400"></i> Quiet Hours
+                            <i class="fa-solid fa-moon text-emerald-400"></i> Quiet hours
                         </span>
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" id="quiet-toggle" checked class="sr-only peer" onchange="toggleQuietHours(this.checked)">
@@ -215,7 +215,7 @@
                 <!-- Category Filter Pills Header -->
                 <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[#282a30]">
                     <div>
-                        <h3 class="font-bold text-gray-100 text-sm">What You Want To Know</h3>
+                        <h3 class="font-bold text-gray-100 text-sm">What you want to know</h3>
                         <p class="text-[11px] text-gray-400 mt-0.5">Pick a ready-made set, or tap an alert to set times, repeats, and buttons.</p>
                     </div>
 
@@ -230,7 +230,7 @@
                 <!-- SECTION 1: CHARGING -->
                 <div class="space-y-2">
                     <span class="font-bold text-[10px] uppercase tracking-wider text-amber-400 flex items-center gap-1.5 px-1">
-                        <i class="fa-solid fa-bolt text-xs"></i> Charging Events
+                        <i class="fa-solid fa-bolt text-xs"></i> Charging events
                     </span>
 
                     <div class="space-y-1.5">
@@ -310,7 +310,7 @@
                 <!-- SECTION 2: SECURITY & OPENINGS -->
                 <div class="space-y-2 pt-2">
                     <span class="font-bold text-[10px] uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 px-1">
-                        <i class="fa-solid fa-shield-halved text-xs"></i> Security & Openings
+                        <i class="fa-solid fa-shield-halved text-xs"></i> Security & openings
                     </span>
 
                     <div class="space-y-1.5">
@@ -463,14 +463,14 @@
 
                             <div class="bg-[#121316] border border-[#24262c] rounded-xl p-2.5 text-[10px] space-y-1">
                                 <div class="flex items-center justify-between font-mono text-emerald-400">
-                                    <span class="font-bold flex items-center gap-1"><i class="fa-solid fa-timeline text-[10px]"></i> Active Schedule:</span>
+                                    <span class="font-bold flex items-center gap-1"><i class="fa-solid fa-timeline text-[10px]"></i> Active schedule:</span>
                                     <span id="schedule-span" class="font-bold">30' ➔ 1h 30'</span>
                                 </div>
                                 <p id="schedule-desc" class="text-gray-400 text-[10px]">2 notifications total over 1h 30'. Stops on resolution or dismiss action.</p>
                             </div>
 
                             <div class="space-y-1.5">
-                                <span class="text-[10px] font-medium text-gray-400 block">Notification Button Action</span>
+                                <span class="text-[10px] font-medium text-gray-400 block">Notification button action</span>
                                 <div class="grid grid-cols-4 gap-1 font-mono text-[10px]">
                                     <button onclick="setButtonOption(this, 'None')" class="btn-opt py-1.5 rounded-lg bg-[#1b1c20] border border-[#282a30] text-gray-400 text-center hover:text-gray-200 transition-all">None</button>
                                     <button onclick="setButtonOption(this, 'Dismiss')" class="btn-opt active py-1.5 rounded-lg bg-emerald-400 text-slate-950 font-bold text-center shadow-md">Dismiss</button>
@@ -490,7 +490,7 @@
                             </div>
 
                             <div class="space-y-1.5">
-                                <label class="text-[10px] font-medium text-gray-400 block">Notification Severity</label>
+                                <label class="text-[10px] font-medium text-gray-400 block">Notification severity</label>
                                 <div class="grid grid-cols-3 gap-1 bg-[#121316] p-1 rounded-xl border border-[#24262c]">
                                     <button onclick="setSeverity('info')" id="sev-info" class="sev-btn py-1.5 rounded-lg text-[10px] font-medium text-gray-400 hover:text-gray-200 transition-all text-center">Info</button>
                                     <button onclick="setSeverity('important')" id="sev-important" class="sev-btn active py-1.5 rounded-lg text-[10px] font-bold bg-emerald-400 text-slate-950 shadow transition-all text-center">Important</button>
@@ -592,7 +592,7 @@
                             <button onclick="resetDefaults()" class="px-3.5 py-1.5 rounded-full text-gray-400 hover:text-gray-200 hover:bg-[#1b1c20] font-medium text-[11px] transition-all">Reset</button>
                             <button onclick="saveNotificationConfig()" class="px-5 py-1.5 rounded-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-[11px] shadow-lg shadow-emerald-400/20 active:scale-95 transition-all flex items-center gap-1.5">
                                 <i class="fa-solid fa-check"></i>
-                                <span>Save Changes</span>
+                                <span>Save changes</span>
                             </button>
                         </div>
                     </div>
@@ -607,7 +607,7 @@
     <!-- TOAST NOTIFICATION -->
     <div id="toast" class="fixed bottom-5 right-5 bg-emerald-400 text-slate-950 px-4 py-2 rounded-full font-bold text-xs shadow-2xl flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
         <i class="fa-solid fa-circle-check text-sm"></i>
-        <span id="toast-text">Configuration updated successfully!</span>
+        <span id="toast-text">Settings saved.</span>
     </div>
 
     <script>
@@ -650,7 +650,7 @@
             } else {
                 badge.className = "px-2 py-0.5 rounded-md bg-gray-700/40 text-gray-400 font-mono font-bold text-[10px] uppercase";
                 badge.innerText = "MUTED";
-                label.innerText = "Notifications Disabled";
+                label.innerText = "Notifications off";
                 label.className = "px-3 py-1.5 rounded-full bg-[#151619] text-gray-500 border border-[#282a30] font-bold text-[11px] hidden sm:inline-block";
                 icon.className = "w-11 h-11 rounded-2xl bg-[#151619] border border-[#282a30] text-gray-500 flex items-center justify-center font-bold text-lg shrink-0 transition-all";
                 showToast("Notifications paused globally");

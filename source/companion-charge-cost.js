@@ -182,7 +182,7 @@ DeepalS05Card.prototype._ccSave=async function(state,node){
   }catch(error){
     if(state.dead||generation!==this._compGeneration)return;
     state.busy=false;
-    if(/changed elsewhere/i.test(error.message||''))this._toast(T('Settings were changed elsewhere. The latest settings were loaded; repeat your change.'),'error');
+    if(/changed elsewhere/i.test(error.message||''))this._toast(T('Settings changed elsewhere and were reloaded. Please repeat your change.'),'error');
     else this._toast(error.message||String(error),'error');
     state.reloadProfiles=true;state.editing=false;state.choice='';
   }

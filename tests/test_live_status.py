@@ -270,6 +270,61 @@ class OpenOrUnlocked(Base):
         self.state("binary_sensor.s05_doors_lock_state", "off")  # fresh and locked: the second sensor decides
         self.assertFalse(self.live.open_snapshot(self.now, options)["unlocked"])
 
+    async def test_stale_odometer_does_not_keep_the_alert_after_locking(self):
+        # A parked car does not report its odometer: locking must still clear the notification.
+        self.config["live_open"].update(start_delay=0, end_delay=10, include_unlocked=True, only_parked=True)
+        def odometer(reported_ago, changed_ago):
+            self.state("sensor.s05_total_odometer", 1000, age=reported_ago)
+            self.states["sensor.s05_total_odometer"].last_changed = datetime.fromtimestamp(self.now - changed_ago, timezone.utc)
+        odometer(10, 5000)
+        self.doors((), unlocked=True)
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1, "unlocked and parked: the alert shows")
+        self.now += 7200
+        odometer(7200, 12000)  # no fresh odometer report for two hours
+        self.doors((), unlocked=True)
+        self.assertIsNone(self.live.open_snapshot(self.now, {**status.KINDS["open"]["default"], "only_parked": True}), "stale odometer never starts an alert")
+        self.doors((), unlocked=False)
+        await self.live.tick()
+        self.now += 11
+        await self.live.tick()
+        self.assertEqual(self.calls[-1][1]["message"], "clear_notification")
+
+    async def test_ios_end_is_sent_with_the_live_activity_command_and_repeated(self):
+        self.live.owner.recipient_os = lambda device: "ios"
+        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=True, only_parked=False)
+        self.doors((), unlocked=True)
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1)
+        self.now += 31
+        self.doors((), unlocked=False)
+        await self.live.tick()
+        messages = [call[1]["message"] for call in self.calls[1:]]
+        self.assertEqual(messages, ["clear_notification", "end_live_activity"])
+        self.now += 31
+        await self.live.tick()
+        self.assertEqual([call[1]["message"] for call in self.calls[3:]], ["clear_notification", "end_live_activity"], "repeated once after 30 s")
+        self.now += 31
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 7, "and once more after 60 s")
+        self.now += 31
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 7, "then it stops")
+
+    async def test_a_new_notification_is_not_cleared_by_the_repeats(self):
+        self.live.owner.recipient_os = lambda device: "ios"
+        self.config["live_open"].update(start_delay=0, end_delay=0, include_unlocked=True, only_parked=False)
+        self.doors((), unlocked=True)
+        await self.live.tick()
+        self.now += 31
+        self.doors((), unlocked=False)
+        await self.live.tick()
+        sent = len(self.calls)
+        self.now += 31
+        self.doors((), unlocked=True)  # unlocked again before the repeat is due
+        await self.live.tick()
+        self.assertNotIn("clear_notification", [call[1]["message"] for call in self.calls[sent:]])
+
     async def test_list_updates_and_clears_when_secure(self):
         self.doors(("front_left_door", "trunk"), unlocked=True)
         await self.live.tick()
@@ -429,6 +484,26 @@ class OpenOrUnlocked(Base):
         await self.live.tick()
         data = self.calls[0][1]["data"]
         self.assertEqual({data[key] for key in ("color", "notification_icon_color", "progress_bar_color", "text_color")}, {data["color"]})
+
+    async def test_open_or_unlocked_is_red_even_without_a_saved_palette(self):
+        self.config["live_open"].update(start_delay=0, show_timer=False)
+        self.doors(("trunk",), unlocked=True)
+        await self.live.tick()
+        self.assertEqual(self.calls[0][1]["data"]["color"], "#f87171")
+        self.live.runtime.config["lvl_red"] = "#ff0000"  # a saved palette colour wins
+        self.assertEqual(self.live.color("open", {"color": ""}, {"unlocked": True, "items": []}), "#ff0000")
+        self.assertEqual(self.live.color("open", {"color": "#112233"}, {"unlocked": True, "items": []}), "#112233", "a colour chosen for the notification wins")
+
+    async def test_notification_colours_follow_the_chosen_card_level_colours(self):
+        config, defaults = self.live.runtime.config, importlib.import_module("dcpkg.live_charging").card_defaults()
+        alert = self.live.color("open", {"color": ""}, {"unlocked": True, "items": []})
+        self.assertEqual(alert, defaults["lvl_red"], "nothing saved: the default alert level colour from defaults.json")
+        self.assertEqual(self.live.color("open", {"color": ""}, {"unlocked": False, "items": []}), defaults["lvl_green"])
+        config.update(notify_alert_level="orange", lvl_orange="#aa5500", notify_ok_level="yellow")
+        self.assertEqual(self.live.color("open", {"color": ""}, {"unlocked": False, "items": ["Trunk"]}), "#aa5500", "the chosen level, in the saved palette colour")
+        self.assertEqual(self.live.color("open", {"color": ""}, {"unlocked": False, "items": []}), defaults["lvl_yellow"], "chosen level, palette colour not saved: default")
+        config["notify_climate_level"] = "not a level"
+        self.assertEqual(self.live.color("climate", {"color": ""}, {}), defaults["lvl_green"], "an invalid choice falls back to the default choice")
 
     async def test_watch_list_and_limits(self):
         self.config["live_open"].update(start_delay=0, items=["trunk", "hood"], include_unlocked=False, max_shown=1, lock_button=False)

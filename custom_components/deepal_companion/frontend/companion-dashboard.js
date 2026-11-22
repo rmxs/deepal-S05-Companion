@@ -22,7 +22,7 @@ export async function showDashboardAdd(panel){
   const selected=()=>current?.views?.[Number(view.value)];
   const check=()=>{
     const item=selected();let error='';
-    if(!current||current.strategy||!Array.isArray(current.views))error=T('This dashboard is generated automatically. Take control in Home Assistant or choose another dashboard.');
+    if(!current||current.strategy||!Array.isArray(current.views))error=T('This dashboard is created automatically. Take control in Home Assistant or pick another dashboard.');
     else if(!item||item.strategy)error=T('Choose an editable view.');
     else if((item.type==='panel'||item.panel)&&item.cards?.length)error=T('This panel view already has a card. Choose another view.');
     save.disabled=busy||!!error;status.textContent=error;

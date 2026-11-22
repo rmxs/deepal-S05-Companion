@@ -4,12 +4,12 @@ node_modules/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
-companion-app-preview.png
-
 *-preview.png
 settings-colours-*.png
 costs-dashboard-overview.png
 layout-navigation-failure.png
+cold-image-recovery.png
+language-sweep.json
 SETTINGS_VALIDATION.json
 LAYOUT_VALIDATION.json
 PERFORMANCE.json

@@ -20,7 +20,7 @@ module.exports=async page=>{
   for(const key of ['info_custom','diag_custom']){
     await page.evaluate(key=>{const widget=document.querySelector('deepal-companion-panel').settings;widget.onPatch({[key]:[{entity:'sensor.s05_battery_level',label:'First',icon:'battery'},{entity:'sensor.s05_inside_temperature',label:'Second',icon:'thermo'}]});},key);
     await page.waitForFunction(key=>document.querySelector('deepal-companion-panel').settings._cfg[key]?.length===2,key);
-    await page.evaluate(key=>{const widget=document.querySelector('deepal-companion-panel').settings;widget._setTab(key==='info_custom'?'layout':'vehicle');widget.shadowRoot.querySelector('[data-mv="'+key+'|0|1"]').click();},key);
+    await page.evaluate(key=>{const widget=document.querySelector('deepal-companion-panel').settings;widget._setTab(key==='info_custom'?'layout':'sensors');widget.shadowRoot.querySelector('[data-mv="'+key+'|0|1"]').click();},key);
     await page.waitForFunction(key=>document.querySelector('deepal-companion-panel').settings._cfg[key][0].label==='Second',key);
   }
   await page.evaluate(()=>{const widget=document.querySelector('deepal-companion-panel').settings,old=window.tileSettingsBefore;widget.onPatch(Object.fromEntries(['info_order','info_custom','diag_custom','tile_icons','tile_icon_color'].map(k=>[k,old[k]])));});

@@ -1,12 +1,23 @@
 """Constants for Deepal Companion."""
 DOMAIN = "deepal_companion"
-VERSION = "1.0.0"
-FRONTEND_REVISION = "20261118-35"
+VERSION = "2.0.0"
+FRONTEND_REVISION = "20261122-04"
 FRONTEND_VERSION = VERSION + "&rev=" + FRONTEND_REVISION
 SIGNAL = f"{DOMAIN}_updated"
+PLAN_SIGNAL = f"{DOMAIN}_plan_updated"
+CAR_LOG_SIGNAL = f"{DOMAIN}_car_log_updated"
 FRONTEND_URL = f"/{DOMAIN}/frontend"
 PANEL_URL = "deepal-companion"
 CARD_PANEL_URL = "deepal-companion-card"  # page that shows only the card
+UPDATE_RATES = (0, 300, 600)  # seconds between saved readings and notification refreshes: 0 = live (every change), 5 or 10 minutes
+
+
+def update_floor(runtime):
+    """The data update rate chosen by the user, in seconds (0 = live). Anything unknown counts as live."""
+    value = getattr(getattr(runtime, "hub", None), "update_rate", 0)
+    return value if type(value) is int and value in UPDATE_RATES else 0
+
+
 SHARED_KEYS = frozenset({
     "prefix", "entities", "powertrain", "battery_kwh", "fuel_max",
     "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump",

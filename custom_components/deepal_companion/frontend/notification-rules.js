@@ -8,12 +8,12 @@ const EV = {
   charge_done: {
     g: "charge", icon: "mdi:battery-check-outline", label: "Charging complete", sub: "When charging stops and the battery has reached the limit.",
     d: { on: true, delay: 2, repeat: 0, max: 1, sev: "info", thr: 80, away: false, parked: false, actions: [] }, ctl: ["delay", "sev", "thr"], acts: ["dismiss"],
-    thr: { label: "Counts as complete from", unit: "%", min: 50, max: 100, step: 1, sub: "When charging stops and the battery is at least this high, a notification is sent. If it stops earlier, see “Plugged in, but not charging”." },
+    thr: { label: "Counts as complete from", unit: "%", min: 50, max: 100, step: 1, sub: "Sent when charging stops at or above this level. If it stops earlier, see “Plugged in, but not charging”." },
     delayHelp: "Minutes charging must have stopped before you are notified.",
     vars: ["name", "battery", "range"], title: "{name} · Charging complete", text: "Battery {battery}%, range {range} km.",
   },
   plugged_idle: {
-    g: "charge", icon: "mdi:power-plug-off-outline", label: "Plugged in, but not charging", sub: "The plug is in the port and nothing is charging. Leave it off if you charge on a schedule.",
+    g: "charge", icon: "mdi:power-plug-off-outline", label: "Plugged in, but not charging", sub: "The plug is in but nothing is charging. Leave it off if you charge on a schedule.",
     d: { on: false, delay: 30, repeat: 60, max: 2, sev: "important", away: false, parked: false, actions: ["dismiss"] }, ctl: ["delay", "repeat", "sev", "actions"], acts: ["dismiss"],
     delayHelp: "Minutes the plug must stay connected without charging.",
     vars: ["name", "battery", "range", "minutes"], title: "{name} · Plugged in but not charging", text: "The plug has been in the port for {minutes} minutes, but it is not charging. Battery {battery}%.",
@@ -25,7 +25,7 @@ const EV = {
     vars: ["name", "battery", "range", "minutes"], title: "{name} · Charging interrupted", text: "Charging stopped at {battery}%, before reaching the limit, and the cable is still connected.",
   },
   charge_started: {
-    g: "charge", icon: "mdi:battery-charging-high", label: "Charging started", sub: "Charging has just started, for example a scheduled charge. If it never starts, use “Plugged in, but not charging”.",
+    g: "charge", icon: "mdi:battery-charging-high", label: "Charging started", sub: "Charging has started (for example a scheduled charge). If it never starts, use “Plugged in, but not charging”.",
     d: { on: false, delay: 0, repeat: 0, max: 1, sev: "info", away: false, parked: false, actions: ["dismiss"] }, ctl: ["delay", "sev", "actions"], acts: ["dismiss"],
     delayHelp: "Minutes charging must keep running before you are notified.",
     vars: ["name", "battery", "range"], title: "{name} · Charging started", text: "Charging has started. Battery {battery}%.",
@@ -33,7 +33,7 @@ const EV = {
   charge_eta: {
     g: "charge", icon: "mdi:timer-sand", label: "Charging almost finished", sub: "The estimated time left to finish charging is at or below your limit.", needsLeft: true,
     d: { on: false, delay: 0, repeat: 0, max: 1, sev: "info", away: false, parked: false, actions: ["dismiss"], thr: 15 }, ctl: ["delay", "sev", "thr", "actions"], acts: ["dismiss"],
-    thr: { label: "Time left at or below", unit: "min", min: 5, max: 120, step: 5, sub: "A notification is sent while charging when the estimated time left is this many minutes or less." },
+    thr: { label: "Time left at or below", unit: "min", min: 5, max: 120, step: 5, sub: "Sent while charging when the estimated time left drops to this many minutes." },
     delayHelp: "Minutes the condition must last before you are notified.",
     vars: ["name", "battery", "range", "left"], title: "{name} · Charging almost finished", text: "About {left} minutes left. Battery {battery}%.",
   },
@@ -65,7 +65,7 @@ const EV = {
   tires: {
     g: "tires", icon: "mdi:car-tire-alert", label: "Tyre pressure", sub: "Pressure out of range or a tyre alarm. Follows the limits in Settings → Tyres.",
     d: { on: true, delay: 5, repeat: 60, max: 3, sev: "important", away: false, parked: false, actions: ["dismiss"] }, ctl: ["delay", "repeat", "sev", "actions"], acts: ["dismiss"],
-    delayHelp: "Minutes the problem must last before the first notification is sent (avoids false alarms).",
+    delayHelp: "How long a problem must last before the first notification (avoids false alarms).",
     vars: ["name", "items"], title: "{name} · Tyre pressure", text: "Check the pressure: {items}.",
   },
   warn_crit: {
@@ -76,7 +76,7 @@ const EV = {
     vars: ["name", "battery", "items"], title: "{name} · Critical warning", text: "The vehicle reported: {items}. Check it before you drive.",
   },
   warn: {
-    g: "vehicle", icon: "mdi:alert-outline", label: "Vehicle warning", sub: "ABS, 12V battery, power steering, power limit and your own indicators. Choose below which ones trigger a notification.",
+    g: "vehicle", icon: "mdi:alert-outline", label: "Vehicle warning", sub: "ABS, 12 V battery, power steering, power limit and your own indicators. Pick below which ones notify you.",
     diag: true,
     d: { on: true, delay: 5, repeat: 120, max: 2, sev: "important", away: false, parked: false, actions: ["dismiss"], items: null }, ctl: ["delay", "repeat", "sev", "actions"], acts: ["dismiss"],
     delayHelp: "Minutes the warning light must stay on before you are notified.",
@@ -201,13 +201,13 @@ const COMFORT = [
 /* Advanced conditions: the user picks a sensor, a state and for how long it must hold. Several rows are combined with "all" or "any". */
 const OO = [["on", "On"], ["off", "Off"]];
 const ADV = [
-  { k: "power", help: "The car's power status. It turns on when you unlock or start the car and usually stays on after you leave. It often turns off a few minutes after the doors are locked, but can stay on a long time when the car is left unlocked. So 'on' alone does not mean the car is in use.", label: "Power status", e: (E) => [E.power], st: OO },
-  { k: "engine", help: "Whether the car is switched on (ready or driving). Like the power status, it turns on when you start the car and can stay on after you leave.", label: "Engine", e: (E) => [E.eng], st: OO },
-  { k: "odo", help: "The odometer changes only while the car moves. If it has not changed for the time you set, the car is not moving. The car reports about every 5 minutes (about every 2 while driving), so this always waits at least 2 minutes.", label: "Odometer", e: (E) => [E.odo], st: [["still", "Not changing"], ["moving", "Changing"]] },
-  { k: "lock", help: "Whether the doors are locked. The car reports it about every 5 minutes, so locking or unlocking can take up to 5 minutes to show.", label: "Doors", e: (E) => [E.lock], st: [["unlocked", "Unlocked"], ["locked", "Locked"]] },
-  { k: "lights", help: "The low and high beams. 'On' means at least one is on, 'Off' means both are off.", label: "Lights", e: (E) => [E.low, E.high], st: OO },
-  { k: "door", help: "Whether any of the four doors is open. The car reports it about every 5 minutes.", label: "Any door", e: (E) => [E.door], st: [["on", "Open"], ["off", "Closed"]] },
-  { k: "win", help: "The windows. 'Open' means at least one window is open, 'Closed' means all are closed.", label: "Windows", e: (E) => [E.win], st: [["open", "Open"], ["closed", "Closed"]] },
+  { k: "power", help: "Turns on when the car is unlocked or started and can stay on for a while after you leave, so ‘on’ does not always mean in use.", label: "Power status", e: (E) => [E.power], st: OO },
+  { k: "engine", help: "Whether the car is switched on (ready or driving). It can stay on for a while after you leave.", label: "Engine", e: (E) => [E.eng], st: OO },
+  { k: "odo", help: "If the odometer has not changed for this time, the car is not moving. At least 2 minutes, because the car reports every 2–5 minutes.", label: "Odometer", e: (E) => [E.odo], st: [["still", "Not changing"], ["moving", "Changing"]] },
+  { k: "lock", help: "Whether the doors are locked. Changes can take up to 5 minutes to show.", label: "Doors", e: (E) => [E.lock], st: [["unlocked", "Unlocked"], ["locked", "Locked"]] },
+  { k: "lights", help: "Low and high beams: ‘On’ if at least one is on, ‘Off’ if both are off.", label: "Lights", e: (E) => [E.low, E.high], st: OO },
+  { k: "door", help: "Whether any door is open. The car reports about every 5 minutes.", label: "Any door", e: (E) => [E.door], st: [["on", "Open"], ["off", "Closed"]] },
+  { k: "win", help: "Windows: ‘Open’ if at least one is open, ‘Closed’ if all are closed.", label: "Windows", e: (E) => [E.win], st: [["open", "Open"], ["closed", "Closed"]] },
   { k: "plug", help: "Whether the charging cable is plugged into the car.", label: "Charging cable", e: (E) => [E.plug], st: [["on", "Plugged in"], ["off", "Unplugged"]] },
   { k: "chg", help: "Whether the car is charging right now.", label: "Charging", e: (E) => [E.chg], st: OO },
   { k: "climon", help: "Whether the cabin climate is running.", label: "Climate", e: (E) => [E.climon], st: OO },
@@ -250,13 +250,13 @@ function gate(x, e, s) {
    Every line has a short explanation (the "?" in the panel): what the sensor is, when it changes and why it is used. */
 const BASE_LABEL = { unlocked: "Doors are unlocked", open: "Something is open", lights: "Lights are on", climate: "Climate is running", comfort: "A comfort function is on" };
 const BASE_HELP = {
-  unlocked: "This is what the alert is about: it is true while the doors are unlocked. The car reports the lock state about every 5 minutes, so a change can take up to 5 minutes to show here after you lock or unlock.",
-  open: "This is what the alert is about: it is true while a door, window, bonnet or trunk is open. A window counts as open when its opening is above 0%. The car reports about every 5 minutes, so a change can take up to 5 minutes to show.",
-  lights: "This is what the alert is about: it is true while the low or high beam is on.",
-  climate: "This is what the alert is about: it is true while the cabin climate is running.",
-  comfort: "This is what the alert is about: it is true while seat heating, seat ventilation or the steering-wheel heating is on and the car is locked.",
+  unlocked: "True while the doors are unlocked. Changes can take up to 5 minutes to show.",
+  open: "True while a door, window (above 0%), bonnet or trunk is open. The car reports about every 5 minutes.",
+  lights: "True while the low or high beam is on.",
+  climate: "True while the cabin climate is running.",
+  comfort: "True while seat heating, seat ventilation or steering-wheel heating is on and the car is locked.",
 };
-const LATER = "Home Assistant counts the time from the sensor's last change. After a Home Assistant restart the count starts again.";
+const LATER = "Counted from the sensor’s last change. A Home Assistant restart resets it.";
 function ruleChecks(x, evId) {
   const { E, n } = x, e = n.events[evId], s = EV[evId], lg = logic(x, evId, e), out = [];
   const wrap = (expr, pre) => `${pre ? pre + "\n" : ""}{{ ${expr} }}`;
@@ -270,7 +270,7 @@ function ruleChecks(x, evId) {
   if (g.kind === "adv") {
     const all = e.adv.mode === "all";
     out.push({ label: T(all ? "All of your conditions are true" : "Any of your conditions is true"), test: wrap(g.expr), show: "",
-      help: T(all ? "You chose that every condition below must be true at the same time." : "You chose that one true condition below is enough.") + " " + T("These conditions replace 'Only when the car is parked'. When they are true, the 'Before first alert' time is added.") });
+      help: T(all ? "You chose that every condition below must be true at the same time." : "You chose that one true condition below is enough.") + " " + T("These replace “Only when the car is parked”. When true, the “Before first alert” time is added.") });
     for (const { r, expr } of g.rows) {
       const d = ADV.find((v) => v.k === r.s), list = d.e(E).filter((en) => en && x.has(en)), st = d.st.find((p) => p[0] === r.v);
       out.push({ label: `${T(d.label)}: ${T(st[1])}${r.t ? ` ${T("for at least")} ${r.t} min` : ""}`, test: wrap(expr),
@@ -280,11 +280,11 @@ function ruleChecks(x, evId) {
     return out;
   }
   out.push({ label: T("The car is parked (off, or on and not moving)"), test: wrap(g.expr), show: "",
-    help: T("This tells a car you left from a car in use. The car does not switch itself off, so it counts as parked when the power status is off, or when it is on but the odometer has not changed for the wait time. While you drive the odometer keeps changing, so nothing is sent.") });
+    help: T("Parked means the power is off, or it is on but the odometer has not changed for the wait time. Nothing is sent while you drive.") });
   if (g.kind === "default") {
     out.push({ label: T("Power status is off"), test: wrap(`is_state('${E.power}', 'off')`), help: T(power.help) + " " + T(LATER), show: now(E.power) });
     out.push({ label: `${T("Car on and not moving for at least")} ${Math.round(g.sec / 60)} min`, test: wrap(`is_state('${E.power}', 'on') and (now() - states.${E.power}.last_changed).total_seconds() >= ${g.sec} and (now() - states.${E.odo}.last_changed).total_seconds() >= ${g.sec}`),
-      help: T("The car is on, and both the power status and the odometer have stayed the same for this long. The time is 'Car on, not moving for' minus 'Before first alert' (that time is added afterwards), and never less than 2 minutes. The odometer changes only while the car moves.") + " " + T(LATER),
+      help: T("The car is on, but the power status and odometer have not changed for this long. Never less than 2 minutes.") + " " + T(LATER),
       show: `${T("power status")} ${now(E.power)}; ${odo(E.odo)}` });
   } else if (g.kind === "odo") out.push({ label: `${T("Odometer not changing for at least")} 2 min`, test: wrap(g.expr), help: T(odoDef.help), show: odo(E.odo) });
   return out;

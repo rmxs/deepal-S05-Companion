@@ -4,7 +4,7 @@ class CompanionChoice extends HTMLElement {
   static resizeStyles(){for(const picker of CompanionChoice.live)picker.syncAppearance?.();}
   constructor(){
     super();this.attachShadow({mode:'open'});I18N.watch(this.shadowRoot);this.options=[];this._value='';this._disabled=false;
-    this.shadowRoot.innerHTML='<style>:host{display:block;min-width:0;width:100%}*{box-sizing:border-box}button{font:inherit;color:inherit;cursor:pointer}.field{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:var(--choice-padding,10px 12px);border:var(--choice-border,1px solid var(--ds-line,rgba(127,127,127,.35)));border-radius:var(--choice-radius,11px);background:var(--choice-background,var(--ds-soft,var(--secondary-background-color,#262626)));color:var(--choice-color,var(--ds-fg,var(--primary-text-color,#eee)));font:var(--choice-font,inherit);text-align:start}.field:focus-visible{outline:2px solid var(--primary-color,#63cba3);outline-offset:2px}.field:disabled{opacity:.5;cursor:default}.field span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chevron{flex:none;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 0;opacity:.65}.menu{position:fixed;inset:auto;margin:0;padding:5px;border:1px solid var(--divider-color,#454545);border-radius:12px;background:var(--card-background-color,#252525);color:var(--primary-text-color,#eee);box-shadow:0 12px 32px #0005;overflow:auto;overscroll-behavior:contain;z-index:10000}.menu:not(:popover-open){display:none}.option{display:block;width:100%;min-height:42px;border:0;border-radius:8px;padding:10px 12px;background:none;color:inherit;font:inherit;text-align:start;white-space:normal;overflow-wrap:anywhere}.option[aria-selected=true]{background:color-mix(in srgb,var(--primary-color,#63cba3) 18%,transparent);color:var(--primary-color,#63cba3)}.option:hover,.option:focus{outline:0;background:color-mix(in srgb,var(--primary-color,#63cba3) 12%,transparent)}</style><button class="field" type="button" aria-haspopup="listbox" aria-expanded="false"><span></span><i class="chevron" aria-hidden="true"></i></button><div class="menu" role="listbox" popover="auto"></div>';
+    this.shadowRoot.innerHTML='<style>:host{display:block;min-width:0;width:100%}*{box-sizing:border-box}button{font:inherit;color:inherit;cursor:pointer}.field{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:var(--choice-padding,10px 12px);border:var(--choice-border,1px solid var(--ds-line,rgba(127,127,127,.35)));border-radius:var(--choice-radius,var(--cp-ctl-r,12px));background:var(--choice-background,var(--ds-soft,var(--secondary-background-color,#262626)));color:var(--choice-color,var(--ds-fg,var(--primary-text-color,#eee)));font:var(--choice-font,inherit);text-align:start}.field:focus-visible{outline:2px solid var(--primary-color,#63cba3);outline-offset:2px}.field:disabled{opacity:.5;cursor:default}.field span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chevron{flex:none;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 4px 0;opacity:.65}.menu{position:fixed;inset:auto;margin:0;padding:5px;border:1px solid var(--divider-color,#454545);border-radius:12px;background:var(--card-background-color,#252525);color:var(--primary-text-color,#eee);box-shadow:0 12px 32px #0005;overflow:auto;overscroll-behavior:contain;z-index:10000}.menu:not(:popover-open){display:none}.option{display:block;width:100%;min-height:42px;border:0;border-radius:8px;padding:10px 12px;background:none;color:inherit;font:inherit;text-align:start;white-space:normal;overflow-wrap:anywhere}.option[aria-selected=true]{background:color-mix(in srgb,var(--primary-color,#63cba3) 18%,transparent);color:var(--primary-color,#63cba3)}.option:hover,.option:focus{outline:0;background:color-mix(in srgb,var(--primary-color,#63cba3) 12%,transparent)}</style><button class="field" type="button" aria-haspopup="listbox" aria-expanded="false"><span></span><i class="chevron" aria-hidden="true"></i></button><div class="menu" role="listbox" popover="auto"></div>';
     this.button=this.shadowRoot.querySelector('.field');this.menu=this.shadowRoot.querySelector('.menu');
     this.button.addEventListener('click',()=>this.open());
     this.button.addEventListener('keydown',event=>{if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();this.open(event.key);}});
@@ -41,7 +41,7 @@ class CompanionChoice extends HTMLElement {
 }
 if(!customElements.get('deepal-companion-choice'))customElements.define('deepal-companion-choice',CompanionChoice);
 /* Phone back from the background: checks the Home Assistant connection, reconnects when it is dead and then lets the page reload its data. Returns a function that removes every listener. */
-function watchConnection(getHass, onResume) {
+function watchConnection(getHass, onResume, onDead) {
   let hiddenAt = document.hidden ? Date.now() : 0, timer = null, busy = false, conn = null;
   const settle = async (force) => {
     if (busy || document.hidden) return; busy = true;
@@ -49,8 +49,19 @@ function watchConnection(getHass, onResume) {
       const c = getHass()?.connection; if (!c) return;
       let alive = true;
       try { await Promise.race([c.ping(), new Promise((_, no) => setTimeout(() => no(new Error("ping")), 5000))]); } catch (_) { alive = false; }
-      if (!alive) { try { c.reconnect(true); } catch (_) {} }
-      if (!alive || force) onResume();
+      const wasDead = !alive;
+      if (!alive) {
+        try { c.reconnect(true); } catch (_) {}
+        /* Some phones never bring the socket back after the app slept. Give it ~10 s, then let the owner reload the page (what a manual refresh does). */
+        if (onDead) {
+          for (let i = 0; i < 5 && !alive && !document.hidden; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            try { await Promise.race([c.ping(), new Promise((_, no) => setTimeout(() => no(new Error("ping")), 3000))]); alive = true; } catch (_) {}
+          }
+          if (!alive && !document.hidden) { onDead(); return; }
+        }
+      }
+      if (wasDead || force) onResume();
     } finally { busy = false; }
   };
   const later = (force) => { clearTimeout(timer); timer = setTimeout(() => settle(force), 400); };
@@ -156,7 +167,7 @@ window.__DEEPAL_COMPANION_UI = {
         card?._force();
       };
       if(key==='callWS')return message=>{
-        if(!interactive&&!message.type?.startsWith('history/'))return Promise.reject(new Error(I18N.t('The preview is read-only.',[]))); /* reading the recorded history is allowed: the card uses it for the real lock and engine times */
+        if(!interactive&&!message.type?.startsWith('history/')&&message.type!=='recorder/statistics_during_period')return Promise.reject(new Error(I18N.t('The preview is read-only.',[]))); /* reading the recorded history is allowed: the card uses it for the real lock and engine times */
         if(mode==='live')return target.callWS(message);
         const read=message.type?.startsWith('history/')||message.type?.endsWith('/list')||message.type==='frontend/get_user_data'||(message.type==='deepal_companion/request'&&['list','config_get','costs_get','history','sessions','summary','charge_prompt','session_curve'].includes(message.op));
         return read?target.callWS(message):Promise.reject(new Error(I18N.t('Demo mode does not save vehicle or charging data.',[])));
