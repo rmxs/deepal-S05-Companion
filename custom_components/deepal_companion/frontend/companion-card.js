@@ -9,7 +9,7 @@
  * (MIT) — see THIRD_PARTY_NOTICES.md in the card folder.
  */
 (() => {
-const CARD_VERSION = "2.0.1-b1"; // the build overwrites this with the package version
+const CARD_VERSION = "2.0.1-b2"; // the build overwrites this with the package version
 const CARD_CREDIT = "Made with ♥ in Greece · L.K.";
 const TAG = "deepal-companion-card";
 const SETTINGS_TAG = "deepal-companion-settings";
@@ -664,7 +664,7 @@ const I18N = {
     return new Promise((res) => {
       if (LANGS[code]) return res(true);
       const s = document.createElement("script");
-      s.src = `${SCRIPT_BASE}lang/${code}.js?v=${CARD_VERSION}&rev=20261126-01`; s.async = true;
+      s.src = `${SCRIPT_BASE}lang/${code}.js?v=${CARD_VERSION}&rev=20261126-02`; s.async = true;
       s.onload = () => res(!!LANGS[code]); s.onerror = () => res(false);
       document.head.appendChild(s);
     });
@@ -2485,7 +2485,7 @@ class DeepalS05Card extends HTMLElement {
     const d = this._planEl; if (!d) return;
     if (this._pcStyle === undefined) { /* the time fields and labels are the preconditioning panel's own, so its stylesheet is reused */
       d.innerHTML = loaderHtml("plan");
-      try { this._pcStyle = (await import(`${SCRIPT_BASE}companion-precondition.js?v=${CARD_VERSION}&rev=20261126-01`)).PC_STYLE || ""; } catch (_) { this._pcStyle = ""; }
+      try { this._pcStyle = (await import(`${SCRIPT_BASE}companion-precondition.js?v=${CARD_VERSION}&rev=20261126-02`)).PC_STYLE || ""; } catch (_) { this._pcStyle = ""; }
       if (this._planEl !== d) return;
     }
     const q = this._planDraft || (this._planDraft = { on: this._planOn(), start: this._planTime("charge_schedule_start"), end: this._planTime("charge_schedule_end"), full: this._planFull() });
@@ -2613,7 +2613,7 @@ class DeepalS05Card extends HTMLElement {
     if (h && h.user && h.user.is_admin === false) return fail("Notifications are only available to administrators.");
     try {
       const request = (op, data) => h.companionRequest(op, data);
-      const [mod, page] = await Promise.all([import(`${SCRIPT_BASE}notification-activity.js?v=${CARD_VERSION}&rev=20261126-01`), request("notifications_history", { limit: 5 })]);
+      const [mod, page] = await Promise.all([import(`${SCRIPT_BASE}notification-activity.js?v=${CARD_VERSION}&rev=20261126-02`), request("notifications_history", { limit: 5 })]);
       if (gone()) return;
       d.innerHTML = ""; const host = document.createElement("div"); d.appendChild(host);
       this._nfAct = mod.mountActivity(host, request, { loaderHtml, loaderCss:LOADER_CSS, format:haFmt, t: T, compact: true, unread: this._nfOpenUnread || 0 }, (m, err) => this._toast(m, err ? "error" : undefined),()=>this._hass);
@@ -2692,7 +2692,7 @@ class DeepalS05Card extends HTMLElement {
     const gone = () => this._pcEl !== d, h = this._hass;
     if (!h || !h.companionRequest) { d.innerHTML = `<p class="hint">${esc(T("Preconditioning needs the Deepal Companion integration."))}</p>`; return; }
     try {
-      const mod = await import(`${SCRIPT_BASE}companion-precondition.js?v=${CARD_VERSION}&rev=20261126-01`);
+      const mod = await import(`${SCRIPT_BASE}companion-precondition.js?v=${CARD_VERSION}&rev=20261126-02`);
       if (gone()) return;
       d.innerHTML = ""; const host = document.createElement("div"); d.appendChild(host);
       this._pcAct = mod.mountPrecondition(host, { request: (op, data) => h.companionRequest(op, data), t: T, loaderHtml, loaderCss: LOADER_CSS, mode: "quick", admin: !!(this._rawHass || this._hass)?.user?.is_admin, onMore: (section) => this._openPreconditionSettings(section),
@@ -4299,7 +4299,7 @@ function loadEnergy() {
     const bad = () => { _enP = null; res(false); };
     if (Eg() && Eg().init) return ok();
     const sc = document.createElement("script");
-    sc.src = `${SCRIPT_BASE}energy/energy.js?v=${CARD_VERSION}&rev=20261126-01`; sc.async = true; sc.onload = ok; sc.onerror = bad;
+    sc.src = `${SCRIPT_BASE}energy/energy.js?v=${CARD_VERSION}&rev=20261126-02`; sc.async = true; sc.onload = ok; sc.onerror = bad;
     document.head.appendChild(sc);
   }));
 }
@@ -5901,7 +5901,7 @@ DeepalS05Card.prototype._render=function(...args){
   if(this._chargingCurve){this._chargingCurve.update();return result;}
   if(!this._curveLoad){
     const token={};this._curveLoad=token;
-    import('/deepal_companion/frontend/charging-curve.js?v=2.0.1-b1&rev=20261126-01').then(module=>{
+    import('/deepal_companion/frontend/charging-curve.js?v=2.0.1-b2&rev=20261126-02').then(module=>{
       if(this._curveLoad!==token||!this.isConnected)return;
       this._curveLoad=null;this._chargingCurve=module.mountCurve(this);this._chargingCurve.update();
     }).catch(()=>{if(this._curveLoad===token){this._curveLoad=null;this._toast('Charging curve could not be loaded.','error');}});

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1-b2 — Beta
+
+### Fixed
+- **Dashboard memory:** a closed dashboard page is freed right away; before, a waiting 12-second timer kept it in memory.
+
 ## 2.0.1-b1 — Beta
 
 First beta of 2.0.1. The Charger limit has not yet been tried on every kind of charger; start with Dry run.
@@ -60,7 +65,6 @@ First beta of 2.0.1. The Charger limit has not yet been tried on every kind of c
 
 ### Fixed
 - **Other languages:** Preconditioning and Live status now find the car's climate entities when Home Assistant uses another language. Charging, alerts, Live charging and the Charger limit use the same lookup: your own entity choices first, then the usual names, then the car's entities by their fixed internal key. Setups whose names already match see no change.
-- **Dashboard memory:** a closed dashboard page is freed right away; before, a waiting 12-second timer kept it in memory.
 - **Keyboard:** the big range number and the Charger limit tile can be opened with Tab and Enter.
 - **Health dot colour:** the Health tab's red dot uses the theme's red.
 - **iPhone Live climate end:** the end command now carries the Live Activity flag, so iOS ends the lock-screen status silently instead of showing the text "end_live_activity" as an alert.

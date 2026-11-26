@@ -1,7 +1,7 @@
 """Constants for Deepal Companion."""
 DOMAIN = "deepal_companion"
-VERSION = "2.0.1-b1"
-FRONTEND_REVISION = "20261126-01"
+VERSION = "2.0.1-b2"
+FRONTEND_REVISION = "20261126-02"
 FRONTEND_VERSION = VERSION + "&rev=" + FRONTEND_REVISION
 SIGNAL = f"{DOMAIN}_updated"
 PLAN_SIGNAL = f"{DOMAIN}_plan_updated"
