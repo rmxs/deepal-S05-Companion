@@ -74,8 +74,8 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 6. **Start blocked by the battery:** check **Battery protection** on the Preconditioning page. The last battery reading is refreshed before every start. If the car still does not report its battery level, the start is blocked on purpose.
 7. **A schedule did not run:** check that **Scheduled preconditioning** is on (it is off by default), that the schedule is enabled, and **Notifications → Recent activity** for “skipped” or “missed”. A schedule that is more than five minutes late because Home Assistant was not running is recorded as missed.
 8. **Remote climate stops after 15 minutes:** this is the car’s own limit. Companion never extends it.
-8. **“Unknown operation” on the Preconditioning page:** restart Home Assistant after updating.
-9. **“Vehicle unavailable” or unknown values on a Home Assistant set to another language:** update to 2.0.1-b1 and restart Home Assistant. Companion now finds the car’s entities even when they have other names or the language is not English.
+9. **“Unknown operation” on the Preconditioning page:** restart Home Assistant after updating.
+10. **“Vehicle unavailable” or unknown values on a Home Assistant set to another language:** update to 2.0.1-b1 and restart Home Assistant. Companion now finds the car’s entities even when they have other names or the language is not English.
 
 ## A preconditioning notification does not arrive
 

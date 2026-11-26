@@ -143,7 +143,7 @@ On the real card, the reminder needs a finished charge that added at least the m
 
 **Ignore one-off battery jumps above (%)** (default 20) protects the recorded charge: a single battery reading far above the charge so far is ignored until the next reading confirms it. A real fast jump is counted as soon as one more reading agrees.
 
-**Charging target.** Set **Stop charging at** in the **Charger limit** block (**Charging** page) to a goal from 50 to 95 % (or the presets Off, 70, 80 or 90 %). 100 % does nothing as a Charger limit. While charging, the Energy tile shows the goal with an estimated time, for example “80 % at ~22:21”; at 100 % it shows “Full at” that time. The card itself cannot stop charging; the Charger limit can, when you connect your own charger there. To receive a phone alert when the target is reached, enable the charging notification and use it together with this setting in **Notifications**.
+**Charging target.** Set **Stop charging at** in the **Charger limit** block (**Charging** page) to a goal from 50 to 95 % (or the presets Off, 70, 80 or 90 %). 100 % does nothing as a Charger limit. While charging, the Energy tile shows the goal with an estimated time, for example “80 % at ~22:21”; at 100 % it shows “Full at” that time. The card itself cannot stop charging; the Charger limit can, when you connect your own charger there. For Feyree (Tuya Local) wallboxes, set **Charger type** to **Feyree (Tuya Local)** above the Stop control; Companion then finds the Start/Stop charging command and the power and status sensors itself. To receive a phone alert when the target is reached, enable the charging notification and use it together with this setting in **Notifications**.
 
 ## 9. Browse sessions and charts
 
