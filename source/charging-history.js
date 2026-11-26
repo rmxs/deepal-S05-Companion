@@ -58,7 +58,7 @@ EN.loadChargingSessions=async(card)=>{
       await EN.importChargeRows(hass,completed);
       const persisted=await hass.companionRequest('sessions',{});
       return {rows:[...recovered.filter(row=>!persisted.some(a=>a.s<=row.e&&a.e>=row.s)),...persisted].sort((a,b)=>a.s-b.s),warning};
-    }catch(error){warning=T("Recovered charges couldn’t be archived and still depend on Recorder history: ")+(error.message||String(error));}
+    }catch(error){warning=T("Recovered charges couldn’t be archived and still depend on Recorder history: ")+tError(error.message||String(error));}
   }
   return {rows:[...recovered,...archived].sort((a,b)=>a.s-b.s),warning};
 };

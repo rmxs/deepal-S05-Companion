@@ -104,5 +104,19 @@
   "Stopped by you.": "Σταμάτησε από εσένα.",
   "Stopped by the schedule.": "Σταμάτησε από το πρόγραμμα.",
   "Recovered after a Home Assistant restart.": "Ανακτήθηκε μετά από επανεκκίνηση του Home Assistant.",
-  "Command timed out": "Η εντολή έληξε (χρονικό όριο)"
+  "Command timed out": "Η εντολή έληξε (χρονικό όριο)",
+  "Charging reached target · {0}%": "Η φόρτιση έφτασε τον στόχο · {0}%",
+  "Dry run: would stop charging at {0}%": "Δοκιμή: θα σταματούσε τη φόρτιση στο {0}%",
+  "Charger released": "Ο φορτιστής ελευθερώθηκε",
+  "Charging limit paused": "Το όριο φόρτισης σε παύση",
+  "The charger could not be stopped": "Ο φορτιστής δεν μπόρεσε να σταματήσει",
+  "The charger was switched off at the charging target.": "Ο φορτιστής απενεργοποιήθηκε στον στόχο φόρτισης.",
+  "Nothing was changed on the charger.": "Δεν άλλαξε τίποτα στον φορτιστή.",
+  "You restarted the charger, so the limit waits until the next plug-in.": "Επανεκκινήσατε τον φορτιστή, οπότε το όριο περιμένει μέχρι την επόμενη σύνδεση.",
+  "The charging target changed, so charging may continue.": "Ο στόχος φόρτισης άλλαξε, η φόρτιση μπορεί να συνεχιστεί.",
+  "The car was unplugged.": "Το αυτοκίνητο αποσυνδέθηκε.",
+  "The charger limit is no longer live.": "Το όριο φορτιστή δεν είναι πλέον ενεργό.",
+  "The charger settings changed.": "Οι ρυθμίσεις του φορτιστή άλλαξαν.",
+  "The charger could not be released": "Ο φορτιστής δεν μπόρεσε να απελευθερωθεί",
+  "The charger could not be put back to charging. Companion will keep trying.": "Ο φορτιστής δεν μπόρεσε να επανέλθει σε φόρτιση. Η Companion θα συνεχίσει να προσπαθεί."
 }

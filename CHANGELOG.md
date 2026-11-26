@@ -1,5 +1,88 @@
 # Changelog
 
+## 2.0.1-b1 — Beta
+
+First beta of 2.0.1. The Charger limit has not yet been tried on every kind of charger; start with Dry run.
+
+### New
+- **Charger limit:** stops charging at your charging target by switching off your own charger. Mode is Off, Dry run (shows what it would do, never touches the charger) or Live.
+  - Set it on the Charging page with **Stop charging at**. A ring shows the target; the slider (50–95%) and the presets Off, 70%, 80% and 90% sit on the left. The charger, stop control, power sensor and energy sensor are on the right, and each chosen sensor shows its current value beside its name. A limit of 100% does nothing, and the block says so: use 95% or less. The target is the same for every display profile of the car.
+  - Choose your charger and the stop control, power sensor and energy sensor are filled in from it. The energy sensor prefers a "this charge" counter and never picks a lifetime total. You can change any of them, and pick any other lock or switch, from any device, except the car's own door lock. Changing the charger resets only the stop control and its direction; power and energy sensors you chose from other devices are kept. kW, MW, Wh and MWh are converted automatically, and sensors with no unit are not read as W or kWh. Choosing the car itself as the charger is refused, and a stop direction guessed from the names is flagged so you can check it.
+  - **Charger type:** a new dropdown above the stop control. **Auto (switch or lock)** is the way it always worked, so saved setups do not change. **Feyree (Tuya Local)** is for a wallbox that takes commands instead of a switch: Companion picks its "Toggle charging" dropdown (or its Start and Stop buttons), its power sensor and its status sensor by itself, and shows one line such as `Stops with "Stop charging" · restarts with "Start charging"`. Only when it cannot tell which command is which, two small pickers appear in the same place. The stop is confirmed by the power and the status sensors, never by the dropdown itself (it goes back to "Waiting for command"). Without a power sensor the status alone confirms it, and Health says so. Start is only sent to put the charger back (target raised, Charge anyway, unplugged); if the car is full or unplugged and Start does nothing, it counts as released. "Choose another..." now also lists dropdowns and buttons that are a stop or start command. A "Session energy" counter is no longer taken for a lifetime total.
+  - It waits about 45 seconds at the target before stopping, then checks that the stop worked and tries up to 3 times. The stop is saved before it is sent, so a Home Assistant restart cannot lose track of it.
+  - If you restart the charger by hand, the limit pauses until the next plug-in. **Charge anyway** does the same.
+  - Raising or removing the target, leaving Live mode or unplugging the car releases the charger, so an earlier stop should not hold the next charge.
+  - If the charger cannot be put back to charging, for example because it is offline, Companion keeps trying, Health shows a warning and your phone is told once. Messages go to the phones of your enabled alerts (see Notifications).
+  - The card row and the info tile show the power while waiting and the energy once stopped, for example `Stopped at 80% · 12.4 kWh`. Health has a Charger limit check that warns when the plug sensor has not answered for 10 minutes, when the energy sensor looks like a lifetime total, when the car's last report is too old for the limit to act, and when the target is 100%.
+  - The settings preview has demo states for it. Translated in all languages.
+  - **Alerts and the limit work together:** while the limit has the charger stopped on purpose, **Charging complete**, **Charging interrupted** and **Plugged in, but not charging** stay quiet, so you get one message, not three. They work as before when the limit is off, in Dry run, or when it has no phone to tell. Saved alerts pick this up without saving again.
+  - **Charging reached target** now follows **Stop charging at**. Change the target and the alert changes with it, with no need to save the alerts again. The Notifications page shows "Follows Stop charging at (80 %)". The alert's own number is used only when the target is Off or 100 %, and it is kept.
+  - While the limit is about to stop or has stopped the charge, its own message is the one you get ("Charging reached target · 80%"), so **Charging reached target** is not sent twice.
+  - The limit's calm messages (stopped, would stop, released, paused) follow the quiet hours of the first enabled alert that has them: inside them they arrive silently. A failure to stop or to release stays loud.
+- **Seat and steering wheel comfort on the Temperature tile:** small chips appear at the bottom left while a seat heater, seat ventilation or the steering wheel heater is on. Tap them to open the Seats pop-up.
+- **Tyres page redrawn:** the Tyres view shows the car from above, with one value box beside each wheel. A tyre flagged by the car or outside your limits turns red with the reason.
+- **Recommended setup for notifications:** a new install shows a card above the master switch that turns on the key alerts (charging complete, car left unlocked and critical warnings) and sends them to your phone.
+- **Range window:** tap the big range number on the card to see your real range on a full battery, based on your own driving. It also shows Efficiency, consumption per 1% and per 100 km, and charts for 7 days, 30 days or 12 months.
+- **Car side:** Appearance → Car View lets the 3/4 car picture face the driver side, the passenger side or Auto.
+- **Black car colour:** new jet-black car images for every door, hood and tailgate state.
+- **Car logs in pages:** the newest 30 entries load first, and **Show older** loads the next 30. The counts on the tiles are the true totals for the selected range.
+- **Status tile:** Status (on the image) is its own tile in Layout → Sections, right after Vehicle image.
+
+### Changed
+- **Live climate waits while you drive:** Live climate is blocked while the car is moving, like Left open or unlocked. Its new switch **Only when the car is parked** (on by default, also for saved settings without it) and **Count as parked after** sit on the Live climate page; switch it off to show the climate while driving.
+- **Charging page:** the page **Charging Profiles** is now **Charging**. The Charger limit block sits under the profiles and holds **Stop charging at**. It moved from Card Settings → Charging and is the same saved setting.
+- **Car colour and Wheels moved:** they are now in Card Settings → Vehicle, no longer in Appearance.
+- **Energy tile settings:** the Energy tile switches are in Card Settings → Charging.
+- **Card Settings tabs:** the tabs are Layout, Appearance, Controls, Charging, Vehicle and Advanced. Advanced holds the less-used settings, such as Entity mapping, Card page, Data update rate and the colour settings. Diagnostics and Tyres moved to Vehicle.
+- **Message under Locked / Unlocked:** moved to Appearance → Messages.
+- **My diagnostics removed:** the custom diagnostic sensor list is gone. The built-in indicators stay.
+- **Tile icon colour removed:** the "Icon colour of the bottom tiles" setting is gone. Those icons now follow your theme colour, and any saved value is ignored.
+- **Theme colour on charging values:** the Charged total, the kWh in Last charge and the kWh column in the energy day list follow your theme colour. Status colours are unchanged.
+- **Smaller card corners:** the card and its tiles have less rounded corners, so they no longer cut into the buttons and the power knob.
+- **Energy tile style:** the Ring and Half gauge choices show the real Energy tile.
+- **Climate pop-up:** the seat buttons are replaced by one preconditioning line. Pick Cool, Comfort or Hot, then a time, then Start. While it runs, the line shows a countdown and Stop. If climate is already on, it shows Running.
+- **Preconditioning page is information only:** it has no Start or Stop button and no temperature controls. It shows the status and summary. Starting, stopping and the temperature stay on the card. A failed or unconfirmed start or stop appears on Health.
+- **Preconditioning notifications:** the page no longer repeats the notification settings. A row there opens the Notifications page.
+- **Preconditioning info:** the info area is one simpler row, with the status shown in the top pill.
+- **Charge plan:** Save plan looks off until something changes, and the car's time zone shows under it.
+- **Settings sections:** every section starts closed. Tap a section's title to open or close it; your choice is remembered in this browser.
+- **Pop-up windows:** the background blurs smoothly as they open, follows your finger when dragged down, and closes when you tap outside them.
+- **Car look shared:** picture style, sky, side view and photos now apply to the car in every display profile, like colour and wheels.
+- **Car logs:** passing checks on Health fold into one "N checks passed" dropdown. The category tiles count every event of the selected range. Opened parts in the timeline are amber and closed parts are blue.
+- **Entity mapping:** the key list shows only entities that still need mapping.
+- **Phone menu:** on a phone the Companion tabs show only icons, with the title on the open tab.
+- **Car lights:** the position lamp is tinted, dim when off and bright when on. Turn signals and hazards show amber on the lamp line.
+- **Charging sessions title:** it sits above the card with the other page headings.
+- **Faster saves:** saving a card setting is quicker.
+- **Charge plan and notifications titles:** Preconditioning and Charging no longer repeat their title under the page heading, and the notification on/off card is titled "Master switch".
+- **Error messages:** messages from Home Assistant and the Companion backend, such as a rejected setting or an invalid price, now show in your language in the card and the panel. English is used when no translation exists.
+- **German text:** uses the formal "Sie" form throughout.
+
+### Fixed
+- **Other languages:** Preconditioning and Live status now find the car's climate entities when Home Assistant uses another language. Charging, alerts, Live charging and the Charger limit use the same lookup: your own entity choices first, then the usual names, then the car's entities by their fixed internal key. Setups whose names already match see no change.
+- **Keyboard:** the big range number and the Charger limit tile can be opened with Tab and Enter.
+- **Health dot colour:** the Health tab's red dot uses the theme's red.
+- **iPhone Live climate end:** the end command now carries the Live Activity flag, so iOS ends the lock-screen status silently instead of showing the text "end_live_activity" as an alert.
+- **Charging location popup:** the close X shows again. Its icon had no stroke in the panel, so the button looked empty.
+- **Sliding selection:** the choices on Notifications, Charging, Preconditioning, the charging curve and Car logs now glide to the new option, like Settings.
+- **Live updates:** a parked car that has not sent data for hours no longer shows an orange "Last update" warning while its cloud connection is on.
+- **Statistics window:** Today, This week and This month for the Odometer now include the km driven since Home Assistant last saved its statistics.
+- **Statistics window:** the 30-day figures are the same on every tab. The 7-day tab used to count only the days since the start of the month.
+- **Tyres tab:** it could stay empty after the card rebuilt itself, for example after a settings change, until the page was reloaded.
+- **Car View:** the rear-right window now opens at the back, and the sky and city backgrounds keep their size at every card height.
+- **Car View sky:** the hills and curves in the day and night skies fade out softly instead of ending in a hard edge.
+- **Turn signals:** every signal now gives four full blinks, even if the sensor switches off within a second.
+- **Car logs:** a window that drops or rises only because its own door opened or closed is no longer listed.
+- **Pop-up windows:** they have a solid background, so the picture behind the card no longer shows through the text.
+- **Health:** charge plan details no longer run off the right edge on a phone.
+- **Live alerts on iPhone:** closing a live alert no longer shows a stray extra notification.
+- **Connection lost:** the panel retries on its own and reloads when the connection stays dead after the phone wakes, unless there are unsaved changes.
+- **Saved settings:** an older settings store that cannot be read at start-up no longer overwrites your saved settings with defaults. It tries again at the next start.
+- **Live preview:** the charging cost bar shows the real charging location chosen for the charge, instead of asking again.
+- **German times:** no longer show a double full stop, such as "15 Min..".
+- **Italian and Spanish text:** Per 100 km, Car View, Live, Dashboard, Layout and Mobile no longer stay in English. Italian now says Ogni 100 km, In diretta, Cruscotto, Disposizione and Cellulare; Spanish says Vista del coche.
+- **Preconditioning diagnostics:** Last failure is a full-width tile at the bottom of the grid, and its long message wraps in normal words instead of breaking one word per line.
+
 ## 2.0.0 — Charge plan, Car logs, statistics, theme colour and notification colours
 
 > **Before you update:** upgrade [Deepal Alternative to v1.9.0](https://github.com/Sunek0/ha-deepal-alternative/releases/tag/v1.9.0) first. Some card functions, such as the Charge plan, need it.

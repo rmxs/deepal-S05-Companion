@@ -29,7 +29,7 @@ module.exports=async page=>{
     assert(fits,'Charging cards overflow at '+width);
     await panel.locator('[data-action=session-view-table]').click();assert(await panel.locator('.charge-session-list').evaluate(node=>node.classList.contains('is-table')));assert(await panel.locator('.charge-session-list').evaluate(node=>node.scrollWidth<=node.clientWidth+1),'Table layout must fit without horizontal scrolling');await panel.locator('[data-action=session-view-grid]').click();
   }
-  await panel.evaluate(root=>{const list=root.shadowRoot.querySelector('.charge-session-list');list.innerHTML='<p class="charge-empty">No charging sessions available yet.</p>';});assert.equal(await panel.locator('.charge-empty').count(),1);
+  await panel.evaluate(root=>{const list=root.shadowRoot.querySelector('.charge-session-list');list.innerHTML='<p class="cp-empty">No charging sessions available yet.</p>';});assert.equal(await panel.locator('.cp-empty').count(),1);
   await panel.evaluate(root=>{root.shadowRoot.querySelector('.charge-session-list').innerHTML=window.savedSessionList;});
   await page.setViewportSize({width:1440,height:1050});
   if(process.env.COST_CAPTURE){await panel.locator('.charge-session-list').screenshot({path:process.env.COST_CAPTURE+'-grid.png'});await panel.locator('[data-action=session-view-table]').click();await panel.locator('.charge-session-list').screenshot({path:process.env.COST_CAPTURE+'-table.png'});await panel.locator('[data-action=session-view-grid]').click();}

@@ -110,7 +110,8 @@ export function mountCurve(card,history=null,container=null){
   const gapMinutes=()=>{const value=Number(card._c.charge_curve_gap);return value>=1&&value<=120?value:15;}; /* Settings: A stop longer than this starts a new charge */
   const compact=!history&&!container; /* the card's live curve is a short strip with the cost bar at its foot; the archive keeps the tall chart */
   const host=document.createElement('section');host.className='charging-curve-block';host.setAttribute('aria-label','Charging current curve');
-  host.innerHTML='<style>'+css+detailCss+'</style><div class="curve-heading"><h3>Charging curve</h3><div class="curve-range" aria-label="Current range while charging"><span>Low <b data-curve-low>—</b> A</span><span>High <b data-curve-high>—</b> A</span></div></div><div class="curve-plot"><div class="curve-reading" role="status" aria-live="polite" hidden></div></div>'+(compact?'<div data-curve-cost></div>':'<p class="curve-note">Low and High ignore the stop reading.</p>');
+  const tt=key=>window.__DEEPAL_COMPANION_UI?.t?.(key)??key;
+  host.innerHTML='<style>'+css+detailCss+'</style><div class="curve-heading"><h3>'+tt('Charging curve')+'</h3><div class="curve-range" aria-label="'+tt('Current range while charging')+'"><span>'+tt('Low')+' <b data-curve-low>—</b> A</span><span>'+tt('High')+' <b data-curve-high>—</b> A</span></div></div><div class="curve-plot"><div class="curve-reading" role="status" aria-live="polite" hidden></div></div>'+(compact?'<div data-curve-cost></div>':'<p class="curve-note">'+tt('Low and High ignore the stop reading.')+'</p>');
   const attach=()=>{if(!host.isConnected){if(container)container.append(host);else{const foot=card._el.card.querySelector(':scope>.foot');if(foot)foot.before(host);else card._el.card.append(host);}}host.style.order=String(card._c.order.indexOf('curve'));};attach();
   const plot=host.querySelector('.curve-plot'),readout=host.querySelector('.curve-reading');
   host.addEventListener('selectstart',event=>event.preventDefault());host.addEventListener('contextmenu',event=>event.preventDefault());
@@ -214,6 +215,7 @@ export function mountArchivedCurve(container,hass,data,config){const chart=mount
 // releases its chart, including when its owning page or card is disconnected.
 // tools (optional, administrators): {sessionId, mode:'AC'|'DC'|null, request(op,data), onChanged(kind)} adds
 // the charge type switch, reading removal by dragging on the chart, and deleting the charge.
+function outsideClose(d,f){let down=false;const out=e=>{if(e.target!==d)return false;const r=d.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};d.addEventListener('pointerdown',e=>{down=out(e);});d.addEventListener('click',e=>{if(down&&out(e))f();down=false;});}
 export function openCurveDialog(root,hass,load,config={},tools=null){
   const dialog=document.createElement('dialog');let chart,dead=false,selecting=false,range=null;
   window.__DEEPAL_COMPANION_UI.applyPalette(dialog,config);
@@ -227,9 +229,6 @@ export function openCurveDialog(root,hass,load,config={},tools=null){
     .archived-curve-dialog>header button svg{display:block;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
     .archived-curve-dialog>.note{font:inherit;font-size:11px;color:var(--ds-fg2,var(--secondary-text-color,#aaa));line-height:1.5;margin:12px 0 0}
     .curve-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
-    .curve-tools .seg{display:inline-flex;padding:3px;border:1px solid var(--ds-line,var(--divider-color,#444));border-radius:999px}
-    .curve-tools .seg button{min-width:44px;min-height:32px;padding:4px 12px;border:0;border-radius:999px;background:transparent;color:var(--ds-fg2,var(--secondary-text-color,#aaa));font:inherit;font-size:12px;cursor:pointer}
-    .curve-tools .seg button[aria-pressed=true]{background:rgb(var(--ds-ac,52,211,153));color:rgb(var(--ds-ac-ink,11,21,17));font-weight:600}
     .curve-tools>button{min-height:38px;padding:6px 12px;border:1px solid var(--ds-line,var(--divider-color,#444));border-radius:10px;background:transparent;color:var(--ds-fg,var(--primary-text-color,#eee));font:inherit;font-size:12px;cursor:pointer}
     .curve-tools>button[aria-pressed=true]{border-color:rgb(var(--ds-ac,52,211,153));color:rgb(var(--ds-ac,52,211,153))}
     .curve-tools>button.danger{color:rgb(var(--ds-bad,248,113,113));margin-left:auto}
@@ -246,10 +245,11 @@ export function openCurveDialog(root,hass,load,config={},tools=null){
   const format=window.__DEEPAL_COMPANION_UI.format(hass);
   if(tools){
     const bar=document.createElement('div');bar.className='curve-tools';
-    bar.innerHTML='<div class="seg" role="group" aria-label="Charge type"><button type="button" data-mode="AC">AC</button><button type="button" data-mode="DC">DC</button></div><button type="button" data-tool="select" aria-pressed="false">Remove readings</button><button type="button" class="danger" data-tool="delete">Delete charge</button>';
+    bar.innerHTML='<div class="seg" role="group" aria-label="Charge type"><button type="button" data-k="mode" data-mode="AC">AC</button><button type="button" data-k="mode" data-mode="DC">DC</button></div><button type="button" data-tool="select" aria-pressed="false">Remove readings</button><button type="button" class="danger" data-tool="delete">Delete charge</button>';
     const confirm=document.createElement('div');confirm.className='curve-confirm';confirm.hidden=true;confirm.setAttribute('role','status');
     dialog.querySelector('.note').before(bar,confirm);
-    const paintMode=()=>{for(const b of bar.querySelectorAll('[data-mode]'))b.setAttribute('aria-pressed',String(b.dataset.mode===tools.mode));};paintMode();
+    /* the AC / DC group is the Settings .seg: the chosen button is 'on'; the sliding pill is snapshotted before and applied after the repaint */
+    const paintMode=()=>{const snap=window.__DEEPAL_COMPANION_UI?.pillSnap?.(bar);for(const b of bar.querySelectorAll('[data-mode]')){const on=b.dataset.mode===tools.mode;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));}window.__DEEPAL_COMPANION_UI?.pillApply?.(bar,snap);};paintMode();
     const tr=(key,...args)=>window.__DEEPAL_COMPANION_UI?.t?.(key,...args)??key;
     const ask=(text,label,run)=>{confirm.hidden=false;confirm.innerHTML='<span></span><button type="button" data-no></button><button type="button" class="primary" data-yes></button>';confirm.firstElementChild.textContent=text;confirm.querySelector('[data-no]').textContent=tr('Cancel');confirm.querySelector('[data-yes]').textContent=label;
       confirm.querySelector('[data-no]').onclick=()=>{confirm.hidden=true;clearRange();};
@@ -273,7 +273,7 @@ export function openCurveDialog(root,hass,load,config={},tools=null){
   }
   const remove=dialog.remove.bind(dialog);dialog.remove=()=>{if(dead)return;dead=true;chart?.destroy();remove();};
   dialog.querySelector('button').onclick=event=>{event.stopPropagation();dialog.remove();};
-  dialog.addEventListener('cancel',event=>{event.preventDefault();dialog.remove();});dialog.addEventListener('close',()=>dialog.remove());
+  dialog.addEventListener('cancel',event=>{event.preventDefault();dialog.remove();});dialog.addEventListener('close',()=>dialog.remove());outsideClose(dialog,()=>dialog.remove());
   (root.nodeType===9?root.body:root).append(dialog);dialog.showModal();
   Promise.resolve().then(load).then(data=>{if(dead)return;content.replaceChildren();chart=mountArchivedCurve(content,hass,data,config);}).catch(error=>{if(!dead)content.textContent=/Unknown.*operation/i.test(error.message||'')?'Restart Home Assistant to load archived charging curves, then refresh.':error.message||'Charging curve could not be loaded.';});
   return dialog;

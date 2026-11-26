@@ -1,11 +1,10 @@
 /* Car logs page: the car right now, and a timeline of what happened to it in three groups (security, charging, others).
    Read-only: it never changes settings or sends a command. Updates arrive by push; the 30 second check is only a fallback. */
 const REFRESH_MS=30000;
+const PAGE_ROWS=30;   /* entries per page; the server sends the same size (car_log.py PAGE) */
 const styles=`
-.carlog,.carlog.box{display:grid;gap:14px}
+.carlog{display:grid;gap:14px}
 
-.carlog-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.carlog-head h2{margin:0;font-size:16px;flex:1;min-width:140px}
 .carlog-meta{font-size:12px;color:var(--ds-fg2)}
 .carlog-status{display:grid;gap:12px;padding:var(--cp-item-p);border:1px solid var(--cp-off-line);border-radius:var(--cp-item-r);background:var(--cp-off-bg)}
 .carlog-status:empty{display:none}
@@ -31,10 +30,9 @@ const styles=`
 .carlog-tile[aria-pressed=true]{border-color:rgba(var(--tone),.45);background:rgba(var(--tone),.12)}
 .carlog-tile:focus-visible,.tl-card:focus-visible,.carlog-chip:focus-visible,.carlog-more:focus-visible{outline:2px solid var(--primary-color);outline-offset:2px}
 .carlog-range{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.carlog-range .carlog-meta{margin-left:auto}
-.carlog-chip{padding:6px 16px;border:1px solid var(--cp-off-line);border-radius:999px;background:var(--cp-off-bg);color:var(--ds-fg);font:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:var(--cp-ctl-h);white-space:nowrap}
+.carlog-meta-row{flex-basis:100%;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px}
 /* selected chip: source/companion-shared.css */
-.carlog-more{justify-self:center;padding:8px 18px;border:1px solid var(--ds-line);border-radius:999px;background:var(--ds-card);color:var(--ds-fg);font:inherit;cursor:pointer;min-height:36px}
+.carlog-more{display:block;margin:18px auto 6px;padding:8px 18px;border:1px solid var(--ds-line);border-radius:999px;background:var(--ds-card);color:var(--ds-fg);font:inherit;cursor:pointer;min-height:36px}
 .carlog-day{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:28px 0 12px;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ds-fg2)}
 .carlog-body>.carlog-day:first-child,.carlog-note+.carlog-day{margin-top:6px}
 .carlog-day em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:400;color:var(--primary-color)}
@@ -66,7 +64,7 @@ button.tl-card[aria-expanded=true] .tl-chev{transform:rotate(180deg)}
 .tl-steps small{display:block;font-size:11.5px;color:var(--ds-fg2);margin-top:1px}
 .carlog-note{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--ds-line);border-left:3px solid rgb(var(--ds-info));border-radius:12px;background:var(--ds-soft);font-size:12px;line-height:1.45;color:var(--ds-fg2)}
 .carlog-note strong{font-size:13px;color:var(--ds-fg)}
-.carlog-empty{padding:24px 12px;text-align:center;border:1px dashed var(--ds-line);border-radius:12px;color:var(--ds-fg2);font-size:13px}
+
 @media(max-width:380px){.cs-tiles{gap:6px}.carlog-tiles{gap:6px}.tl-item{grid-template-columns:36px minmax(0,1fr);gap:8px}.tl-node{width:36px;height:36px}.tl-list::before{left:17px}}
 `;
 const TONES={security:'var(--ds-info)',charging:'var(--ds-ok)',others:'var(--ds-warn)',all:'var(--ds-ac,var(--ds-ok))'};
@@ -76,20 +74,21 @@ const SEVC={info:'var(--ds-info)',important:'var(--ds-warn)',critical:'var(--ds-
 const RANK={info:0,important:1,critical:2};
 export async function mountCarLog(panel,stage){
   const t=(...args)=>panel.t(...args);
-  const host=document.createElement('section');host.className='box carlog';
-  host.innerHTML='<style>'+styles+'</style><div class="carlog-head"><h2></h2><span class="carlog-meta"></span></div><div class="carlog-status"></div><div class="carlog-now" role="status"></div><div class="carlog-tiles"></div><div class="carlog-range" role="group"></div><div class="carlog-body"></div>';
+  const host=document.createElement('div');host.className='carlog';
+  host.innerHTML='<style>'+styles+'</style><div class="carlog-status"></div><div class="carlog-now" role="status"></div><div class="carlog-tiles"></div><div class="carlog-range"></div><div class="carlog-body"></div>';
   stage.append(host);
   const q=selector=>host.querySelector(selector);
-  let dead=false,busy=false,again=false,timer=null,soon=null,unsub=null,data=null,filter=null,failure='',range='30',all=[],fresh=true;
+  let dead=false,busy=false,again=false,timer=null,soon=null,unsub=null,data=null,filter=null,failure='',range='30',all=[],fresh=true,older={more:false,before:null};
   const owner={...panel.selected},open=new Set();
   const F=()=>window.__DEEPAL_COMPANION_UI.format(panel._hass);
   const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;};
   const icon=(name,cls)=>{const i=document.createElement('ha-icon');i.setAttribute('icon',name);i.setAttribute('aria-hidden','true');if(cls)i.className=cls;return i;};
-  q('h2').textContent=t('Car logs');
   const title=row=>{const m=/^(.*) (opened|closed|cleared)$/.exec(row.title);return m&&row.kind!=='precondition'?t('{0} '+m[2],t(m[1])):t(row.title);};
   const levelText=(a,b)=>(a!=null&&b!=null?Math.round(a)+'% → '+Math.round(b)+'%':b!=null?Math.round(b)+'%':a!=null?Math.round(a)+'%':'');
   const span=minutes=>minutes>=60?t('{0} h {1} min',Math.floor(minutes/60),minutes%60):t('{0} min',minutes);
   const tone=row=>row.sev==='critical'?'var(--ds-bad)':row.sev==='important'?'var(--ds-warn)':(TONES[row.cat]||TONES.security);
+  /* In the step lists an open part and a closed part need different colours: opened = amber, closed = blue. */
+  const stepTone=row=>{const m=/ (opened|closed)$/.exec(row.title||'');return m?(m[1]==='opened'?'var(--ds-warn)':'var(--ds-info)'):tone(row);};
   const worst=rows=>rows.reduce((m,r)=>RANK[r.sev]>RANK[m]?r.sev:m,'info');
   function detail(row){
     const d=row.detail||{},f=F(),parts=[];
@@ -146,7 +145,7 @@ export async function mountCarLog(panel,stage){
     const list=el('ul','tl-steps');list.hidden=!open.has(session);
     for(const r of [...rows].sort((a,b)=>b.time-a.time)){
       const li=document.createElement('li'),body=el('span',null,title(r)),sub=detail(r),dot=el('span','tl-dot');
-      li.style.setProperty('--tone',tone(r));dot.setAttribute('aria-hidden','true');
+      li.style.setProperty('--tone',stepTone(r));dot.setAttribute('aria-hidden','true');
       if(sub)body.append(el('small',null,sub));
       li.append(el('time',null,(r.poll?'≈ ':'')+F().hm(r.time*1000,true)),dot,body);list.append(li);
     }
@@ -181,7 +180,7 @@ export async function mountCarLog(panel,stage){
     }else{
       const lockRow=[...rows].sort((a,b)=>b.time-a.time).find(r=>r.kind==='locked'||r.kind==='unlocked');
       head=lockRow?.kind==='locked'?t('Parked & secured'):rows.some(r=>r.kind==='unlocked')?t('Unlocked & opened'):t('Doors and windows');
-      sub=parkSummary(rows);badge=t('{0} actions',rows.length);when=f.hm(last.time*1000);
+      sub=parkSummary(rows);badge=t('{0} changes',rows.length);when=f.hm(last.time*1000);
     }
     const item=el('div','tl-item '+sev);
     const n=el('span','tl-node');n.style.setProperty('--tone',tone({sev,cat}));n.append(icon(isCharge?'mdi:ev-station':isPre?'mdi:fan':(lockRow=>lockRow?.kind==='locked'?'mdi:lock-outline':'mdi:car-door')([...rows].sort((a,b)=>b.time-a.time).find(r=>r.kind==='locked'||r.kind==='unlocked'))));
@@ -194,7 +193,6 @@ export async function mountCarLog(panel,stage){
   }
   function draw(){
     const f=F(),now=Date.now(),todayKey=f.date(now),yesterdayKey=f.date(now-86400000),rows=all;
-    q('.carlog-meta').textContent=t('Kept for {0} days',data.retention_days);
     drawStatus();
     const alerts=q('.carlog-now');alerts.replaceChildren();
     for(const item of data.active||[]){
@@ -209,17 +207,19 @@ export async function mountCarLog(panel,stage){
       const pressed=cat==='all'?filter==null:filter===cat;
       const b=el('button','carlog-tile');b.type='button';b.setAttribute('aria-pressed',pressed?'true':'false');b.style.setProperty('--tone',TONES[cat]);
       b.append(icon(ic),el('span',null,t(label)),el('small',null,String(count)));
-      b.title=t('{0} today',count);
+      b.title=t('{0} events in this range',count);
       b.onclick=()=>{filter=cat==='all'||filter===cat?null:cat;fresh=true;load();};tiles.append(b);
     }
-    const chips=q('.carlog-range');chips.replaceChildren();
+    /* the range choice is the Settings .seg (its sliding pill is snapshotted before the rebuild and applied after); the meta line sits beside it */
+    const rangeBox=q('.carlog-range'),snap=window.__DEEPAL_COMPANION_UI?.pillSnap?.(rangeBox),chips=el('div','seg');chips.setAttribute('role','group');
     for(const [value,label] of [['today','Today'],['7','7 days'],['30','30 days']]){
-      const b=el('button','carlog-chip',t(label));b.type='button';b.setAttribute('aria-pressed',range===value?'true':'false');
+      const b=el('button',null,t(label));b.type='button';b.dataset.k='range';b.classList.toggle('on',range===value);b.setAttribute('aria-pressed',range===value?'true':'false');
       b.onclick=()=>{if(range===value)return;range=value;fresh=true;load();};chips.append(b);
     }
-    chips.append(el('span','carlog-meta',t('Grouped events')));
+    const meta=el('div','carlog-meta-row');meta.append(el('span','carlog-meta',t('Grouped events')),el('span','carlog-meta',t('Kept for {0} days',data.retention_days)));rangeBox.replaceChildren(chips,meta);
+    window.__DEEPAL_COMPANION_UI?.pillApply?.(rangeBox,snap);
     const body=q('.carlog-body');body.replaceChildren();
-    if(!data.ready){body.append(el('p','carlog-empty',t('The car log is not running. Restart Home Assistant to load the update.')));return;}
+    if(!data.ready){body.append(el('p','cp-empty',t('The car log is not running. Restart Home Assistant to load the update.')));return;}
     if(filter){
       const note=el('div','carlog-note');note.append(el('strong',null,t(CATS.find(c=>c[0]===filter)[2])),el('span',null,t(ABOUT[filter])));
       const sum=data.summary?.[filter];
@@ -228,7 +228,7 @@ export async function mountCarLog(panel,stage){
       if(!rows.length&&data.since)note.append(el('span',null,t('Nothing recorded since {0}. Earlier charges come from the charging archive.',f.dm(data.since*1000))));
       body.append(note);
     }
-    if(!rows.length){if(!filter||!data.since)body.append(el('p','carlog-empty',t('Nothing in this period. Try a longer one.')));return;}
+    if(!rows.length){if(!filter||!data.since)body.append(el('p','cp-empty',t('Nothing in this period. Try a longer one.')));return;}
     const sessions=new Map();
     for(const r of rows)if(r.session){if(!sessions.has(r.session))sessions.set(r.session,[]);sessions.get(r.session).push(r);}
     const done=new Set();let day=null,list=null,hinted=false;
@@ -248,23 +248,30 @@ export async function mountCarLog(panel,stage){
   const ask=extra=>panel.request('car_log_get',{...(filter?{cat:filter}:{}),range,...extra},owner);
   function fail(error){
     if(dead)return;
-    failure=/Unknown Companion operation/i.test(error.message||'')?t('Restart Home Assistant to load the updated Companion backend.'):(error.message||String(error));
-    if(!data){const body=q('.carlog-body');body.replaceChildren();body.append(el('p','carlog-empty',failure));}
+    failure=/Unknown Companion operation/i.test(error.message||'')?t('Restart Home Assistant to load the updated Companion backend.'):(window.__DEEPAL_COMPANION_UI.tError(error.message)||String(error));
+    if(!data){const body=q('.carlog-body');body.replaceChildren();const again=el('button','carlog-more',t('Try again'));again.type='button';again.onclick=()=>{fresh=true;load();};body.append(el('p','cp-empty',failure),again);}
   }
   async function load(){
     if(dead)return;if(busy){again=true;return;}busy=true;
     try{
-      const reset=fresh,res=await ask({limit:reset?100:Math.min(500,Math.max(100,all.length))});
+      const reset=fresh,res=await ask({limit:PAGE_ROWS});
       if(reset&&fresh)fresh=false;
-      failure='';all=res.rows||[];data=res;if(!dead)draw();
+      /* Only the newest page is asked again; older pages already shown stay in place, so a refresh never refetches them. */
+      const rows=res.rows||[],low=rows.length?Math.min(...rows.map(r=>r.time)):null;
+      const kept=low==null||reset?[]:all.filter(r=>r.time<low);
+      if(!kept.length)older={more:!!res.more,before:res.next_before??null};
+      const seen=new Set(rows.map(r=>r.id));
+      all=[...rows,...kept.filter(r=>!seen.has(r.id))];
+      failure='';data={...res,more:older.more};if(!dead)draw();
     }catch(error){fail(error);}
     finally{busy=false;if(!dead&&again){again=false;schedule();}}
   }
   async function more(){
-    if(dead||busy||!data?.more||!all.length)return;busy=true;
+    if(dead||busy||!older.more||older.before==null)return;busy=true;
     try{
-      const res=await ask({limit:100,before:Math.min(...all.map(r=>r.time))}),seen=new Set(all.map(r=>r.id));
-      all=all.concat((res.rows||[]).filter(r=>!seen.has(r.id)));data={...res,rows:all};if(!dead)draw();
+      const res=await ask({limit:PAGE_ROWS,before:older.before}),seen=new Set(all.map(r=>r.id));
+      all=all.concat((res.rows||[]).filter(r=>!seen.has(r.id)));
+      older={more:!!res.more,before:res.next_before??null};data={...data,more:older.more};if(!dead)draw();
     }catch(error){fail(error);}
     finally{busy=false;if(!dead&&again){again=false;schedule();}}
   }

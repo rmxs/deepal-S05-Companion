@@ -12,7 +12,7 @@ const server=http.createServer((q,r)=>{const u=new URL(q.url,"http://x");const r
  await page.goto("http://127.0.0.1:"+server.address().port);await page.addScriptTag({url:"/deepal_companion/frontend/companion-card.js"});
  const defaults=JSON.parse(fs.readFileSync(path.join(base,"..","defaults.json"),"utf8"));
  await page.evaluate((defaults)=>{const s=document.createElement("deepal-companion-settings");s.style.cssText="display:block;width:390px";window.patches=[];s.onPatch=(p)=>window.patches.push(p);
-   s.hass={locale:{language:"en"},language:"en",states:{},entities:{},devices:{},services:{},config:{time_zone:"UTC"}};s.cfg=defaults;document.getElementById("w").append(s);window.st=s;s._setTab("colours");},defaults);
+   s.hass={locale:{language:"en"},language:"en",states:{},entities:{},devices:{},services:{},config:{time_zone:"UTC"}};s.cfg=defaults;document.getElementById("w").append(s);window.st=s;s._setTab("advanced");},defaults);
  await page.waitForTimeout(600);
  const q=(f,a)=>page.evaluate(f,a);let fails=0;const ok=(n,c)=>{console.log(c?"ok  ":"FAIL",n);if(!c)fails++};
  const rows=()=>q(()=>{const r=st.shadowRoot,o={};for(const k of ["notify_alert_level","notify_ok_level","notify_climate_level","notify_charge_level"])o[k]=[[...r.querySelectorAll(`[data-sset^="${k}|"]`)].map(x=>x.dataset.sset.split("|")[1]).join(","),[...r.querySelectorAll(`[data-sset^="${k}|"].on`)].map(x=>x.dataset.sset.split("|")[1]).join(",")];return o});

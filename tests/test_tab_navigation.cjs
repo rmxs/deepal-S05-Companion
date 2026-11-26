@@ -4,7 +4,7 @@ module.exports=async page=>{
   const panel=page.locator('deepal-companion-panel');
   await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').settings);
   assert.equal(new URL(page.url()).hash,'#card');
-  assert.deepEqual(await panel.locator('nav [data-mode]>span').allTextContents(),['Card Settings','Notifications','Sessions','Charging Profiles','Preconditioning','Car logs','Health']);
+  assert.deepEqual(await panel.locator('nav [data-mode]>span').allTextContents(),['Card Settings','Notifications','Sessions','Charging','Preconditioning','Car logs','Health']);
   assert.deepEqual(await panel.locator('nav [data-mode]').evaluateAll(buttons=>buttons.map(button=>button.dataset.mode)),['settings','notifications','history','chargers','preconditioning','logs','health']);
   assert.equal(await panel.locator('nav [data-mode]>:is(ha-icon,svg)[aria-hidden=true]').count(),7,'every tab has a decorative icon (Preconditioning uses its own SVG)');
   for(const width of [320,360,390,768,1440]){await page.setViewportSize({width,height:1050});assert(await panel.locator('nav').evaluate(nav=>nav.scrollWidth<=nav.clientWidth+1&&[...nav.children].every(button=>button.scrollWidth<=button.clientWidth+1)),'Navigation labels fit at '+width);}
@@ -15,12 +15,13 @@ module.exports=async page=>{
   assert(layout.profile.x>layout.settings.x&&Math.abs(layout.profile.x-layout.preview.x)<1&&layout.profile.bottom<=layout.preview.top,'Profile belongs above the right preview');
   assert.equal(await panel.locator('.profile-setup > .ps-head .ps-icon ha-icon,.preview-heading h2 ha-icon').count(),2);
   const palette=await page.evaluate(()=>{const node=document.createElement('div');window.__DEEPAL_COMPANION_UI.applyPalette(node,{lvl_green:'#11aa22',lvl_yellow:'#ddcc33',lvl_red:'#bb4422'});return ['ok','warn','bad'].map(key=>node.style.getPropertyValue('--companion-'+key));});assert.deepEqual(palette,['17,170,34','221,204,51','187,68,34']);
+  await page.evaluate(()=>{window.localNotifications={enabled:true,rules:[{id:'qa-default',name:'QA',enabled:false,devices:['notify.replacement_phone'],entity_id:'sensor.qa',condition:'above',value:1}]};});
   await panel.locator('[data-mode=notifications]').click();await panel.locator('.local-notifications').waitFor();assert.equal(new URL(page.url()).hash,'#notifications');
   assert.equal(await panel.locator('header .app-credit').textContent(),`v${version} · Made with ♥ in Greece · L.K.`);
   await page.evaluate(()=>history.back());await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').mode==='settings'&&!!document.querySelector('deepal-companion-panel').settings);assert.equal(new URL(page.url()).hash,'#card');
   await page.evaluate(()=>history.forward());try{await panel.locator('.local-notifications').waitFor();}catch(error){console.log('HASH_FORWARD',await panel.evaluate(root=>({mode:root.mode,hash:location.hash,pending:root.pending,version:root.navigationVersion,stage:root.shadowRoot.querySelector('.stage')?.className,board:root.localBoard&&{dirty:root.localBoard.dirty,busy:root.localBoard.busy},html:root.shadowRoot.querySelector('.local-notifications')?.shadowRoot.innerHTML.slice(-400)})));throw error;}
   await panel.locator('.device-pill[data-recipient]').first().click();await page.evaluate(()=>location.hash='#costs');await page.waitForFunction(()=>location.hash==='#notifications');assert.equal(await panel.evaluate(root=>root.mode),'notifications','Unsaved changes block URL navigation');
-  await panel.locator('#view-overview [data-command=cancel]').dispatchEvent('click');
+  await panel.locator('#view-overview [data-command=cancel]').dispatchEvent('click');await page.evaluate(()=>{window.localNotifications=undefined;});
   await page.evaluate(()=>location.hash='#charging');await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').mode==='chargers'&&!!document.querySelector('deepal-companion-panel').costs);
   // Recreate the panel at the saved URL to exercise the same constructor path as refresh.
   await page.evaluate(()=>{document.querySelector('deepal-companion-panel').remove();const next=document.createElement('deepal-companion-panel');document.querySelector('#panel').append(next);next.hass=window.testHass;});await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').costs);assert.equal(await panel.evaluate(root=>root.mode),'chargers');

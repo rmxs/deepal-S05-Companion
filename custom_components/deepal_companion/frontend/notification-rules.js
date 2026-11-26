@@ -40,7 +40,7 @@ const EV = {
   charge_target: {
     g: "charge", icon: "mdi:battery-charging-80", label: "Charging reached target", sub: "The battery reached your target percentage while still charging.",
     d: { on: false, delay: 0, repeat: 0, max: 1, sev: "info", away: false, parked: false, actions: ["dismiss"], thr: 80 }, ctl: ["delay", "sev", "thr", "actions"], acts: ["dismiss"],
-    thr: { label: "Target", unit: "%", min: 50, max: 100, step: 1, sub: "A notification is sent while charging when the battery reaches this percentage." },
+    thr: { label: "Target", unit: "%", min: 50, max: 100, step: 1, follows: true, sub: "A notification is sent while charging when the battery reaches this percentage." },
     delayHelp: "Minutes the battery must stay at the target before you are notified.",
     vars: ["name", "battery", "range"], title: "{name} · Target reached", text: "Battery {battery}% (range {range} km). Target reached.",
   },
@@ -331,15 +331,19 @@ function logic(x, evId, e) {
   const plugged = `is_state('${E.plug}', 'on') and not ${charging}`;
   const ref = curs.length ? curs[0] : E.chg;
   switch (evId) {
-    case "charge_done": return { expr: `(${ended}) and (${bat} >= 100 or (${bat} >= ${e.thr} and not is_state('${E.plug}', 'off'))) and (now() - states.${ref}.last_changed).total_seconds() < 1800` };
-    case "plugged_idle": return { expr: `${plugged} and ${bat} < ${n.events.charge_done.thr}` };
+    case "charge_done": return { expr: `(${ended}) and (${bat} >= 100 or (${bat} >= ${e.thr} and not is_state('${E.plug}', 'off'))) and (now() - states.${ref}.last_changed).total_seconds() < 1800 and not limit_stopped` };
+    case "plugged_idle": return { expr: `${plugged} and ${bat} < ${n.events.charge_done.thr} and not limit_stopped` };
     case "charge_interrupted": {
       /* connected, not charging, below the limit AND charging stopped recently (otherwise it is just "connected but not charging") */
-      return { expr: `${plugged} and ${bat} < ${n.events.charge_done.thr} and ${bat} > 0 and (now() - states.${ref}.last_changed).total_seconds() < 7200` };
+      return { expr: `${plugged} and ${bat} < ${n.events.charge_done.thr} and ${bat} > 0 and (now() - states.${ref}.last_changed).total_seconds() < 7200 and not limit_stopped` };
     }
     case "charge_started": return { expr: `${charging} and (now() - states.${x.has(E.chg) ? E.chg : ref}.last_changed).total_seconds() < 900` };
-    case "charge_target": return { expr: `${charging} and ${bat} >= ${e.thr}` };
-    case "charge_eta": return { pre: tags("set p = states('" + E.left + "').split(':')", "set mins = ((p[0] | int(0)) * 60 + (p[1] | int(0))) if p | count == 2 else 0"),
+    case "charge_target": {
+      /* follows the charging target of the Charger limit (charge_target_pct, supplied by the backend each check); with no usable target (Off, or 100 %) the alert's own number counts */
+      const goal = "(charge_target_pct | default(0) | int(0))";
+      return { expr: `${charging} and ${bat} >= (${goal} if 1 <= ${goal} <= 99 else ${e.thr}) and not limit_stopping` };
+    }
+    case "charge_eta": return { pre: tags("set p = states('" + E.left + "').split(':')", "set mins = ((p[0] | int(0)) * 60 + (p[1] | int(0))) if p | count >= 2 else 0"),
       expr: `${charging} and mins > 0 and mins <= ${e.thr}`, left: "{{ mins }}" };
     case "comfort": {
       const list = COMFORT.filter(([k]) => x.has(eid(x.id(k)))).map(([k, nm, t]) => `[${jq(eid(x.id(k)))}, ${jq(T(nm))}, ${jq(t)}]`).join(", ");
@@ -379,11 +383,9 @@ function logic(x, evId, e) {
       return { pre: tags(...rows), expr: "ns.l | count > 0", items: "{{ ns.l | join(', ') }}" };
     }
     case "warn_crit": case "warn": {
-      const crit = evId === "warn_crit";
       const base = diagOpts(x, evId).filter(([k]) => !e.items || e.items.includes(k)).map(([k, nm]) => [eid(x.id(k)), T(nm)]);
-      const custom = crit ? [] : (Array.isArray(c.diag_custom) ? c.diag_custom : []).filter((d) => d && typeof d.entity === "string" && EID_RE.test(d.entity)).map((d) => [d.entity, T(String(d.label || d.entity).slice(0, 60))]);
-      const list = [...base, ...custom].map(([en, nm]) => `[${jq(en)}, ${jq(nm)}]`).join(", ");
-      return { pre: tags("set ns = namespace(l=[])", `for e, nm in [${list}]`, "if states(e) in ['on', 'problem', 'alarm']", "set ns.l = ns.l + [nm]", "endif", "endfor"), expr: "ns.l | count > 0", items: "{{ ns.l | join(', ') }}", empty: !base.length && !custom.length };
+      const list = base.map(([en, nm]) => `[${jq(en)}, ${jq(nm)}]`).join(", ");
+      return { pre: tags("set ns = namespace(l=[])", `for e, nm in [${list}]`, "if states(e) in ['on', 'problem', 'alarm']", "set ns.l = ns.l + [nm]", "endif", "endfor"), expr: "ns.l | count > 0", items: "{{ ns.l | join(', ') }}", empty: !base.length };
     }
   }
   return { expr: "false" };

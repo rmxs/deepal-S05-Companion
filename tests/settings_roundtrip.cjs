@@ -14,7 +14,7 @@ module.exports=async function settingsRoundtrip(page){
   const base=await page.evaluate(()=>JSON.parse(JSON.stringify(document.getElementById("settings-validation-card")._c)));
   const catalog=await page.evaluate(()=>{
     const widget=document.querySelector("deepal-companion-panel").settings,result={};
-    for(const tab of ["vehicle","layout","look","controls","charge","colours","sensors","general"]){
+    for(const tab of ["vehicle","layout","look","controls","charge","advanced","general"]){
       widget._setTab(tab);
       for(const node of widget.shadowRoot.querySelectorAll("[data-set],[data-sset],[data-tgl]")){
         const key=node.dataset.sset?.split("|")[0]||node.dataset.set||node.dataset.tgl;
@@ -29,11 +29,11 @@ module.exports=async function settingsRoundtrip(page){
     widget._setTab("vehicle");return result;
   });
   const fixed={
-    prefix:"validation",name:"Settings validation vehicle",image_path:"/deepal_companion/frontend/images/car/",layers_path:"/deepal_companion/frontend/images/",image_aspect:"4 / 3",
+    prefix:"validation",name:"Settings validation vehicle",image_path:"/deepal_companion/frontend/images/car/",image_aspect:"4 / 3",
     fuel_max:940,battery_kwh:24,image_scale:1.1,tire_min:2.2,tire_max:3.4,air_t1:21,air_t2:25,button_primary:4,toast_duration:8,
     bat_t1:25,bat_t2:55,bat_t3:75,fuel_t1:12,fuel_t2:28,fuel_t3:45,
     confirm:["unlock"],order:[...defaults.order].reverse(),hidden:["stats"],buttons:[...defaults.buttons].reverse(),buttons_hidden:["honk"],top_buttons:[...defaults.top_buttons].reverse(),top_buttons_hidden:["diag"],
-    info_order:[...defaults.info_order].reverse(),diag:[],diag_mode:"all",diag_custom:[{entity:"binary_sensor.s05_cloud_connection",label:"Validation connection",icon:"info"}],diag_ignore:["binary_sensor.s05_engine_warning"],hero_show:["name","range","cloud","updated"],info:["humidity"],
+    info_order:[...defaults.info_order].reverse(),diag:[],diag_ignore:["binary_sensor.s05_engine_warning"],hero_show:["name","range","cloud","updated"],info:["humidity"],
     info_custom:[{entity:"sensor.s05_inside_temperature",label:"Validation temperature",icon:"thermo"}],
     entities:{...base.entities,"sensor.inside_temperature":"sensor.s05_inside_temperature"},images:{off:"/deepal_companion/frontend/images/car/hero_off.jpg"},
     climate_on_mode:"cool",companion_design:"tablet",companion_width:820
@@ -91,7 +91,6 @@ module.exports=async function settingsRoundtrip(page){
           await page.evaluate(async()=>{const card=document.getElementById("settings-validation-card");card._compConfigSignature=null;await card._loadRemote();});
           assert.deepStrictEqual(await page.evaluate(key=>document.getElementById("settings-validation-card")._c[key],item.key),item.value,"Reloaded value for "+item.key);
           if(item.key==="name")assert((await page.evaluate(()=>document.getElementById("settings-validation-card")._el.nm.textContent)).includes(item.value));
-          if(item.key==="tile_icons")assert.equal(await page.evaluate(()=>document.getElementById("settings-validation-card")._el.card.dataset.ti),item.value);
           if(item.key==="card_padding")assert.equal(await page.evaluate(()=>document.getElementById("settings-validation-card")._el.card.dataset.pad),item.value);
           if(item.key==="hidden")assert.equal(await page.evaluate(()=>getComputedStyle(document.getElementById("settings-validation-card")._el.stats).display),"none");
           report.checks.push({flow,setting:item.key,input:method,passed:true,elapsed_ms:Date.now()-start});

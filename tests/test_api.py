@@ -1,4 +1,5 @@
 """API contract tests with explicit lightweight HA interface doubles."""
+import copy
 import asyncio
 from datetime import datetime, timezone
 import importlib
@@ -154,7 +155,8 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
             return self.db.sessions("car", start, end)
         runtime = types.SimpleNamespace(entry=types.SimpleNamespace(data={"battery_entity": "sensor.batt"}, options={}), refresh=refresh, priced_sessions=sessions)
         self.hub = types.SimpleNamespace(db=db, read_db=read_db, vehicles={"car": runtime}, setting_keys={"car_color", "battery_kwh", "charge_target", "entities", "prefix", "companion_design", "companion_width", "charge_prompt_min_gain", "charge_prompt_recent", "charge_spike_jump"}, changed=lambda vehicle: None)
-        self.hass = types.SimpleNamespace(data={"deepal_companion": self.hub})
+        self.hass = types.SimpleNamespace(data={"deepal_companion": self.hub},
+                                          async_add_executor_job=lambda fn, *args: asyncio.get_running_loop().run_in_executor(None, fn, *args))
 
     async def asyncTearDown(self):
         self.tmp.cleanup()
@@ -166,6 +168,26 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         await api.request(self.hass, connection, {"id": 1, "type": "deepal_companion/request", "op": op, "vehicle_id": "car", "view_id": self.view, "data": data or {}, **extra})
         return connection
 
+    async def test_settings_get_reads_profile_vehicle_and_integration_in_one_call(self):
+        self.hub.update_rate = 300
+        self.hub.card_panel_in_sidebar = False
+        self.hub.card_panel_pin = {"vehicle_id": "", "view_id": "", "design": ""}
+        admin = await self.request("settings_get")
+        result = admin.results[0]
+        self.assertFalse(admin.errors)
+        self.assertEqual(result["profile"]["view_id"], self.view)
+        self.assertNotIn("_settings_schema", result["profile"]["config"])
+        self.assertNotIn("battery_entity", result["vehicle"]["config"])
+        self.assertEqual(result["integration"]["update_rate"], 300)
+        self.assertIn("language", result["integration"])
+        self.assertTrue(result["integration"]["can_edit"])
+        self.assertTrue(result["integration"]["card_panel"]["can_edit"])
+        # Without a vehicle the integration part still loads; a non-admin sees the same reads but cannot edit.
+        plain = await self.request("settings_get", connection=Connection(admin=False), vehicle_id=None)
+        self.assertFalse(plain.errors)
+        self.assertIsNone(plain.results[0]["profile"])
+        self.assertFalse(plain.results[0]["integration"]["can_edit"])
+
     async def test_charge_target_accepts_goals_and_rejects_out_of_range(self):
         accepted = await self.request('config_patch', {'patch': {'charge_target': 80}})
         self.assertTrue(accepted.results, accepted.errors)
@@ -173,6 +195,28 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         for bad in (101, -1, True):
             rejected = await self.request('config_patch', {'patch': {'charge_target': bad}})
             self.assertTrue(rejected.errors, 'charge_target %r must be refused' % (bad,))
+
+    async def test_charge_target_save_reaches_the_runtime_and_the_charger_limit(self):
+        runtime = self.hub.vehicles["car"]
+        runtime.config, runtime._summary_revision, evaluated = {"charge_target": 0}, 0, []
+        runtime.hub, runtime.vehicle = self.hub, "car"
+        async def evaluate():
+            evaluated.append(runtime.config["charge_target"])
+        runtime.charger_limit = types.SimpleNamespace(evaluate=evaluate, _spawn=lambda coro: asyncio.ensure_future(coro))
+        done = await self.request('config_patch', {'patch': {'charge_target': 75}})
+        self.assertTrue(done.results, done.errors)
+        await asyncio.sleep(0)
+        self.assertEqual(runtime.config["charge_target"], 75)
+        self.assertEqual(evaluated, [75])
+
+    async def test_start_hint_dismissal_is_saved_per_user(self):
+        def as_user(ident, admin=True):
+            c = Connection(admin=admin); c.user.id = ident; return c
+        self.assertFalse((await self.request("user_hint_get", {}, as_user("a"))).results[0]["dismissed"])
+        self.assertTrue((await self.request("user_hint_dismiss", {}, as_user("a"))).results[0]["dismissed"])
+        self.assertTrue((await self.request("user_hint_get", {}, as_user("a"))).results[0]["dismissed"], "stays dismissed")
+        self.assertFalse((await self.request("user_hint_get", {}, as_user("b", admin=False))).results[0]["dismissed"], "other users still see it")
+        self.assertTrue((await self.request("user_hint_dismiss", {"hint": "other"}, as_user("b"))).errors, "only the known hint can be saved")
 
     async def test_all_views_are_listed(self):
         c = await self.request("list")
@@ -286,6 +330,46 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(c.errors)
         self.assertEqual(c.results[0]["config"]["car_color"], "blue")
 
+    async def test_config_patch_reloads_only_what_the_patch_touches(self):
+        runtime = self.hub.vehicles["car"]
+        calls = []
+        async def counted_refresh():
+            calls.append("refresh")
+        runtime.refresh = counted_refresh
+        runtime.hub, runtime.vehicle = self.hub, "car"
+        # 1. The entity mapping changed: the full refresh runs once.
+        runtime._summary_revision = 0
+        result = await self.request("config_patch", {"patch": {"entities": {"batt": "sensor.battery_level"}}})
+        self.assertFalse(result.errors)
+        self.assertEqual(calls, ["refresh"])
+        # 2. A shared setting changed: no full refresh, the vehicle settings are read again and the summary revision moves.
+        calls.clear()
+        runtime._summary_revision = 0
+        runtime.config = "stale"
+        result = await self.request("config_patch", {"patch": {"battery_kwh": 60}})
+        self.assertFalse(result.errors)
+        self.assertEqual(calls, [])
+        self.assertEqual(runtime._summary_revision, 1)
+        self.assertEqual(runtime.config["battery_kwh"], 60)
+        # 3. A profile-only setting changed: nothing is reloaded.
+        calls.clear()
+        runtime._summary_revision = 0
+        runtime.config = "stale"
+        result = await self.request("config_patch", {"patch": {"companion_design": "tablet"}})
+        self.assertFalse(result.errors)
+        self.assertEqual(calls, [])
+        self.assertEqual(runtime._summary_revision, 0)
+        self.assertEqual(runtime.config, "stale")
+
+    async def test_session_import_row_errors_are_unchanged_through_the_op(self):
+        row = {"s": 1000000, "e": 2000000, "from": 20, "to": 80, "kwh": 11, "capacity": 18.4}
+        c = await self.request("sessions_import", {"rows": [{**row, "kwh": 501}]})
+        self.assertEqual(c.errors, [("invalid_format", "Invalid recovered session kwh")])
+        self.assertFalse(self.db.sessions("car"))
+        self.assertIsNone(api.validate_import_rows([row]))
+        with self.assertRaisesRegex(ValueError, "^Only completed, continuous sessions can be archived$"):
+            api.validate_import_rows([row, {**row, "live": True}])
+
     async def test_stale_cost_editor_cannot_overwrite_another_saved_receipt(self):
         from copy import deepcopy
         original = self.db.get("car", "costs", {})
@@ -305,6 +389,41 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         c = await self.request("config_patch", {"patch": {"companion_design": "tablet", "companion_width": 1000}})
         self.assertFalse(c.errors)
         self.assertEqual(c.results[0]["config"]["companion_width"], 1000)
+
+    async def test_subscription_event_carries_the_revision_cards_use_to_skip_fetches(self):
+        import companion_api_test.api as module_api
+        callbacks = []
+        original = module_api.async_dispatcher_connect
+        module_api.async_dispatcher_connect = lambda hass, signal, fn: (callbacks.append(fn), lambda: None)[1]
+        events = []
+        class Connection2(Connection):
+            subscriptions = {}
+            def send_event(self, ident, payload):
+                events.append(payload)
+        try:
+            module_api.subscribe(self.hass, Connection2(), {"id": 7})
+        finally:
+            module_api.async_dispatcher_connect = original
+        runtime = self.hub.vehicles["car"]
+        runtime.signal_revision = 4
+        callbacks[0]("car")
+        runtime.signal_revision = 5
+        callbacks[0]("car")
+        self.assertEqual([e["revision"] for e in events], [4, 5])
+        self.assertTrue(all(e["vehicle_id"] == "car" for e in events))
+
+    async def test_only_one_profile_can_be_suggested_for_new_charges(self):
+        current = self.db.get('car', 'costs')['profiles']
+        def attempt(flags):
+            profiles = copy.deepcopy(current)
+            for index, flag in flags.items():
+                profiles[index]['default'] = flag
+            return self.request('costs_set', {'changes': {'profiles': profiles}, 'expected_changes': {'profiles': current}})
+        self.assertTrue((await attempt({0: True, 1: True})).errors)
+        self.assertTrue((await attempt({0: 'yes'})).errors)
+        self.assertEqual([p.get('default') for p in self.db.get('car', 'costs')['profiles']], [None] * len(current))
+        self.assertFalse((await attempt({1: True})).errors)
+        self.assertEqual([p['id'] for p in self.db.get('car', 'costs')['profiles'] if p.get('default')], [current[1]['id']])
 
     async def test_missing_field_is_named_in_plain_words(self):
         import companion_api_test.api as module_api

@@ -219,6 +219,89 @@ class Climate(Base):
         await self.live.tick()
         self.assertEqual(self.calls[-1][1]["message"], "clear_notification")
 
+    def odometer_changed(self, changed_ago, reported_ago=10):
+        self.state("sensor.s05_total_odometer", 1000, age=reported_ago)
+        self.states["sensor.s05_total_odometer"].last_changed = datetime.fromtimestamp(self.now - changed_ago, timezone.utc)
+
+    async def test_driving_blocks_the_start(self):
+        self.config["live_climate"].update(start_delay=0)
+        self.odometer_changed(changed_ago=60)  # the odometer changed a minute ago: driving
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(self.calls, [], "climate on while driving does not start the notification")
+
+    async def test_moving_after_start_ends_it_the_normal_way(self):
+        self.config["live_climate"].update(start_delay=0, end_delay=30)
+        self.odometer_changed(changed_ago=5000)
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1, "parked with the climate on: shown")
+        tag = self.calls[0][1]["data"]["tag"]
+        self.now += 60
+        self.odometer_changed(changed_ago=60)
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1, "moving: the grace period of the normal end runs first")
+        self.now += 31
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(self.calls[-1][1]["message"], "clear_notification")
+        self.assertEqual(self.calls[-1][1]["data"]["tag"], tag)
+        self.assertEqual(self.history[-1][:2], ("live_climate", "live_ended"))
+        self.assertEqual(self.history[-1][2]["trigger"]["reason"], "Vehicle moving")
+        self.assertNotIn("climate", self.live.state)
+
+    async def test_parked_with_the_climate_on_shows_even_without_fresh_odometer(self):
+        self.config["live_climate"].update(start_delay=0)
+        self.odometer_changed(changed_ago=5000, reported_ago=3600)  # a parked car reports its odometer rarely
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1, "remote preconditioning with the car parked still shows")
+
+    async def test_explicit_off_still_shows_while_driving(self):
+        self.config["live_climate"].update(start_delay=0, only_parked=False)
+        self.odometer_changed(changed_ago=60)
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1, "a saved OFF keeps the old behaviour")
+
+    async def test_saved_settings_without_the_key_default_to_parked_only(self):
+        saved = {key: value for key, value in status.KINDS["climate"]["default"].items() if key not in ("only_parked", "parked_after")}
+        self.config["live_climate"] = {**saved, "enabled": True, "devices": ["notify.phone"], "start_delay": 0}
+        self.odometer_changed(changed_ago=60)
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(self.calls, [], "missing key: parked-only")
+        self.assertIs(status.validate_status("climate", saved)["only_parked"], True)
+        self.assertEqual(status.validate_status("climate", saved)["parked_after"], 360)
+        self.assertIs(status.validate_status("climate", {**saved, "only_parked": False})["only_parked"], False)
+        for bad in (59, 3601, True, "360"):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                status.validate_status("climate", {**saved, "parked_after": bad})
+
+    async def test_parked_again_restarts_the_wait_before_showing(self):
+        self.config["live_climate"].update(start_delay=60, end_delay=30)
+        self.odometer_changed(changed_ago=5000)
+        self.climate()
+        await self.live.tick()  # parked and on: the 60 s wait starts
+        self.now += 30
+        self.odometer_changed(changed_ago=30)
+        self.climate()
+        await self.live.tick()  # driving: the pending wait restarts
+        self.now += 10
+        self.odometer_changed(changed_ago=5000)
+        self.climate()
+        await self.live.tick()  # parked again while the climate is still on: a full wait
+        self.assertEqual(self.calls, [], "not shown at once from the old wait")
+        self.now += 59
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(self.calls, [])
+        self.now += 2
+        self.climate()
+        await self.live.tick()
+        self.assertEqual(len(self.calls), 1, "shown after the normal delay")
+
 
 class ParkedAfter(Base):
     def odometer(self, reported_ago, changed_ago):
@@ -301,15 +384,19 @@ class OpenOrUnlocked(Base):
         await self.live.tick()
         messages = [call[1]["message"] for call in self.calls[1:]]
         self.assertEqual(messages, ["clear_notification", "end_live_activity"])
+        end = self.calls[2][1]
+        self.assertEqual(end, {"message": "end_live_activity", "data": {"tag": self.live.tag("open"), "live_activity": True}},
+                         "iOS needs the live_activity flag, or the text end_live_activity shows as a visible alert")
+        self.assertNotIn("title", end)
         self.now += 31
         await self.live.tick()
-        self.assertEqual([call[1]["message"] for call in self.calls[3:]], ["clear_notification", "end_live_activity"], "repeated once after 30 s")
+        self.assertEqual([call[1]["message"] for call in self.calls[3:]], ["clear_notification"], "only the silent clear is repeated after 30 s")
         self.now += 31
         await self.live.tick()
-        self.assertEqual(len(self.calls), 7, "and once more after 60 s")
+        self.assertEqual(len(self.calls), 5, "and once more after 60 s")
         self.now += 31
         await self.live.tick()
-        self.assertEqual(len(self.calls), 7, "then it stops")
+        self.assertEqual(len(self.calls), 5, "then it stops")
 
     async def test_a_new_notification_is_not_cleared_by_the_repeats(self):
         self.live.owner.recipient_os = lambda device: "ios"

@@ -32,14 +32,14 @@
 
 1. Check that its entity exists and has a valid state in Home Assistant.
 2. Check **Card Settings → Layout** for a hidden section or control.
-3. Check **Card Settings → Advanced → Entity mapping** if the wrong entity is being used.
-4. For paint and wheels, check **Card Settings → Advanced** and choose Car View in Appearance.
+3. Check **Card Settings → Vehicle → Entity mapping** if the wrong entity is being used.
+4. For car colour and wheels, check **Card Settings → Vehicle**, and choose Car View in **Appearance**.
 
 ## Charging text or the curve is missing
 
 1. Check the AC/DC current and charger-connected entities.
 2. Choose a charging text style under **Card Settings → Charging**.
-3. Enable **Card Settings → Layout → Sections → Charging curve** for the current-session graph.
+3. Enable **Card Settings → Advanced → Charging records → Charging curve** for the current-session graph.
 4. For an older curve, open **Sessions → Data options → Import older Recorder charges**.
 5. Reopen the saved charge’s curve.
 
@@ -75,6 +75,7 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 7. **A schedule did not run:** check that **Scheduled preconditioning** is on (it is off by default), that the schedule is enabled, and **Notifications → Recent activity** for “skipped” or “missed”. A schedule that is more than five minutes late because Home Assistant was not running is recorded as missed.
 8. **Remote climate stops after 15 minutes:** this is the car’s own limit. Companion never extends it.
 8. **“Unknown operation” on the Preconditioning page:** restart Home Assistant after updating.
+9. **“Vehicle unavailable” or unknown values on a Home Assistant set to another language:** update to 2.0.1-b1 and restart Home Assistant. Companion now finds the car’s entities even when they have other names or the language is not English.
 
 ## A preconditioning notification does not arrive
 
@@ -93,7 +94,7 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 
 ## The Deepal Card entry is missing from the sidebar
 
-1. It is hidden by default. An administrator can turn on **Card Settings → Advanced → Sidebar → Show “Deepal Card” in the sidebar**.
+1. It is hidden by default. An administrator can turn on **Card Settings → Vehicle → Sidebar → Show “Deepal Card” in the sidebar**.
 2. Reload the browser after changing it.
 3. The page itself still opens at `/deepal-companion-card`, and notifications can open it.
 
@@ -113,7 +114,7 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 ## The connection badge shows Offline or No data
 
 1. **Offline** means Deepal Alternative reports the vehicle cloud connection as off or unavailable. Check that integration and its sign-in.
-2. **No data** means the connection sensor has no state yet or was not found. Check the entity prefix under **Card Settings → Advanced**.
+2. **No data** means the connection sensor has no state yet or was not found. Check the entity prefix under **Card Settings → Vehicle**.
 
 ## The Settings gear is missing
 
@@ -128,7 +129,7 @@ Battery-based figures are marked as estimates. **Not priced** sessions do not co
 
 ## Fuel items are shown on an electric car, or missing on a hybrid
 
-1. Open **Card Settings → Advanced → Vehicle type**.
+1. Open **Card Settings → Vehicle → Vehicle type**.
 2. **Automatic** treats the car as a hybrid when a fuel level, fuel range or fuel volume sensor exists for the vehicle prefix. If an electric car still shows fuel, check whether Deepal Alternative creates a fuel sensor for it; otherwise choose **Electric**.
 3. If a hybrid shows no fuel, make sure its fuel sensors exist and the prefix is correct, or choose **Plug-in hybrid**.
 4. Reload the page after changing the type. Choosing Electric only hides fuel items; no data is deleted.

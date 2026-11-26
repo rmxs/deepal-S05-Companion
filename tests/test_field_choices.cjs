@@ -11,6 +11,7 @@ module.exports=async page=>{
   await panel.locator('[data-profile-choose]').click();await panel.locator('.profile-selector deepal-companion-choice').getByRole('option',{name:/Everyday|Mobile/i,exact:false}).first().click();
   await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').selected.view_id==='mobile'&&!!document.querySelector('deepal-companion-panel').preview);
   assert.equal(await panel.locator('.vehicle-management,details.profile-management').count(),0);
+  await panel.evaluate(root=>{if(!root.previewOpen)root.shadowRoot.querySelector('.pv-toggle').click();});await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.live-preview').classList.contains('pv-closed'));
   const choice=panel.locator('[name=preview_mode]').locator('..').locator('deepal-companion-choice'),button=choice.locator('.field');
   await button.click();assert.equal(await choice.locator('.menu').evaluate(n=>n.matches(':popover-open')),true);
   await choice.getByRole('option',{name:'AC charging',exact:true}).click();

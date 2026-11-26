@@ -33,6 +33,14 @@ class StorageTests(unittest.TestCase):
         self.db.ensure_vehicle('car', 'Car', {'prefix': 's05', 'battery_entity': 'sensor.battery', 'powertrain': 'ev'})
         self.assertEqual(self.db.config('car')['config']['powertrain'], 'ev')
 
+    def test_user_flag_is_kept_per_user_and_survives_reopening(self):
+        self.assertFalse(self.db.user_flag('u1', 'hint_start'))
+        self.db.set_user_flag('u1', 'hint_start')
+        self.db.set_user_flag('u1', 'hint_start')
+        self.assertTrue(self.db.user_flag('u1', 'hint_start'))
+        self.assertFalse(self.db.user_flag('u2', 'hint_start'), 'another user still sees the hint')
+        self.assertTrue(Database(self.path).user_flag('u1', 'hint_start'))
+
     def seed(self, entity='sensor.current', hours=2, vehicle='car'):
         with self.db.connect() as db:
             db.executemany('INSERT INTO readings VALUES(?,?,?,?,?)',

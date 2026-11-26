@@ -23,7 +23,7 @@ module.exports=async page=>{
    await openNotifications();
    const language=await box('.deepal-language-box');
    assert(language&&language.select,'The Notification language box must sit at the top of the page');
-   const reference=await panel.evaluate(p=>{const r=p.shadowRoot.querySelector('.local-notifications').shadowRoot;const c=[...r.querySelectorAll('.ha-card')].find(e=>(e.textContent||'').trim().startsWith('Notifications'));const b=c.getBoundingClientRect(),s=getComputedStyle(c);return {left:b.left,width:b.width,pad:s.padding,radius:s.borderTopLeftRadius,border:s.borderTopColor,bg:s.backgroundColor};});
+   const reference=await panel.evaluate(p=>{const r=p.shadowRoot.querySelector('.local-notifications').shadowRoot;const c=[...r.querySelectorAll('.ha-card')].find(e=>(e.textContent||'').trim().startsWith('Master switch'));const b=c.getBoundingClientRect(),s=getComputedStyle(c);return {left:b.left,width:b.width,pad:s.padding,radius:s.borderTopLeftRadius,border:s.borderTopColor,bg:s.backgroundColor};});
    assert(Math.abs(language.left-reference.left)<0.5&&Math.abs(language.width-reference.width)<0.5,'Language box must span the same width and left edge as the Notifications card at '+width+'px '+JSON.stringify({language,reference}));
    assert.equal(language.pad,'16px','Language box padding must be the standard 16px at '+width+'px');
    assert.equal(language.radius,reference.radius,'Language box corners must match at '+width+'px');

@@ -26,6 +26,8 @@ const STYLE=`
 .pc input:not([type=checkbox]):not([type=range]):not([type=hidden]),.pc select{min-height:40px;box-sizing:border-box;width:100%;padding:0 10px;border-radius:10px;border:1px solid var(--ds-line,var(--divider-color));background:var(--ds-card,var(--card-background-color));color:inherit;font:inherit}
 .pc button{min-height:40px;padding:0 14px;border-radius:var(--ctl-r,12px);border:1px solid var(--ds-line,var(--divider-color));background:var(--ds-card,transparent);color:inherit;font:inherit;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 .pc button:disabled{opacity:.5;cursor:default}.pc button ha-icon{--mdc-icon-size:18px}
+/* Segmented choices (repeat, mode) keep the Settings .seg button size and look, not the generic .pc button above. */
+.pc .seg>button{min-height:0;padding:7px 6px;border:0;border-radius:11px;background:transparent;font-size:12.5px;color:var(--ds-fg2,var(--secondary-text-color));line-height:inherit}
 .pc button.go{background:var(--cp-accent);border-color:transparent;color:var(--pc-on-accent,rgb(var(--ds-ac-ink,16,21,18)))}.pc button.stop{background:rgba(var(--ds-bad,248,113,113),.14);color:rgb(var(--ds-bad,248,113,113));border-color:rgba(var(--ds-bad,248,113,113),.35)}
 .pc .actions{display:flex;gap:8px;flex-wrap:wrap}.pc .actions>button{flex:1;min-width:130px}
 .pc .subgrp{display:grid;gap:12px;min-width:0}.pc .f:has(>.pills){gap:8px}
@@ -51,9 +53,6 @@ const STYLE=`
 .pc input[type=time],.pc input[type=date]{-webkit-appearance:none;appearance:none;display:flex;align-items:center;line-height:44px;padding:0 12px!important;text-align:left;font-size:15px;font-variant-numeric:tabular-nums}
 .pc input[type=time]::-webkit-date-and-time-value,.pc input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0;line-height:44px}
 .pc input[type=time]::-webkit-datetime-edit,.pc input[type=date]::-webkit-datetime-edit{padding:0;line-height:44px}
-.pc .seg{display:flex;gap:4px;padding:4px;height:44px;box-sizing:border-box;border-radius:12px;background:var(--ds-card,rgba(127,127,127,.08));border:1px solid var(--ds-line,rgba(127,127,127,.3))}
-.pc .seg button{flex:1;min-width:0;height:34px;min-height:34px;padding:0 6px;border:0;border-radius:9px;background:transparent;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ds-fg2,var(--secondary-text-color))}
-.pc .seg button[aria-pressed=true]{background:var(--cp-accent);color:var(--pc-on-accent,rgb(var(--ds-ac-ink,16,21,18)))}
 .pc .stp{border:1px solid var(--ds-line,rgba(127,127,127,.3))!important;box-sizing:border-box}
 .pc .f{align-content:start}.pc .f>.lab{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:20px;font-size:12.5px;color:var(--ds-fg2,var(--secondary-text-color))}.pc .f>.lab b{font-size:14px;color:var(--ds-fg,var(--primary-text-color));font-weight:600}
 .pc input:not([type=checkbox]):not([type=range]),.pc select{height:44px;min-height:44px}
@@ -67,6 +66,7 @@ const STYLE=`
 .pc .sl input[type=range]:disabled{opacity:.5;cursor:default}
 .pc .sl input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 4px rgba(var(--ds-info,121,173,255),.5)}
 .pc .kv{align-content:start}
+.pc .kv.wide{grid-column:1/-1;overflow-wrap:break-word;word-break:normal}.pc .kv.wide b{overflow-wrap:break-word;word-break:normal}.pc .kv .msg{display:block;font-size:12px;line-height:1.4;color:var(--ds-fg2,var(--secondary-text-color));overflow-wrap:break-word;word-break:normal}
 .pc .days{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px!important;grid-column:1/-1;margin:0}
 .pc .days label{display:block!important;position:relative;margin:0!important;padding:0!important;min-width:0}
 .pc .days span{min-width:0!important;width:100%;height:40px!important;box-sizing:border-box}
@@ -163,7 +163,7 @@ const STYLE=`
 .pc.pg .pg-col{display:grid;gap:14px;align-content:start;min-width:0}
 @container (min-width:560px){.pc.pg .ptgrid.ev{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}}
 @container (min-width:760px){.pc.pg .pg-cols{grid-template-columns:minmax(0,5fr) minmax(0,7fr)}.pc.pg .pg-sum ul{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@container (max-width:560px){.pc.pg .pg-act{width:100%;margin-left:0}.pc.pg .pg-act>button{flex:1 1 100%}.pc.pg .pg-hero>.pg-head .chip{margin-left:auto}}
+@container (max-width:560px){.pc.pg .pg-act{width:100%;margin-left:0}.pc.pg .pg-act>button{flex:1 1 100%}.pc.pg .pg-hero>.pg-head .chip{margin-left:0}}
 `;
 
 export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()=>'',loaderCss='',notify=()=>{},getHass=()=>null,mode='card',admin=true,scrollTo=null}){
@@ -175,7 +175,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
   const PAGE=!['quick','card','notifications'].includes(mode);if(PAGE)root.classList.add('pg');  /* the Companion dashboard page has its own layout */
   let scrolled=false,infoOpen=false,schedOpen=false,summaryOpen=false,reloading=false,pending=null,clock=null,saveTimer=null,queued={};
   /* Times follow the Home Assistant profile (12/24 h, language, time zone), not the browser language. */
-  const fmt=()=>{const h=getHass(),l=h?.locale||{},tf=l.time_format||'language',tz=h?.config?.time_zone,loc=tf==='system'?undefined:(l.language||h?.language||undefined);const o={hour:tf==='12'?'numeric':'2-digit',minute:'2-digit'};if(tf==='12')o.hour12=true;else if(tf==='24')o.hourCycle='h23';if(tz)o.timeZone=tz;const show=(ts,opts)=>{try{return new Date(ts*1000).toLocaleString(loc,opts);}catch(_){return '—';}};return{hm:ts=>ts?show(ts,o):'—',dt:ts=>ts?show(ts,{weekday:'short',day:'numeric',month:'short',...o}):'—'};};
+  const fmt=()=>{const h=getHass(),l=h?.locale||{},tf=l.time_format||'language',tz=h?.config?.time_zone,loc=tf==='system'?undefined:(l.language||h?.language||undefined);const o={hour:tf==='12'?'numeric':'2-digit',minute:'2-digit'};if(tf==='12')o.hour12=true;else if(tf==='24')o.hourCycle='h23';if(tz)o.timeZone=tz;const show=(ts,opts)=>{try{return new Date(ts*1000).toLocaleString(loc,opts);}catch(_){return '—';}};return{hm:ts=>ts?show(ts,o):'—',wd:ts=>ts?show(ts,{weekday:'short',...o}):'—',dt:ts=>ts?show(ts,{weekday:'short',day:'numeric',month:'short',...o}):'—'};};
   const ago=ts=>{if(!ts)return '—';const s=Math.max(0,Date.now()/1000-ts);return s<60?T('now'):s<3600?T('{0} min ago',Math.floor(s/60)):fmt().dt(ts);};
   const sw=(name,on,dis,label)=>'<label class="pcsw"><input type="checkbox" role="switch" data-k="'+name+'"'+(on?' checked':'')+(dis?' disabled':'')+' aria-label="'+esc(label||name)+'"><i></i></label>';
   /* a switch is a whole tappable tile (like Card Settings): the hidden checkbox keeps the same data-k and change handling */
@@ -192,21 +192,21 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
 
   async function load(){
     try{data=await request('precondition_get');error='';}
-    catch(e){error=/Unknown.*operation/i.test(e?.message||'')?T('Restart Home Assistant to load preconditioning, then try again.'):(e?.message||T('Could not load preconditioning.'));}
+    catch(e){error=/Unknown.*operation/i.test(e?.message||'')?T('Restart Home Assistant to load preconditioning, then try again.'):(window.__DEEPAL_COMPANION_UI.tError(e?.message)||T('Could not load preconditioning.'));}
     if(!dead)draw();schedule();
   }
   function schedule(){clearTimeout(timer);if(dead)return;const fast=data&&(BUSY.has(data.state.status)||data.state.status==='ACTIVE');timer=setTimeout(()=>{if(!document.hidden&&!busy&&!edit)load();else schedule();},fast?5000:30000);}
   async function save(patch,msg){
     if(busy)return;busy=true;draw();
     try{const keep=data?.recipients;data=await request('precondition_set',{value:patch});if(!data.recipients&&keep)data.recipients=keep;if(msg)notify(T(msg));return true;}
-    catch(e){notify(e?.message||T('Could not save.'),true);return false;}
+    catch(e){notify(window.__DEEPAL_COMPANION_UI.tError(e?.message)||T('Could not save.'),true);return false;}
     finally{busy=false;if(!dead)draw();}
   }
   /* Remembering the last temperature and duration never blocks the screen: it is written quietly a moment after the last change, without redrawing anything. */
   async function flushDefaults(){
     const patch=queued;queued={};if(!Object.keys(patch).length||dead)return;
     try{const keep=data?.recipients;const r=await request('precondition_set',{value:patch});if(r&&r.config){data=r;if(!data.recipients&&keep)data.recipients=keep;}}
-    catch(e){notify(e?.message||T('Could not save.'),true);}
+    catch(e){notify(window.__DEEPAL_COMPANION_UI.tError(e?.message)||T('Could not save.'),true);}
   }
   async function command(op){
     if(busy)return;pending=op==='precondition_start'?'start':'stop';busy=true;draw();
@@ -214,7 +214,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
       const r=await request(op,op==='precondition_start'?{temperature:ui.temperature??data.config.default_temperature,duration:ui.duration??data.config.default_duration}:{});
       if(r.accepted===false)notify(T(REASONS[r.reason]||r.reason),true);
       data={...data,...r,recipients:r.recipients||data.recipients};
-    }catch(e){notify(e?.message||T('Command could not be sent.'),true);}
+    }catch(e){notify(window.__DEEPAL_COMPANION_UI.tError(e?.message)||T('Command could not be sent.'),true);}
     finally{pending=null;busy=false;if(!dead){draw();schedule();}}
   }
 
@@ -235,7 +235,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
     items.push(n.enabled&&names.length?H('Notifications go to {0}.',names.join(', ')):'<span class="off">'+esc(T('No preconditioning notifications are sent.'))+'</span>');
     items.push(esc(T('Every action is logged in Notifications → Recent activity and the Home Assistant log.')));
     if(asItems)return '<ul>'+items.map(i=>'<li>'+i+'</li>').join('')+'</ul>';
-    return '<section class="summary"><h4><ha-icon icon="mdi:text-box-check-outline"></ha-icon>'+esc(T('Your setup in short'))+'</h4><ul>'+items.map(i=>'<li>'+i+'</li>').join('')+'</ul></section>';
+    return '<section class="summary"><h4><ha-icon icon="mdi:text-box-check-outline"></ha-icon>'+esc(T('Summary'))+'</h4><ul>'+items.map(i=>'<li>'+i+'</li>').join('')+'</ul></section>';
   }
   function statusSection(){
     const s=data.state,c=data.climate,[label,tone]=STATUS[s.status]||[s.status,'muted'],f=fmt(),on=c.on===true,owned=s.owner==='companion'&&s.session_start;
@@ -331,7 +331,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
     const fill=root.querySelector('[data-fill]');if(fill)fill.style.width=Math.min(100,left/clock.total*100)+'%';
   }
   const clockTimer=setInterval(tickClock,1000);
-  const seg=(k,opts,val)=>'<div class="seg" role="group">'+opts.map(([v,l])=>'<button type="button" data-seg="'+k+'" data-v="'+v+'" aria-pressed="'+(v===val)+'">'+esc(T(l))+'</button>').join('')+'</div><input type="hidden" data-e="'+k+'" value="'+esc(val)+'">';
+  const seg=(k,opts,val)=>'<div class="seg" role="group">'+opts.map(([v,l])=>'<button type="button" data-k="'+k+'" class="'+(v===val?'on':'')+'" data-seg="'+k+'" data-v="'+v+'" aria-pressed="'+(v===val)+'">'+esc(T(l))+'</button>').join('')+'</div><input type="hidden" data-e="'+k+'" value="'+esc(val)+'">';
   function editorHtml(){
     const e=edit;return '<div class="editor" data-editor><div class="two">'+
       field('Name','<input data-e="name" maxlength="60" value="'+esc(e.name)+'">','Optional label shown in the list.')+
@@ -349,7 +349,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
     const cfg=data.config,f=fmt(),up=Object.fromEntries(data.upcoming.map(u=>[u.id,u]));
     const next=data.upcoming.filter(u=>u.next_start).sort((a,b)=>a.next_start-b.next_start)[0];
     const list=cfg.schedules.map(s=>{const u=up[s.id]||{},last=u.last;return '<div class="sched"><div><b>'+esc(s.name||T('Schedule'))+'</b><small>'+esc(describe(s))+'</small><br><small>'+
-      (u.next_start?esc(T('Next'))+' '+esc(f.dt(u.next_start))+' → '+esc(f.hm(u.next_stop)):esc(T('No upcoming run')))+(last?' · '+esc(T('Last'))+': '+esc(T(last.kind.replace(/_/g,' ')))+(last.reason?' ('+esc(T(REASONS[last.reason]||last.reason))+')':''):'')+'</small></div>'+
+      (u.next_start?esc(T('Next start'))+' '+esc(f.dt(u.next_start))+' → '+esc(f.hm(u.next_stop)):esc(T('No upcoming run')))+(last?' · '+esc(T('Last'))+': '+esc(T(last.kind.replace(/_/g,' ')))+(last.reason?' ('+esc(T(REASONS[last.reason]||last.reason))+')':''):'')+'</small></div>'+
       (admin?sw('sched:'+s.id,s.enabled,busy,T('Enabled')+' · '+(s.name||describe(s)))+'<button data-edit="'+esc(s.id)+'" aria-label="'+esc(T('Edit'))+'"><ha-icon icon="mdi:pencil"></ha-icon></button>':'')+'</div>'+
       '';}).join('');
     const btn=admin&&!edit?'<button data-act="new"><ha-icon icon="mdi:plus"></ha-icon>'+esc(T('Create schedule'))+'</button>':'';
@@ -385,26 +385,21 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
       field('Wait between attempts',stepper('data-cfg="retry_delay"',10,120,10,c.retry_delay,'s',dis),'Pause before trying again, to respect the Deepal limit.')+
       field('Wait for the car to answer',stepper('data-cfg="verify_timeout"',30,180,15,c.verify_timeout,'s',dis),'If the car doesn’t report the change in this time, the attempt is not confirmed.')+'</div></details></section>';
   }
-  /* Dashboard page header: title, state, the setup summary and one Start/Stop button, then the live values in one strip. */
+  /* Dashboard page header: info only, no actions. The status pill and the Summary toggle; Start, Stop and the live values live on the card. */
   function pageHero(){
-    const s=data.state,cfg=data.config,c=data.climate,b=data.battery,f=fmt(),dis=busy||!admin;
-    const starting=['START_REQUESTED','STARTING','VERIFYING_START','RETRYING_START'].includes(s.status)||pending==='start',stopping=(BUSY.has(s.status)&&!starting)||pending==='stop';
-    const on=c.on===true,active=s.status==='ACTIVE'||on,owned=s.owner==='companion'&&s.session_start,blocked=b.blocked==='battery_low'&&b.fresh;
+    const s=data.state,c=data.climate,b=data.battery,f=fmt();
+    const rep=c.report?f.wd(c.report):null,repFull=c.report?f.dt(c.report):'';
+    const active=s.status==='ACTIVE'||c.on===true,blocked=b.blocked==='battery_low'&&b.fresh;
     const [label,tone]=STATUS[s.status]||[s.status,'muted'],chip=s.status==='IDLE'&&!active?['Stopped','muted']:s.status==='IDLE'?['Active','ok']:[label,tone];
-    const act=active||stopping?'<button class="stop" type="button" data-cmd="precondition_stop"'+(dis||stopping||!active&&!BUSY.has(s.status)?' disabled':'')+'><ha-icon icon="mdi:stop"></ha-icon>'+esc(T('Stop preconditioning'))+'</button>'
-      :'<button class="go" type="button" data-cmd="precondition_start"'+(dis||starting||blocked?' disabled':'')+'><ha-icon icon="mdi:play"></ha-icon>'+esc(T('Start'))+' ('+esc(cfg.default_temperature)+' °C / '+esc(cfg.default_duration)+' '+esc(T('min'))+')</button>';
-    const kv=(l,v,cls,sub)=>'<div class="kv'+(cls?' '+cls:'')+'"><small>'+esc(T(l))+'</small><b>'+v+'</b>'+(sub?'<em>'+esc(sub)+'</em>':'')+'</div>',remaining=data.estimated_remaining;
-    const strip=kv('Climate',esc(c.on===null?T('Unknown'):on?T('On'):T('Off')))+kv('Cabin',c.current==null?'—':esc(Number(c.current).toFixed(1))+' °C')+kv('Target',c.target==null?'—':esc(c.target)+' °C')+
-      kv('Battery',b.soc==null?'—':esc(b.soc)+' %','',T('Charging')+': '+(b.charging?T('Yes'):T('No')))+kv('Status',esc(blocked?T('START blocked'):T('Ready')),blocked?'warn':'')+kv('Last vehicle report',esc(ago(c.report)))+
-      (owned?kv('Session start (estimated)',esc(f.hm(s.session_start)))+kv('Remaining (estimated)',remaining==null?'—':Math.ceil(remaining/60)+' '+esc(T('min')))+kv('Automatic shutdown by (estimated)',esc(f.hm(s.deadline)))+(s.stop_at?kv('Requested stop',esc(f.hm(s.stop_at))):''):'');
-    return '<section class="pg-hero" aria-live="polite"><div class="row pg-head"><h4><ha-icon icon="mdi:air-conditioner"></ha-icon>'+esc(T('Preconditioning'))+'</h4><span class="chip '+chip[1]+'">'+esc(T(chip[0]))+'</span>'+
-      '<div class="pg-act"><button type="button" data-act="summary-toggle" aria-expanded="'+summaryOpen+'"><ha-icon icon="mdi:text-box-check-outline"></ha-icon>'+esc(T('Your setup in short'))+'<ha-icon icon="mdi:chevron-'+(summaryOpen?'up':'down')+'"></ha-icon></button>'+act+'</div></div>'+
-      '<p class="note">'+esc(T('The car turns remote A/C off by itself within 15 minutes. Times shown are estimates.'))+'</p>'+
-      (summaryOpen?'<div class="pg-sum">'+summarySection(true)+'</div>':'')+'<div class="grid pg-strip">'+strip+'</div>'+
-      (s.status==='FAILED'||s.status==='UNKNOWN'?box(s.status==='FAILED'?'bad':'warn','mdi:alert-outline',s.last_error||''):'')+
-      (on&&!owned?box('info','mdi:information-outline','Climate was started outside Companion (Deepal app or in the car), so Companion won’t stop it.'):'')+'</section>';
+    return '<section class="pg-hero" aria-live="polite"><div class="row pg-head"><span class="chip '+(blocked?'warn':chip[1])+'">'+esc(T(chip[0]))+' · '+esc(T(blocked?'START blocked':'Ready'))+'</span>'+
+      '<div class="pg-act"><button type="button" data-act="summary-toggle" aria-expanded="'+summaryOpen+'"'+(repFull?' title="'+esc(repFull)+'"':'')+'><ha-icon icon="mdi:text-box-check-outline"></ha-icon>'+esc(T('Summary'))+(rep?' · '+esc(T('report {0}',rep)):'')+'<ha-icon icon="mdi:chevron-'+(summaryOpen?'up':'down')+'"></ha-icon></button></div></div>'+
+      (summaryOpen?'<div class="pg-sum">'+summarySection(true)+'</div>':'')+'</section>';
   }
-  const pageView=()=>pageHero()+'<div class="pg-cols"><div class="pg-col">'+pageGeneral()+batterySection()+'</div><div class="pg-col">'+notifySection(true)+diagnosticsSection()+'</div></div>';
+  /* Notifications are set only on the Notifications page: this row sends the user there with the same navigation as the tabs. */
+  function notifyLinkSection(){
+    return '<section data-pc="notifications"><div class="row"><span class="note">'+esc(T('Preconditioning notifications and the notification language are set in Notifications.'))+'</span><button type="button" data-act="more" data-to="notifications"><ha-icon icon="mdi:bell-outline"></ha-icon>'+esc(T('Open Notifications'))+'</button></div></section>';
+  }
+  const pageView=()=>pageHero()+'<div class="pg-cols"><div class="pg-col">'+pageGeneral()+batterySection()+'</div><div class="pg-col">'+notifyLinkSection()+diagnosticsSection()+'</div></div>';
   function batterySection(){
     const o=data.config.battery,b=data.battery,dis=busy||!admin,levels=[10,15,20,25,30,35,40,45,50];
     return '<section><h4><ha-icon icon="mdi:battery-heart-variant"></ha-icon>'+esc(T('Battery protection'))+'</h4>'+
@@ -413,7 +408,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
       '<div class="ptgrid">'+row('Block START at or below the minimum','bat.block_start',o.block_start,'Also blocks START when the battery level is unavailable or not current.',dis||!o.enabled)+
       row('Request STOP at the minimum','bat.auto_stop',o.auto_stop,'Uses the same verified STOP. It may act a little late if reports are delayed.',dis||!o.enabled)+
       row('Apply while charging','bat.while_charging',o.while_charging,'Recommended on. Off lets a plugged-in, charging car run below the minimum.',dis||!o.enabled)+
-      row('Battery protection notifications','event:battery',data.config.notify.events.battery,'Same switch as Notifications → Preconditioning.',dis)+'</div>'+
+      '</div>'+
       (o.enabled&&!b.fresh?box('info','mdi:clock-outline','The car is probably asleep, so this reading is old. Companion asks for fresh data before every start and blocks it only if the car does not answer.'):'')+'</section>';
   }
   function diagnosticsSection(){
@@ -422,13 +417,15 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
     return '<section><details data-diag'+(diagOpen?' open':'')+'><summary>'+esc(T('Diagnostics'))+'</summary><div class="grid">'+
       item('Current operation',(s.op_kind||'—')+' · '+(STATUS[s.status]?.[0]||s.status))+item('Operation ID',s.op_id||'—')+item('Session ID',s.session_id||'—')+
       item('Last successful START',f.dt(s.last_start_ok))+item('Last successful STOP',f.dt(s.last_stop_ok))+
-      item('Last failure',s.last_failure?f.dt(s.last_failure.time)+' · '+s.last_failure.error:'—')+
       item('Last confirmed state',s.confirmed||'—')+item('Last vehicle report',f.dt(c.report))+item('Tries last time',String(s.last_retries??0))+
+      '<div class="kv wide"><small>'+esc(T('Last failure'))+'</small><b>'+(s.last_failure?esc(f.dt(s.last_failure.time)):'—')+'</b>'+(s.last_failure?.error?'<span class="msg">'+esc(s.last_failure.error)+'</span>':'')+'</div>'+
       '</div><div class="row" style="margin-top:10px"><h4>'+esc(T('Session history'))+'</h4>'+(admin&&data.history.length?'<button data-act="clear-hist"'+(busy?' disabled':'')+'><ha-icon icon="mdi:delete-sweep-outline"></ha-icon>'+esc(T('Clear history'))+'</button>':'')+'</div>'+'<p class="note">'+esc(T('Entries older than 30 days are removed automatically.'))+'</p><div class="hist">'+
       (data.history.map(h=>'<div><span>'+esc(T(h.kind.replace(/_/g,' ')))+(h.reason?' · '+esc(T(REASONS[h.reason]||h.reason)):'')+(h.error?' · <span class="err">'+esc(h.error)+'</span>':'')+'</span><span>'+esc(f.dt(h.time))+'</span></div>').join('')||'<p class="note">'+esc(T('No activity yet.'))+'</p>')+
       '</div></details></section>';
   }
   function askConfirm(title,text,label){
+    /* One confirm dialog for the whole panel (same look and wording everywhere); the card popup has no panel and keeps this local copy. */
+    const shared=PAGE||mode==='notifications'?window.__DEEPAL_COMPANION_UI?.confirm:null;if(shared)return shared(title,text,label);
     return new Promise(resolve=>{
       const d=document.createElement('dialog');d.className='pc-confirm';
       d.innerHTML='<style>.pc-confirm{box-sizing:border-box;width:min(420px,calc(100vw - 24px));margin:auto;padding:18px;border:1px solid var(--ds-line,var(--divider-color,#444));border-radius:20px;color:var(--ds-fg,var(--primary-text-color,#eee));background:var(--ds-card,var(--card-background-color,#222));font-family:inherit}.pc-confirm::backdrop{background:rgba(0,0,0,.55)}.pc-confirm h2{margin:0 0 8px;font-size:16px;font-weight:600}.pc-confirm p{margin:0 0 16px;font-size:13px;line-height:1.5;color:var(--ds-muted,var(--secondary-text-color,#aaa))}.pc-confirm .acts{display:flex;gap:10px;justify-content:flex-end}.pc-confirm button{min-height:44px;padding:0 18px;border-radius:12px;border:1px solid var(--ds-line,var(--divider-color,#444));background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}.pc-confirm [data-yes]{background:rgba(var(--ds-danger,239,83,80),.18);border-color:rgba(var(--ds-danger,239,83,80),.55)}</style><h2></h2><p></p><div class="acts"><button type="button" data-no></button><button type="button" data-yes></button></div>';
@@ -437,7 +434,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
       const done=v=>{d.remove();resolve(v);};
       d.querySelector('[data-no]').onclick=()=>done(false);d.querySelector('[data-yes]').onclick=()=>done(true);
       d.addEventListener('cancel',e=>{e.preventDefault();done(false);});
-      host.append(d);d.showModal();d.querySelector('[data-no]').focus();
+      host.append(d);const oc=(d,f)=>{let down=false;const out=e=>{if(e.target!==d)return false;const r=d.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};d.addEventListener('pointerdown',e=>{down=out(e);});d.addEventListener('click',e=>{if(down&&out(e))f();down=false;});};oc(d,()=>done(false));d.showModal();d.querySelector('[data-no]').focus();
     });
   }
   let diagOpen=false;
@@ -469,10 +466,12 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
     lastHtml=html;
     const keepHeight=root.offsetHeight;root.style.minHeight=keepHeight+'px';  // no collapse, so the page cannot jump
     const sp=scrollParent(),top=sp?sp.scrollTop:0;
+    const pillSnap=window.__DEEPAL_COMPANION_UI?.pillSnap?.(root);  /* the Settings .seg pill: snapshot before the redraw */
     root.innerHTML=html;
     if(sp)sp.scrollTop=top;  // iPhone Safari may scroll when the focused control is replaced: put it back
     requestAnimationFrame(()=>{root.style.minHeight='';if(sp&&Math.abs(sp.scrollTop-top)>1)sp.scrollTop=top;});
     bind();tickClock();
+    window.__DEEPAL_COMPANION_UI?.pillApply?.(root,pillSnap);
     if(scrollTo&&!scrolled){const t=root.querySelector('[data-pc="'+scrollTo+'"]');if(t){scrolled=true;setTimeout(()=>{if(!dead)t.scrollIntoView({block:'start',behavior:'smooth'});},150);}}
     if(keepFocus){const k=Object.entries(keepFocus)[0];if(k)[...root.querySelectorAll('*')].find(n=>n.dataset&&n.dataset[k[0]]===k[1])?.focus?.({preventScroll:true});}
   }
@@ -489,27 +488,27 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
     root.querySelectorAll('[data-ui]').forEach(r=>r.addEventListener('input',()=>syncQuick(r.dataset.ui,Number(r.value))));
     root.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>{if(admin)command(b.dataset.cmd);});
     root.querySelectorAll('[data-ui]').forEach(s=>s.onchange=()=>{const v=Number(s.value),key=s.dataset.ui==='temperature'?'default_temperature':'default_duration';ui[s.dataset.ui]=v;if(!admin)return;queued[key]=v;clearTimeout(saveTimer);saveTimer=setTimeout(flushDefaults,700);});
-    root.querySelectorAll('[data-cfg]').forEach(s=>s.onchange=()=>{const v=Number(s.value);if(Number.isFinite(v))save({[s.dataset.cfg]:v},'Saved.');});
-    root.querySelectorAll('[data-bat]').forEach(s=>s.onchange=()=>save({battery:{...data.config.battery,[s.dataset.bat]:Number(s.value)}},'Saved.'));
+    root.querySelectorAll('[data-cfg]').forEach(s=>s.onchange=()=>{const v=Number(s.value);if(Number.isFinite(v))save({[s.dataset.cfg]:v},'Saved');});
+    root.querySelectorAll('[data-bat]').forEach(s=>s.onchange=()=>save({battery:{...data.config.battery,[s.dataset.bat]:Number(s.value)}},'Saved'));
     root.querySelectorAll('input[data-k]').forEach(i=>i.onchange=()=>{settleUntil=Date.now()+450;clearTimeout(settleTimer);settleTimer=setTimeout(()=>{if(!dead){lastHtml='';draw();}},470);  // after the animation, rebuild from data so the page matches the saved state
 
       const k=i.dataset.k,v=i.checked,n=data.config.notify;
-      if(k==='scheduling_enabled')return save({scheduling_enabled:v},'Saved.');
+      if(k==='scheduling_enabled')return save({scheduling_enabled:v},'Saved');
       const {devices:_d,...nn}=n;
-      if(k.startsWith('notify.'))return save({notify:{...nn,[k.slice(7)]:v}},'Saved.');
-      if(k.startsWith('event:'))return save({notify:{...nn,events:{...nn.events,[k.slice(6)]:v}}},'Saved.');
-      if(k.startsWith('bat.'))return save({battery:{...data.config.battery,[k.slice(4)]:v}},'Saved.');
+      if(k.startsWith('notify.'))return save({notify:{...nn,[k.slice(7)]:v}},'Saved');
+      if(k.startsWith('event:'))return save({notify:{...nn,events:{...nn.events,[k.slice(6)]:v}}},'Saved');
+      if(k.startsWith('bat.'))return save({battery:{...data.config.battery,[k.slice(4)]:v}},'Saved');
       if(k.startsWith('sched:'))return save({schedules:data.config.schedules.map(s=>s.id===k.slice(6)?{...s,enabled:v}:s)},v?'Schedule enabled.':'Schedule disabled.');
     });
     root.querySelectorAll('[data-dev]').forEach(b=>b.onclick=()=>{b.setAttribute('aria-pressed',String(b.getAttribute('aria-pressed')!=='true'));settleUntil=Date.now()+450;clearTimeout(settleTimer);settleTimer=setTimeout(()=>{if(!dead){lastHtml='';draw();}},470);const d=b.dataset.dev,cur=data.config.notify.devices,devices=cur.includes(d)?cur.filter(x=>x!==d):[...cur,d];save({notify_devices:devices},'Phones saved.');});
     root.querySelectorAll('[data-diag]').forEach(d=>{d.ontoggle=()=>{diagOpen=d.open;};});
-    root.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{edit=structuredClone(data.config.schedules.find(s=>s.id===b.dataset.edit));draw();});
+    root.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{if(edit&&edit.id===b.dataset.edit){edit=null;return draw();}edit=structuredClone(data.config.schedules.find(s=>s.id===b.dataset.edit));draw();});
     root.querySelectorAll('[data-seg]').forEach(b=>b.onclick=()=>{readEditor();edit[b.dataset.seg]=b.dataset.v;draw();});
     root.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{
       const a=b.dataset.act;
       if(a==='retry')return load();
-      if(a==='clear-hist'){return askConfirm(T('Clear the whole session history?'),T('Removes the history of past preconditioning sessions. Recent activity in Notifications is kept.'),T('Delete')).then(ok=>{if(!ok)return;busy=true;draw();return request('precondition_clear_history').then(r=>{data=r;notify(T('Session history cleared.'));}).catch(e=>notify(e?.message||T('Could not clear the history.'),true)).finally(()=>{busy=false;draw();});});}
-      if(a==='test-notify'){busy=true;draw();request('precondition_test').then(r=>{const ok=(r.deliveries||[]).filter(d=>d.status==='accepted').length;testResult=T('Sent to {0} of {1} phones. Home Assistant accepted it; delivery is not confirmed.',ok,(r.deliveries||[]).length);}).catch(e=>{testResult=e?.message||T('Test failed.');}).finally(()=>{busy=false;draw();});return;}
+      if(a==='clear-hist'){return askConfirm(T('Clear the whole session history?'),T('Removes the history of past preconditioning sessions. Recent activity in Notifications is kept.'),T('Delete')).then(ok=>{if(!ok)return;busy=true;draw();return request('precondition_clear_history').then(r=>{data=r;notify(T('Session history cleared.'));}).catch(e=>notify(window.__DEEPAL_COMPANION_UI.tError(e?.message)||T('Could not clear the history.'),true)).finally(()=>{busy=false;draw();});});}
+      if(a==='test-notify'){busy=true;draw();request('precondition_test').then(r=>{const ok=(r.deliveries||[]).filter(d=>d.status==='accepted').length;testResult=T('Sent to {0} of {1} phones. Home Assistant accepted it; delivery is not confirmed.',ok,(r.deliveries||[]).length);}).catch(e=>{testResult=window.__DEEPAL_COMPANION_UI.tError(e?.message)||T('Test failed.');}).finally(()=>{busy=false;draw();});return;}
       if(a==='more'){onMore&&onMore(b.dataset.to||null);return;}
       if(a==='info'){infoOpen=!infoOpen;return draw();}
       if(a==='sched-toggle'){schedOpen=!schedOpen;return draw();}
@@ -520,7 +519,7 @@ export function mountPrecondition(host,{onMore=null,request,t=s=>s,loaderHtml=()
           if(r&&r.config)data={...data,...r,recipients:r.recipients||data.recipients};
           if(r&&r.throttled)notify(T('Please wait a moment before refreshing again.'));
           else if(r&&r.fresh===false)notify(T('The car did not send a new report yet.'));
-        }).catch(e=>notify(e?.message||T('Could not refresh.'),true)).finally(()=>{reloading=false;if(!dead)draw();});
+        }).catch(e=>notify(window.__DEEPAL_COMPANION_UI.tError(e?.message)||T('Could not refresh.'),true)).finally(()=>{reloading=false;if(!dead)draw();});
       }
       if(a==='new'){const d=new Date();d.setDate(d.getDate()+1);edit={name:'',repeat:'weekdays',mode:'ready_by',date:d.toISOString().slice(0,10),time:'07:30',duration:data.config.default_duration,temperature:data.config.default_temperature,days:[0,1,2,3,4],enabled:true};return draw();}
       if(a==='cancel'){edit=null;return draw();}

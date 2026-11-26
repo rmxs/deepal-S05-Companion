@@ -3,6 +3,8 @@ module.exports=async page=>{
   const panel=page.locator('deepal-companion-panel');
   const change=async(name,value)=>panel.locator('[name="'+name+'"]').evaluate((field,value)=>{if(field._compPicker)field._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value},bubbles:true}));else{field.value=value;field.dispatchEvent(new Event('change',{bubbles:true}));}},value);
   const emit=async patch=>{await panel.evaluate((root,patch)=>root.settings._emit(patch),patch);await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').pending);};
+  await panel.locator('[data-mode="settings"]').click();
+  await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').shadowRoot.querySelector('[name=profile_name]'));
   await panel.evaluate(p=>{if(p.shadowRoot.querySelector('.profile-setup.ps-closed'))p.shadowRoot.querySelector('[data-profile-toggle]').click();});
   await panel.locator('[name=profile_name]').fill('Everyday');await panel.locator('h1').click();
   await page.waitForFunction(()=>window.viewNames.mobile==='Everyday'&&!document.querySelector('deepal-companion-panel').pending);
@@ -39,7 +41,7 @@ module.exports=async page=>{
   assert.equal(await panel.evaluate(root=>['front_left_door','front_right_door','rear_left_door','rear_right_door','hood','trunk'].every(key=>root.preview._s('binary_sensor.'+key)==='on')),true,'All doors, bonnet and boot must open in the simulation');
   assert.equal(await panel.evaluate(root=>root.preview._s('cover.trunk')),'open');
   assert.equal(await page.evaluate(()=>window.testHass.states['binary_sensor.s05_front_left_door'].state),'off','Opening simulation must not mutate the real car');
-  await emit({diag_mode:'all',diag:null});
+  await emit({diag:null});
   /* Warnings no longer have a block on the card: the Diagnostics button carries a red number instead. */
   assert.equal(await panel.evaluate(root=>root.preview._el.diag.querySelectorAll('.diag-item').length),0);
   assert.equal(await panel.evaluate(root=>root.preview._el.dgb.querySelectorAll('.bdg').length),0);
@@ -58,7 +60,7 @@ module.exports=async page=>{
   await change('preview_mode','live');assert((await panel.locator('.preview-mode-note').textContent()).includes('affect your vehicle'));
   await panel.locator('[name=preview_clicks]').uncheck();
   assert.equal(await panel.evaluate(async root=>{try{await root.preview._hass.callService('lock','unlock',{entity_id:'lock.s05_doors'});return false;}catch(_){return true;}}),true);
-  await emit({charge_style:baseline.charge_style,diag_mode:baseline.diag_mode,diag:baseline.diag,card_padding:baseline.card_padding});
+  await emit({charge_style:baseline.charge_style,diag:baseline.diag,card_padding:baseline.card_padding});
   const imageWidth=await panel.evaluate(root=>root.preview.getBoundingClientRect().width);
   for(const section of ['actions','hero','info','stats','charge']){
     await emit({hidden:[...baseline.hidden,section]});await page.waitForTimeout(100);

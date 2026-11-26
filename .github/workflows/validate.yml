@@ -9,11 +9,11 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - run: python -m pip install -r requirements-test.txt
@@ -35,22 +35,30 @@ jobs:
           PY
       - run: npm run test:curve
       - run: npm run test:tokens
+      - run: npm run test:language
       - run: npx playwright-core install --with-deps chromium
       - run: npm run test:plan
       - run: npm run test:neon
+      - run: npm run test:turn
+      - run: npm run test:range
+      - run: npm run test:nfpopup
+      - run: npm run test:ensheet
       - run: npm run test:browser
       - run: npm run test:browser
         env:
           MEMORY_ONLY: '1'
+      - run: npm run test:browser
+        env:
+          LANG_ONLY: '1'
   hassfest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: home-assistant/actions/hassfest@master
   hacs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: hacs/action@main
         with:
           category: integration

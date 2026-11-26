@@ -138,5 +138,24 @@ class Build(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(result["counts"].values()), len(result["checks"]))
 
 
+
+class PreconditioningCheck(unittest.TestCase):
+    def check(self, status, error=None):
+        pc = types.SimpleNamespace(state={"status": status, "last_error": error})
+        return health.precondition_checks(pc)[0]
+
+    def test_failed_start_is_an_error_with_the_reason(self):
+        row = self.check("FAILED", "Car did not answer")
+        self.assertEqual((row["id"], row["status"]), ("preconditioning", "error"))
+        self.assertIn("Car did not answer", row["detail"])
+        self.assertEqual(row["detail_key"], "The last start or stop failed: {0}")
+
+    def test_unconfirmed_state_is_a_warning(self):
+        self.assertEqual(self.check("UNKNOWN", "no report")["status"], "warning")
+
+    def test_idle_and_active_are_ok(self):
+        self.assertEqual({self.check("IDLE")["status"], self.check("ACTIVE")["status"]}, {"ok"})
+
+
 if __name__ == "__main__":
     unittest.main()

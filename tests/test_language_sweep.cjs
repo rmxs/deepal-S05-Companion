@@ -74,4 +74,8 @@ module.exports=async page=>{
   }
   require('fs').writeFileSync(process.env.LANG_REPORT||'language-sweep.json',JSON.stringify(report,null,1));
   for(const [lang,r] of Object.entries(report))console.log(lang,'untranslated keys shown:',r.untranslated.length,'| English-looking unknown:',r.unknown.length);
+  /* Gate: a text that has a translation but is shown in English fails the run. Known intentional items are listed here. */
+  const allowed=new Set(['Choose an entity  @start']);
+  const drift=Object.entries(report).flatMap(([lang,r])=>r.untranslated.filter(t=>!allowed.has(t)).map(t=>lang+': '+t));
+  assert.equal(drift.length,0,'Translated texts shown in English:\n'+drift.join('\n'));
 };

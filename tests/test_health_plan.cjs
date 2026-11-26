@@ -21,10 +21,12 @@ const server=http.createServer((q,r)=>{const u=new URL(q.url,"http://x");const r
         {time:now-9,source:"ha",event:"state",entity:"switch.s05_charge_schedule",old:"off",new:"on"},
         {time:now-10,source:"ha",event:"service",service:"deepal.set_charge_schedule",entities:[],data:{start_time:"01:00",end_time:"08:00",enabled:true}},
         {time:now-20,source:"ha",event:"state"}]};
-  window.health={status:"warning",version:"1.0.1",checked:now,counts:{ok:1,warning:1,error:0},checks:[
+  window.health={status:"error",version:"1.0.1",checked:now,counts:{ok:2,warning:1,error:1},checks:[
    {id:"sensor_batt",status:"ok",title:"Battery level",detail:"sensor.s05_battery_level"},
+   {id:"sensor_odo",status:"ok",title:"Odometer",detail:"sensor.s05_odometer"},
+   {id:"sensor_ac",status:"error",title:"AC charge current",detail:"Sensor unavailable",fix:"Check the sensor in Home Assistant"},
    {id:"plan",status:"warning",title:"Charge plan",detail:"2 plans are active. The app shows only the newest one.",detail_key:"{0} plans are active. The app shows only the newest one.",args:["2"],fix:"Open this row to see the plans the car reports and the recent plan commands."}]};
-  const panel={selected:{vehicle_id:"v1"},_hass:{locale:{language:"en"},connection:{async subscribeMessage(cb,msg){window.push=cb;window.subMsg=msg;return()=>{window.unsubbed=true}}}},
+  const panel={selected:{vehicle_id:"v1"},_hass:{locale:{language:"en",time_format:"24"},config:{time_zone:"Europe/Athens"},connection:{async subscribeMessage(cb,msg){window.push=cb;window.subMsg=msg;return()=>{window.unsubbed=true}}}},
    t:(key,...args)=>String(key).replace(/\{(\d+)\}/g,(_,i)=>args[i]),
    setHealthResult(){},
    async request(op){window.calls.push(op);if(op==="health_get")return structuredClone(window.health);if(op==="plan_debug_get")return structuredClone(window.planView);throw Error("Unexpected "+op);}};
@@ -36,6 +38,20 @@ const server=http.createServer((q,r)=>{const u=new URL(q.url,"http://x");const r
  const q=f=>page.evaluate(f);let fails=0;const ok=(n,c)=>{console.log(c?"ok  ":"FAIL",n);if(!c)fails++};
  const row=".health-row.health-click";
  ok("only the plan row is clickable",await q(()=>document.querySelectorAll(".health-row.health-click").length===1&&document.querySelector(".health-click strong").textContent==="Charge plan"&&document.querySelectorAll(".health-row[role=button]").length===1));
+ ok("verdict card, three tiles and one Needs attention heading",await q(()=>!!document.querySelector(".health-verdict.health-error .health-chip")&&document.querySelectorAll(".health-tile").length===3&&[...document.querySelectorAll(".health-sec")].map(h=>h.firstChild.textContent).join()==="Needs attention"));
+ ok("passing checks are one closed summary card, not loose rows",await q(()=>{const b=document.querySelector(".health-okcard-btn"),l=document.querySelector(".health-okcard-list");return !!b&&b.getAttribute("aria-expanded")==="false"&&/^2 checks passed$/.test(b.textContent.trim())&&!!l&&l.hidden&&getComputedStyle(l).display==="none"&&!document.querySelector(".health-list>.health-row.health-ok")}));
+ ok("the failing check and the charge plan stay outside the passed card",await q(()=>{const ac=[...document.querySelectorAll(".health-row.health-error")],plan=document.querySelector(".health-click");return ac.length===1&&ac[0].querySelector("strong").textContent==="AC charge current"&&!ac[0].closest(".health-okcard")&&ac[0].getClientRects().length>0&&plan.parentElement.classList.contains("health-list")&&!plan.closest(".health-okcard")&&plan.getClientRects().length>0}));
+ await page.click(".health-okcard-btn");await page.waitForTimeout(200);
+ ok("opening the card shows the passed checks as compact rows with an OK chip",await q(()=>{const l=document.querySelector(".health-okcard-list"),rs=[...l.querySelectorAll(".health-row.health-compact")];return document.querySelector(".health-okcard-btn").getAttribute("aria-expanded")==="true"&&!l.hidden&&rs.length===2&&rs.every(r=>!!r.querySelector(".health-okchip")&&getComputedStyle(r.querySelector("p")||r).display!=="block")&&rs.map(r=>r.querySelector("strong").textContent).join()==="Battery level,Odometer"&&rs.every(r=>r.getClientRects().length>0)}));
+ ok("the failing check and the charge plan are still visible with the card open",await q(()=>document.querySelector(".health-row.health-error").getClientRects().length>0&&document.querySelector(".health-click").getClientRects().length>0));
+ await page.click(".health-okcard-btn");await page.waitForTimeout(200);
+ ok("clicking the card again folds the passed checks away",await q(()=>document.querySelector(".health-okcard-btn").getAttribute("aria-expanded")==="false"&&document.querySelector(".health-okcard-list").hidden));
+ await page.focus(".health-okcard-btn");await page.keyboard.press("Enter");await page.waitForTimeout(200);
+ ok("Enter opens the passed card from the keyboard",await q(()=>document.querySelector(".health-okcard-btn").getAttribute("aria-expanded")==="true"&&document.activeElement===document.querySelector(".health-okcard-btn")));
+ await page.keyboard.press("Space");await page.waitForTimeout(200);
+ ok("Space closes it again",await q(()=>document.querySelector(".health-okcard-btn").getAttribute("aria-expanded")==="false"));
+ await q(()=>{window.copied=null;Object.defineProperty(navigator,"clipboard",{value:{writeText:async t=>{window.copied=t}},configurable:true});document.querySelector(".health-copy").click()});await page.waitForTimeout(200);
+ ok("Copy diagnostics copies a plain-text summary and shows Copied",await q(()=>/^Deepal Companion v1\.0\.1/.test(window.copied||"")&&window.copied.includes("[warning] Charge plan")&&document.querySelector(".health-copy").textContent==="Copied"));
  ok("closed at first, no plan request yet",await q(()=>!document.querySelector(".health-plan")&&document.querySelector(".health-click").getAttribute("aria-expanded")==="false"&&!window.calls.includes("plan_debug_get")));
  await page.click(row);await page.waitForTimeout(300);
  ok("click opens the box and loads it once",await q(()=>!!document.querySelector(".health-plan")&&window.calls.filter(c=>c==="plan_debug_get").length===1&&document.querySelector(".health-click").getAttribute("aria-expanded")==="true"));

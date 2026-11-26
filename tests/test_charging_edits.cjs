@@ -31,6 +31,8 @@ module.exports=async page=>{
    await panel.locator('.removed-profile-action').first().click();await panel.locator('.session-price-dialog [name=profile]').evaluate(select=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value:'work'},bubbles:true})));await panel.locator('.session-price-dialog [data-cc=save-session]').click();await panel.locator('.session-price-dialog').waitFor({state:'detached'});assert.equal(await panel.locator('.removed-profile-action').count(),0);
    await page.evaluate(value=>{window.costs=structuredClone(value);},saved);
    await nav('chargers');await nav('history');await panel.locator('[data-action=edit-session]').first().click();const dialog=panel.locator('.session-price-dialog');
+   /* the close X draws its stroke in the panel and is labelled for screen readers */
+   {const x=dialog.locator('.cc-close').first();assert.equal(await x.getAttribute('aria-label'),'Close');const st=await x.locator('svg').first().evaluate(el=>getComputedStyle(el).stroke);assert.notEqual(st,'none');}
    await dialog.locator('[name=profile]').evaluate(select=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value:'work'},bubbles:true})));
    if(await dialog.locator('.cc-advanced').getAttribute('open')===null)await dialog.locator('.cc-advanced summary').click();await dialog.locator('[name=total]').fill('12.34');
    assert.equal(await dialog.locator('[name=profile]').inputValue(),'__manual__');assert.equal(await dialog.locator('[name=free]').isChecked(),false);

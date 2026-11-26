@@ -1,4 +1,4 @@
-import "/deepal_companion/frontend/companion-card.js?v=2.0.0&rev=20261122-04";
+import "/deepal_companion/frontend/companion-card.js?v=2.0.1-b1&rev=20261126-01";
 
 const TAG = "deepal-companion-card";
 const selectionKey = hass => "deepal-companion-selection:" + String(hass?.user?.id || "local");
@@ -50,7 +50,7 @@ class DeepalCompanionCardPanel extends HTMLElement {
       const choice = pinned || choices.find(c => c.vehicle_id === saved.vehicle_id && c.view_id === saved.view_id) || choices[0];
       this.show(choice, pin.design || "");
     } catch (error) {
-      if (!this.gone) this.page.innerHTML = '<p class="note" role="alert">' + escape(error?.message || "Deepal Companion could not be loaded.") + "</p>";
+      if (!this.gone) this.page.innerHTML = '<p class="note" role="alert">' + escape(window.__DEEPAL_COMPANION_UI?.tError?.(error?.message) || "Deepal Companion could not be loaded.") + "</p>";
     }
   }
   show(choice, design = "") {

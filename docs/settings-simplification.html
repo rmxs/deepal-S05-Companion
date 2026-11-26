@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Settings — the exact change list</title>
+<style>
+  :root{
+    --bg:#0a0e11; --card:#141b20; --card2:#182128; --line:#243038;
+    --txt:#e8f0f2; --dim:#93a5ae; --dim2:#66787f;
+    --accent:#3ee0a4; --accent-dim:#123a2e;
+    --del:#ff6b6b; --delbg:#241416; --add:#5ee39b; --addbg:#0f241c;
+    --move:#f0b44c; --new:#4cc3f0;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+    radial-gradient(1100px 500px at 12% -8%, #14262a 0%, transparent 60%),
+    radial-gradient(900px 460px at 92% 0%, #1a1d2b 0%, transparent 55%), var(--bg);
+    color:var(--txt); font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 22px 90px}
+  code{font-family:var(--mono);font-size:.92em;color:#b8cdd6;background:#0d1418;border:1px solid #1e2a31;border-radius:5px;padding:1px 5px;white-space:nowrap}
+  a{color:var(--accent)}
+
+  header.top{margin-bottom:20px}
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  h1{font-size:31px;line-height:1.15;margin:7px 0 9px;letter-spacing:-.022em}
+  .sub{color:var(--dim);max-width:820px;font-size:13.5px}
+  .sub b{color:#d7e3e7}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin:18px 0 8px}
+  .stat{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .stat .n{font-size:21px;font-weight:700;letter-spacing:-.02em}
+  .stat .n s{color:var(--dim2);font-size:14px;font-weight:600}
+  .stat .l{font-size:11.5px;color:var(--dim);margin-top:2px}
+
+  .prereq{border:1px solid #2b3c33;background:linear-gradient(180deg,#13201a,#0f1a16);border-radius:var(--r);padding:14px 16px;margin:18px 0 8px}
+  .prereq h3{margin:0 0 7px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#9fdcc2}
+  .prereq ul{margin:0;padding-left:18px;color:var(--dim);font-size:12.8px}
+  .prereq li{margin:3px 0}
+  .prereq li b{color:var(--txt)}
+
+  nav.jump{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 26px;position:sticky;top:0;z-index:20;
+    background:rgba(10,14,17,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:9px 0}
+  nav.jump a{font-size:12px;text-decoration:none;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:#10171c}
+  nav.jump a:hover{color:#c9ffe9;border-color:#2b6f59}
+  nav.jump a b{color:var(--accent);font-weight:700;margin-right:5px}
+
+  h2.sec{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim2);margin:38px 0 12px;font-weight:700}
+
+  .edit{position:relative;background:linear-gradient(180deg,#151d23,#111820);border:1px solid var(--line);border-radius:var(--r);
+    padding:18px 20px 18px 20px;margin-bottom:16px;overflow:hidden}
+  .edit:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.55}
+  .edit.back:before{background:var(--new)}
+  .eh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .enum{font-family:var(--mono);font-size:12px;color:var(--accent);border:1px solid #2b6f59;background:#0f231d;border-radius:6px;padding:2px 7px}
+  .edit.back .enum{color:var(--new);border-color:#1c4859;background:#0d1e26}
+  .et{font-size:16.5px;font-weight:650;letter-spacing:-.01em;margin:0}
+  .tagline{color:var(--dim);font-size:12.8px;margin:0 0 12px;max-width:900px}
+  .tagline b{color:var(--txt)}
+
+  .meta{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 14px}
+  .m{font-size:11px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:#101820}
+  .m b{color:#cfe0e6;font-weight:600}
+  .m.ok{border-color:#245343;color:#9fdcc2}
+  .m.warn{border-color:#4a3a1c;color:#f0b44c}
+
+  .step{margin:14px 0 0}
+  .steplabel{font-size:11.5px;color:var(--dim);margin:0 0 5px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .steplabel b{color:#d7e3e7;font-size:12px}
+  .steplabel em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--dim2)}
+
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:860px){.pair{grid-template-columns:1fr}}
+  pre{margin:0;background:#0a1013;border:1px solid #1e2a31;border-radius:10px;padding:11px 12px;overflow:auto;
+    font:11.6px/1.62 var(--mono);color:#b9cdd5;white-space:pre;tab-size:2}
+  pre .lbl{display:block;font-size:10px;letter-spacing:.11em;text-transform:uppercase;margin-bottom:6px;font-family:inherit}
+  pre.find{border-left:2px solid #5b2a2a;background:#0d1113}
+  pre.find .lbl{color:#ff8a8a}
+  pre.add{border-left:2px solid #245c43;background:#0b1310}
+  pre.add .lbl{color:#6ee7a8}
+  pre .k{color:#7fdfb6} pre .s{color:#e0c68a} pre .c{color:#5f7480} pre .n{color:#f0b44c}
+  pre.one{border-left:2px solid #2a3841}
+
+  .why{font-size:12.7px;color:var(--dim);margin:13px 0 0;max-width:940px}
+  .why b{color:var(--txt)}
+  .why code{white-space:normal}
+  .check{margin:10px 0 0;font:11.8px/1.6 var(--mono);color:#a9c6d1;background:#0b1418;border:1px dashed #263a44;border-radius:8px;padding:8px 11px;overflow:auto}
+  .check:before{content:"check  ";color:var(--accent);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+
+  table{width:100%;border-collapse:collapse;font-size:12.7px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .tw{overflow-x:auto;border-radius:var(--r);border:1px solid var(--line)}
+  .tw table{border:0}
+  th{text-align:left;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim2);padding:9px 12px;background:#101820;border-bottom:1px solid var(--line)}
+  td{padding:9px 12px;border-bottom:1px solid #172027;vertical-align:top;color:#cdd9dd}
+  tr:last-child td{border-bottom:0}
+  td b{color:var(--txt)}
+  td.nowrap{white-space:nowrap}
+
+  .dont{background:#101418;border:1px solid #2a3038;border-left:3px solid #55636b;border-radius:12px;padding:14px 16px}
+  .dont ol{margin:0;padding-left:20px;color:var(--dim);font-size:12.8px}
+  .dont li{margin:7px 0}
+  .dont li b{color:var(--txt)}
+
+  footer{margin-top:38px;color:var(--dim2);font-size:11.5px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="eyebrow">Deepal Companion · settings</div>
+    <h1>The change list — 5 edits, 1 file</h1>
+    <div class="sub">Every item below is a literal <b>find this → replace with this</b> inside <code>source/card.js</code>.
+      Line numbers are from today's file (4829 lines) so search for the code, not the number.
+      Nothing here needs a database migration, and no setting key is renamed.</div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="n">1</div><div class="l">source file edited</div></div>
+    <div class="stat"><div class="n">18</div><div class="l">small find/replace spots</div></div>
+    <div class="stat"><div class="n">2</div><div class="l">generated files refreshed by the build</div></div>
+    <div class="stat"><div class="n">2</div><div class="l">settings keys deleted</div></div>
+    <div class="stat"><div class="n">0</div><div class="l">migrations needed</div></div>
+    <div class="stat"><div class="n">5 <s>6</s></div><div class="l">tabs (+ System)</div></div>
+  </div>
+
+  <div class="prereq">
+    <h3>Before you start — three rules that make the rest correct</h3>
+    <ul>
+      <li><b>Only <code>source/card.js</code> is edited by hand.</b> <code>custom_components/deepal_companion/defaults.json</code> and
+        <code>setting_keys.json</code> are <b>generated</b>: <code>scripts/build.cjs</code> writes both from <code>DEFAULTS</code> in <code>source/card.js</code>.
+        Editing those JSON files directly is undone by the next build.</li>
+      <li><b>Finish with <code>npm run build</code>.</b> It also regenerates the <code>.js.gz</code> files; if you edit a bundle by hand its
+        <code>.gz</code> stops matching and Home Assistant serves the old one.</li>
+      <li><b>Add one <code>CHANGELOG.md</code> line</b> under 2.0.1 (text at the bottom of this page). No <code>scripts/update-project-map.cjs</code> run is needed: no file is added, removed or moved.</li>
+    </ul>
+  </div>
+
+  <nav class="jump">
+    <a href="#e1"><b>1</b>Tabs</a>
+    <a href="#e2"><b>2</b>Colours → Appearance</a>
+    <a href="#e3"><b>3</b>Energy tile → Charging</a>
+    <a href="#e4"><b>4</b>Delete diag_mode</a>
+    <a href="#e5"><b>5</b>Delete layers_path</a>
+    <a href="#back"><b>B</b>Backend (later)</a>
+    <a href="#dont">Do not touch</a>
+    <a href="#verify">Build &amp; verify</a>
+  </nav>
+
+  <h2 class="sec">The tab map this produces</h2>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Tab today</th><th>Tab after</th><th>What moves</th><th>Edit</th></tr></thead>
+      <tbody>
+        <tr><td><b>Layout</b></td><td><b>Layout</b></td><td>Keeps Sections, On the image, Top-right buttons, Control buttons, Button style, Info. <b>Loses</b> the whole “Energy tile” block.</td><td class="nowrap">3</td></tr>
+        <tr><td><b>Appearance</b> + <b>Colours</b></td><td><b>Appearance</b></td><td>Colours stops being a tab; its 5 sections are appended to Appearance.</td><td class="nowrap">1, 2</td></tr>
+        <tr><td><b>Controls</b></td><td><b>Controls</b></td><td>Unchanged.</td><td class="nowrap">—</td></tr>
+        <tr><td><b>Charging</b></td><td><b>Charging</b></td><td>Gains the “Energy tile” block (5 switches).</td><td class="nowrap">3</td></tr>
+        <tr><td><b>Vehicle</b></td><td><b>Vehicle</b></td><td>Loses Card name, Card page (profile / design / sidebar) and Data update rate.</td><td class="nowrap">1</td></tr>
+        <tr><td>—</td><td><b>System</b> <span style="color:var(--dim2)">admin only</span></td><td>Receives Card name, Card page and Data update rate. The tab button is not rendered for non-admins.</td><td class="nowrap">1</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ══════════════════════════ EDIT 1 ══════════════════════════ -->
+  <h2 class="sec">The five UI edits, in order</h2>
+
+  <section class="edit" id="e1">
+    <div class="eh"><span class="enum">edit 1</span><h3 class="et">Tab bar: drop Colours, add an admin-only System tab</h3></div>
+    <p class="tagline">This is the only edit that touches routing. It makes the two blocks that are already admin-gated
+      (<b>Card page</b> and <b>Data update rate</b>) live in their own tab instead of sitting inside Vehicle.</p>
+    <div class="meta">
+      <span class="m"><b>source/card.js</b></span>
+      <span class="m"><code>_tabs()</code> · <code>_render()</code> · <code>_tabVehicle()</code></span>
+      <span class="m">adds <b>1</b> method</span>
+      <span class="m ok">no key change</span>
+      <span class="m ok">no migration</span>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>1a</b> <em>_tabs(), ≈L4272</em> — the tab array</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>const T = [["layout", "Layout", "eye"], ["look", "Appearance", "sliders"],
+  ["controls", "Controls", "power"], ["charge", "Charging", "bolt"],
+  ["colours", "Colours", "sliders"], ["vehicle", "Vehicle", "carside"]];</pre>
+        <pre class="add"><span class="lbl">replace</span>const T = [["layout", "Layout", "eye"], ["look", "Appearance", "sliders"],
+  ["controls", "Controls", "power"], ["charge", "Charging", "bolt"],
+  ["vehicle", "Vehicle", "carside"]];
+if (this._hass?.user?.is_admin) T.push(["system", "System", "shield"]);</pre>
+      </div>
+      <p class="why">In the file each array is one long line — the wrapping here is only for reading. <code>"shield"</code> is used by
+        <code>_tabControls</code>’ confirm tiles, so <code>ico()</code> already has it; do not invent a new icon name.</p>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>1b</b> <em>_tabVehicle(), ≈L4502</em> — first line of the method</div>
+      <pre class="find"><span class="lbl">find</span>return `${this._datalist()}${this._tabGeneral(c)}${this.mode === "app" ? this._cardPageSection() + this._updateRateSection() : ""}&lt;h4&gt;Vehicle setup&lt;/h4&gt;</pre>
+      <pre class="add"><span class="lbl">replace</span>return `${this._datalist()}&lt;h4&gt;Vehicle setup&lt;/h4&gt;</pre>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>1c</b> <em>new method, paste right after <code>_tabGeneral(c)</code> (≈L4582)</em></div>
+      <pre class="add"><span class="lbl">add</span>  _tabSystem(c) {
+    return `${this._tabGeneral(c)}${this.mode === "app" ? this._cardPageSection() + this._updateRateSection() : ""}`;
+  }</pre>
+      <p class="why">It is literally the two fragments removed in 1b, so the markup of Card page and Data update rate is untouched.</p>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>1d</b> <em>_render(), ≈L4655</em> — allowed tabs, the non-admin guard, the renderer map</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>if (!["vehicle", "layout", "look", "controls", "charge", "colours", "general"].includes(this.tab)) this.tab = "layout";
+const body = { vehicle: () =&gt; this._tabVehicle(c), layout: () =&gt; this._tabLayout(c), look: () =&gt; this._tabLook(c), controls: () =&gt; this._tabControls(c), charge: () =&gt; this._tabCharge(c), colours: () =&gt; this._tabColours(c), general: () =&gt; this._tabGeneral(c) }[this.tab]();</pre>
+        <pre class="add"><span class="lbl">replace</span>if (!["vehicle", "layout", "look", "controls", "charge", "general", "system"].includes(this.tab)) this.tab = "layout";
+if (this.tab === "system" &amp;&amp; !this._hass?.user?.is_admin) this.tab = "layout";
+const body = { vehicle: () =&gt; this._tabVehicle(c), layout: () =&gt; this._tabLayout(c), look: () =&gt; this._tabLook(c), controls: () =&gt; this._tabControls(c), charge: () =&gt; this._tabCharge(c), general: () =&gt; this._tabGeneral(c), system: () =&gt; this._tabSystem(c) }[this.tab]();</pre>
+      </div>
+      <p class="why">Note <code>"colours"</code> is gone from the allowed list, so the remap line above it must gain
+        <code>colours: "look"</code> — that is the <b>first half of edit 2</b>, done there to keep <code>_render()</code> in one piece.
+        The guard (second line) matters because <code>this.tab</code> survives a re-render: without it an admin’s System tab would be rendered for a non-admin after a user switch.</p>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>1e</b> <em>_render() tail, ≈L4669</em> — the card-page listeners must follow the blocks</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>if (this.tab === "vehicle") {
+  this._probe();
+  if (this.mode === "app") {
+    this.shadowRoot.querySelector("[data-card-page-sidebar]")?.addEventListener("click", () =&gt; this._setCardPageSidebar()); this._loadCardPageSwitch();
+    this.shadowRoot.querySelectorAll("[data-update-rate]").forEach((b) =&gt; b.addEventListener("click", () =&gt; this._setUpdateRate(Number(b.dataset.updateRate)))); this._loadUpdateRate();
+    this.shadowRoot.querySelector("[data-card-page-view]")?.addEventListener("change", (e) =&gt; { const [vehicle_id = "", view_id = ""] = e.target.value.split("|"); this._setCardPagePin({ vehicle_id, view_id }); });
+    this.shadowRoot.querySelector("[data-card-page-design]")?.addEventListener("change", (e) =&gt; this._setCardPagePin({ design: e.target.value }));
+  }
+}</pre>
+        <pre class="add"><span class="lbl">replace</span>if (this.tab === "vehicle") this._probe();
+if (this.mode === "app" &amp;&amp; (this.tab === "vehicle" || this.tab === "system")) {
+  this.shadowRoot.querySelector("[data-card-page-sidebar]")?.addEventListener("click", () =&gt; this._setCardPageSidebar()); this._loadCardPageSwitch();
+  this.shadowRoot.querySelectorAll("[data-update-rate]").forEach((b) =&gt; b.addEventListener("click", () =&gt; this._setUpdateRate(Number(b.dataset.updateRate)))); this._loadUpdateRate();
+  this.shadowRoot.querySelector("[data-card-page-view]")?.addEventListener("change", (e) =&gt; { const [vehicle_id = "", view_id = ""] = e.target.value.split("|"); this._setCardPagePin({ vehicle_id, view_id }); });
+  this.shadowRoot.querySelector("[data-card-page-design]")?.addEventListener("change", (e) =&gt; this._setCardPagePin({ design: e.target.value }));
+}</pre>
+      </div>
+      <p class="why"><b>If you skip 1e the System tab is dead:</b> the update-rate buttons and the two selects render but never save, because their
+        listeners only ever ran on the Vehicle tab. <code>_probe()</code> stays Vehicle-only — it fills the hero-photo thumbnails that only exist there.</p>
+      <p class="check">grep -n "_tabSystem\|tab === \"system\"" source/card.js   → 3 hits (definition, guard, listener)</p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ EDIT 2 ══════════════════════════ -->
+  <section class="edit" id="e2">
+    <div class="eh"><span class="enum">edit 2</span><h3 class="et">Appearance absorbs the Colours sections</h3></div>
+    <p class="tagline">One appended call. <code>_tabColours()</code> keeps working exactly as today and keeps its name; it just stops being a tab.</p>
+    <div class="meta">
+      <span class="m"><b>source/card.js</b></span>
+      <span class="m"><code>_tabLook()</code> end · <code>_render()</code> remap</span>
+      <span class="m">moves <b>19</b> keys’ controls</span>
+      <span class="m ok">no key change</span>
+      <span class="m ok">no migration</span>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>2a</b> <em>_render() remap, ≈L4656</em> — old tab names</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>{ general: "vehicle", sections: "layout", buttons: "layout", images: "look", tires: "vehicle", sensors: "vehicle" }[this.tab]</pre>
+        <pre class="add"><span class="lbl">replace</span>{ general: "vehicle", sections: "layout", buttons: "layout", images: "look", tires: "vehicle", sensors: "vehicle", colours: "look" }[this.tab]</pre>
+      </div>
+      <p class="why">Keeps anyone who was on the Colours tab on the next render, and keeps old stored tab names valid. This is the same one-liner that
+        already migrates <code>images → look</code>.</p>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>2b</b> <em>_tabLook(), last line of the method, ≈L4580</em></div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>&lt;div class="mtile"&gt;${this._tiles([["data-tgl", "toasts", "On-screen messages", c.toasts !== false]])}&lt;/div&gt;&lt;/div&gt;`;
+  }</pre>
+        <pre class="add"><span class="lbl">replace</span>&lt;div class="mtile"&gt;${this._tiles([["data-tgl", "toasts", "On-screen messages", c.toasts !== false]])}&lt;/div&gt;&lt;/div&gt;${this._tabColours(c)}`;
+  }</pre>
+      </div>
+      <p class="why">The string must stay one template literal — appending <b>inside</b> the backticks, before the closing <code>`;</code>.
+        <code>_tabColours()</code> begins with <code>&lt;h4&gt;Tiles&lt;/h4&gt;</code>, so <code>_render()</code>’s <code>split("&lt;h4&gt;")</code>
+        turns it into four normal section cards: <b>Tiles, Airflow colours, Level colours, Notification colours</b>, below “Messages”.</p>
+    </div>
+
+    <p class="check">Open Settings → Appearance. It must end with the four colour sections, and the tab bar must no longer show Colours.</p>
+  </section>
+
+  <!-- ══════════════════════════ EDIT 3 ══════════════════════════ -->
+  <section class="edit" id="e3">
+    <div class="eh"><span class="enum">edit 3</span><h3 class="et">Charging takes the “Energy tile” block from Layout</h3></div>
+    <p class="tagline">Cut one contiguous block out of <code>_tabLayout()</code> and paste it into <code>_tabCharge()</code>. The five controls keep their exact
+      <code>data-tgl</code>/<code>data-sset</code> attributes, so the save path and the keys do not change.</p>
+    <div class="meta">
+      <span class="m"><b>source/card.js</b></span>
+      <span class="m"><code>_tabLayout()</code> · <code>_tabCharge()</code></span>
+      <span class="m">moves <b>5</b> keys</span>
+      <span class="m ok">no key change</span>
+      <span class="m ok">no migration</span>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>3a</b> <em>_tabLayout(), the block right after the Sections list, ≈L4348</em> — delete all of it</div>
+      <pre class="find"><span class="lbl">cut</span>      &lt;h4&gt;Energy tile&lt;/h4&gt;
+      ${this._opt("Energy tile", this._pick("energy_ui", c.energy_ui === "gauge" ? "gauge" : "ring", this._tilePreviews()), "Ring: the classic rings in the tile corner. Half gauge: battery percentage with both ranges.")}
+      &lt;div class="wtiles"&gt;
+        ${this._tileWide("data-tgl", "plan_button", "Charge plan button on the Energy tile", "A clock button that opens the charge plan. The dot pulses while a plan is on. Shown only if the car has charge schedule entities.", c.plan_button !== false, ico("plan"))}
+        ${this._tileWide("data-tgl", "energy_sheet", "“Energy” sheet on the tile", "Tap the Energy tile for battery, charging and driving history; long press opens the sensor. Off: a tap always opens the sensor.", c.energy_sheet !== false, ico("battery"))}
+        ${this._tileWide("data-tgl", "chg_roll", "Switch between “Charging now” and time left", "While charging, the Energy tile rolls up to show the time left every few seconds.", c.chg_roll !== false, ico("refresh"))}
+        ${this._tileWide("data-tgl", "charge_cost_selector", "Cost selector while charging (curve off)", "When the curve is hidden, a small location picker appears while charging. Tap the cost in the charging block to change it later.", c.charge_cost_selector !== false, ico("pin"))}
+      &lt;/div&gt;</pre>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>3b</b> <em>_tabCharge(), between <code>${this._target(c)}</code> and <code>&lt;h4&gt;Charging reminder&lt;/h4&gt;</code>, ≈L4589</em> — paste it there, unchanged</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>      ${this._target(c)}
+      &lt;h4&gt;Charging reminder&lt;/h4&gt;</pre>
+        <pre class="add"><span class="lbl">replace</span>      ${this._target(c)}
+      <span style="color:#6ee7a8">&lt;h4&gt;Energy tile&lt;/h4&gt;</span>
+      <span style="color:#6ee7a8">… the five lines you cut in 3a, indented by 6 spaces …</span>
+      &lt;h4&gt;Charging reminder&lt;/h4&gt;</pre>
+      </div>
+      <p class="why">Keys: <code>energy_ui</code>, <code>plan_button</code>, <code>energy_sheet</code>, <code>chg_roll</code>, <code>charge_cost_selector</code>.
+        Same names, same scope, same defaults — only the tab that renders them changes, so <b>existing profiles keep their values with no migration</b>.
+        <code>_tilePreviews()</code> and <code>_tileWide()</code> are class methods, available from any tab.</p>
+      <p class="check">Settings → Charging shows “Energy tile” once; Settings → Layout starts with “Sections” and has no Energy tile group.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ EDIT 4 ══════════════════════════ -->
+  <section class="edit" id="e4">
+    <div class="eh"><span class="enum">edit 4</span><h3 class="et">Delete the dead key <code>diag_mode</code></h3></div>
+    <p class="tagline"><b>Nothing in the UI reads or writes it.</b> <code>_tabDiag()</code> renders only the per-sensor tiles and None/All, and no element
+      carries <code>data-dmode</code>. What remains is a default, a YAML alias and an orphan click handler — safe to remove with zero visible change.</p>
+    <div class="meta">
+      <span class="m"><b>source/card.js</b></span>
+      <span class="m"><code>DEFAULTS</code> · <code>mergeConfig()</code> · <code>_bind()</code></span>
+      <span class="m">3 spots</span>
+      <span class="m warn">1 key removed</span>
+      <span class="m ok">no migration</span>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>4a</b> <em>DEFAULTS, ≈L91</em></div>
+      <pre class="find"><span class="lbl">delete the line</span>  diag_mode: "alerts", // alerts | all</pre>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>4b</b> <em>mergeConfig(), ≈L1779</em> — old-YAML alias</div>
+      <pre class="find"><span class="lbl">delete the line</span>  if (y.diagnostics_mode !== undefined &amp;&amp; y.diag_mode === undefined) y.diag_mode = y.diagnostics_mode;</pre>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>4c</b> <em>_bind() click handler, ≈L4747</em> — orphan write path</div>
+      <pre class="find"><span class="lbl">delete the line</span>      if (d.dmode) return this._emit({ diag_mode: d.dmode });</pre>
+    </div>
+
+    <p class="why">Do <b>not</b> edit <code>setting_keys.json</code> or <code>defaults.json</code>: <code>npm run build</code> regenerates both from
+      <code>DEFAULTS</code> (<code>build.cjs</code> line 11–12, <code>Object.keys(context.defaults)</code>), so removing the default also removes the
+      allow-listed key. A card YAML that still says <code>diag_mode: all</code> is ignored after the build — the card already had nothing to apply it to.
+      Keep <code>diag_ignore</code>: it is used by “Search for new sensors”.</p>
+    <p class="check">grep -rn "diag_mode\|dmode" source custom_components/deepal_companion --include=*.js --include=*.py  → no hits (ignore .claude/backups)</p>
+  </section>
+
+  <!-- ══════════════════════════ EDIT 5 ══════════════════════════ -->
+  <section class="edit" id="e5">
+    <div class="eh"><span class="enum">edit 5</span><h3 class="et">Delete the dead key <code>layers_path</code></h3></div>
+    <p class="tagline">Also UI-less: the Appearance and Vehicle tabs let you set <code>image_path</code> (hero photos) but there is no field for
+      <code>layers_path</code>. It survives only as a folder override in the persistence code — 7 spots, all mechanical.</p>
+    <div class="meta">
+      <span class="m"><b>source/card.js</b></span>
+      <span class="m"><code>DEFAULTS</code> · <code>REBUILD_KEYS</code> · <code>mergeConfig()</code> · <code>_patch()</code> · <code>_layerBase()</code> · <code>_tabLook()</code> · <code>_bind()</code></span>
+      <span class="m">7 spots</span>
+      <span class="m warn">1 key removed</span>
+      <span class="m ok">no migration</span>
+    </div>
+
+    <div class="step">
+      <div class="steplabel"><b>5a</b> <em>DEFAULTS, ≈L69</em></div>
+      <pre class="find"><span class="lbl">delete the line</span>  layers_path: null, // folder with the layers (null = &lt;card folder&gt;/images/)</pre>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>5b</b> <em>REBUILD_KEYS, ≈L1771</em></div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>const REBUILD_KEYS = ["image_path", "layers_path", "images", "name", "prefix", "entities"];</pre>
+        <pre class="add"><span class="lbl">replace</span>const REBUILD_KEYS = ["image_path", "images", "name", "prefix", "entities"];</pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>5c</b> <em>mergeConfig(), ≈L1797</em> — the null-sanitiser loop</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>for (const k of ["layers_path", "image_path"]) if (c[k] !== null &amp;&amp; typeof c[k] !== "string") c[k] = null;</pre>
+        <pre class="add"><span class="lbl">replace</span>for (const k of ["image_path"]) if (c[k] !== null &amp;&amp; typeof c[k] !== "string") c[k] = null;</pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>5d</b> <em>_patch(), ≈L1927</em> — the keys that reset the car view</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>if (["hero_style", "car_color", "iso_wheels", "layers_path"].some((k) =&gt; k in p)) this._cvReset();</pre>
+        <pre class="add"><span class="lbl">replace</span>if (["hero_style", "car_color", "iso_wheels"].some((k) =&gt; k in p)) this._cvReset();</pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>5e</b> <em>_layerBase(), ≈L2692</em> — keep the method (callers stay), drop the override</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>  _layerBase() { return this._c.layers_path ? normPath(this._c.layers_path) : `${SCRIPT_BASE}images/`; }</pre>
+        <pre class="add"><span class="lbl">replace</span>  _layerBase() { return `${SCRIPT_BASE}images/`; }</pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>5f</b> <em>_tabLook(), ≈L4375</em> — the Car View colour swatch that probes <code>iso/&lt;colour&gt;/base.webp</code></div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find (tail of the line)</span>, src = (c.layers_path ? normPath(c.layers_path) : `${SCRIPT_BASE}images/`) + "iso/" + color + "/base.webp";</pre>
+        <pre class="add"><span class="lbl">replace (tail of the line)</span>, src = `${SCRIPT_BASE}images/` + "iso/" + color + "/base.webp";</pre>
+      </div>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>5g</b> <em>_bind() change handler, ≈L4768</em> — empty text becomes null</div>
+      <div class="pair">
+        <pre class="find"><span class="lbl">find</span>if (["image_path", "layers_path", "climate_on_mode", "image_aspect"].includes(d.set) &amp;&amp; !v) v = null;</pre>
+        <pre class="add"><span class="lbl">replace</span>if (["image_path", "climate_on_mode", "image_aspect"].includes(d.set) &amp;&amp; !v) v = null;</pre>
+      </div>
+    </div>
+
+    <p class="why"><b>The one behaviour change:</b> an installation that hand-edited <code>layers_path:</code> in the card YAML (custom layer art) falls back to the
+      bundled <code>images/</code>. Nothing in the UI ever offered it, so no profile stored by the card can contain it. Say so in the CHANGELOG; no data migration is needed.</p>
+    <p class="check">grep -rn "layers_path" source custom_components/deepal_companion --include=*.js --include=*.py --include=*.json  → no hits</p>
+  </section>
+
+  <!-- ══════════════════════════ BACKEND ══════════════════════════ -->
+  <h2 class="sec" id="back">Backend — three edits, after 1–5, in their own commit</h2>
+  <p class="sub" style="margin-top:-4px;margin-bottom:14px">These do not change any screen. Do them separately so a regression cannot be blamed on the tab move.</p>
+
+  <section class="edit back">
+    <div class="eh"><span class="enum">B1</span><h3 class="et">Make the admin rule real: gate <code>config_patch</code> on the server</h3></div>
+    <p class="tagline">Today the card hides the settings gear from non-admins (<code>source/card.js</code> ≈L3325: <code>el.foot.hidden = c.show_customize === false || … is_admin === false</code>), but the websocket
+      op itself accepts a patch from any user who can read the vehicle. UI-only gating is not gating.</p>
+    <div class="meta">
+      <span class="m"><b>custom_components/deepal_companion/api.py</b></span>
+      <span class="m"><code>websocket handler</code>, op branch ≈L304</span>
+      <span class="m warn">behaviour change</span>
+      <span class="m ok">no migration</span>
+    </div>
+    <div class="pair">
+      <pre class="find"><span class="lbl">find</span>        elif op == "config_patch":
+            patch = data.get("patch", {})</pre>
+      <pre class="add"><span class="lbl">replace</span>        elif op == "config_patch":
+            if not connection.user.is_admin:
+                raise PermissionError("Only administrators can change card settings")
+            patch = data.get("patch", {})</pre>
+    </div>
+    <p class="why">Same shape as the admin checks already in this file (≈L180, L187, L197), so the error reaches the card as the usual permission failure.
+      <b>Trade-off to accept consciously:</b> a household that lets non-admins tune a display profile today will stop being able to. That is consistent with the
+      card already hiding the gear — but it is a real change, not a cleanup.</p>
+    <p class="check">python -m unittest discover -s tests -p "test_api*.py"   → and add one test: a non-admin connection gets PermissionError on config_patch</p>
+  </section>
+
+  <section class="edit back">
+    <div class="eh"><span class="enum">B2</span><h3 class="et">Three JSON stores → one, with a one-time import</h3></div>
+    <p class="tagline">Companion keeps <code>deepal_companion.update_rate</code>, <code>.language</code> and <code>.card_panel</code> as separate Home Assistant
+      stores, each with its own loader, its own <code>try/except</code> and its own save call. One store with one dict removes two files and three error paths.</p>
+    <div class="meta">
+      <span class="m"><b>custom_components/deepal_companion/__init__.py</b></span>
+      <span class="m"><code>async_setup()</code> ≈L121–146 · <code>Hub.set_*</code> ≈L40–72</span>
+      <span class="m warn">medium risk</span>
+      <span class="m warn">needs a migration read</span>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>B2a</b> — after the three <code>try/except</code> blocks, delete them and load one store instead</div>
+      <pre class="add"><span class="lbl">add</span>    from homeassistant.helpers.storage import Store
+    hub._settings_store = Store(hass, 1, DOMAIN + ".settings")
+    saved = await hub._settings_store.async_load()
+    if not isinstance(saved, dict):          <span class="c"># first run after the upgrade: import the three old files once</span>
+        saved = await _import_old_settings(hass)
+        await hub._settings_store.async_save(saved)
+    hub.card_panel_in_sidebar = saved.get("sidebar") is True
+    hub.card_panel_pin = {k: saved.get(k) if isinstance(saved.get(k), str) else "" for k in ("vehicle_id", "view_id", "design")}
+    from .phone_text import set_language
+    set_language(hass, saved.get("language") or "auto")
+    if type(saved.get("update_rate")) is int and saved["update_rate"] in (0, 300, 600):
+        hub.update_rate = saved["update_rate"]</pre>
+      <pre class="add"><span class="lbl">add — helper, same module</span>async def _import_old_settings(hass):
+    """Read the three pre-2.0.2 stores once. The old files are left on disk and never written again."""
+    from homeassistant.helpers.storage import Store
+    out = {"sidebar": False, "vehicle_id": "", "view_id": "", "design": "", "language": "auto", "update_rate": 0}
+    panel = await Store(hass, 1, DOMAIN + ".card_panel").async_load()
+    if isinstance(panel, dict):
+        out.update({k: panel[k] for k in out if k in panel})
+        out["sidebar"] = panel.get("sidebar") is True
+    lang = await Store(hass, 1, DOMAIN + ".language").async_load()
+    if isinstance(lang, dict) and isinstance(lang.get("language"), str):
+        out["language"] = lang["language"]
+    rate = await Store(hass, 1, DOMAIN + ".update_rate").async_load()
+    if isinstance(rate, dict) and type(rate.get("seconds")) is int and rate["seconds"] in (0, 300, 600):
+        out["update_rate"] = rate["seconds"]
+    return out</pre>
+    </div>
+    <div class="step">
+      <div class="steplabel"><b>B2b</b> — the writers</div>
+      <p class="why"><code>set_card_panel</code>, <code>set_language</code>, <code>set_update_rate</code> and <code>set_card_panel_pin</code> currently save a partial
+        dict into their own store. Each becomes one call that writes the whole snapshot, so no store can drift:
+        <code>await hub._settings_store.async_save({**hub.settings_snapshot(), "update_rate": seconds})</code>.
+        Add <code>Hub.settings_snapshot()</code> returning the six keys, and delete the <code>_card_panel_store</code>, <code>_language_store</code>,
+        <code>_rate_store</code> attributes plus their <code>__init__</code> lines.</p>
+      <p class="why"><b>Do not delete the three old storage files</b> in <code>config/.storage/</code>. They are the only copy of an existing user’s language,
+        update rate and sidebar choice if the import has to run again after a failed first boot.</p>
+    </div>
+    <p class="check">Upgrade test: create all three old stores with non-default values, boot, confirm <code>deepal_companion.settings</code> contains them and the old values still apply.</p>
+  </section>
+
+  <section class="edit back">
+    <div class="eh"><span class="enum">B3</span><h3 class="et">One schema file as the source of truth (largest, do last)</h3></div>
+    <p class="tagline">Right now the same key is described in four places: <code>DEFAULTS</code> (existence + default), <code>SHARED_KEYS</code> + <code>RANGES</code> in
+      <code>const.py</code> (scope + limits), the validation branches in <code>api.py</code> (type + enum), and <code>docs/SETTINGS.md</code> (text). They already drifted —
+      the docs describe 7 tabs while the card renders 6.</p>
+    <div class="meta">
+      <span class="m"><b>new</b> <code>custom_components/deepal_companion/setting_schema.json</code></span>
+      <span class="m"><code>const.py</code> · <code>api.py</code> · <code>__init__.py</code></span>
+      <span class="m warn">high effort</span>
+      <span class="m warn">new file → run update-project-map.cjs</span>
+    </div>
+    <pre class="one"><span class="lbl">shape — one entry per key, defaults stay in DEFAULTS</span>{
+  "prefix":      { "type": "string", "scope": "vehicle", "tab": "vehicle",  "pattern": "^[a-z0-9_]+$" },
+  "battery_kwh": { "type": "number", "scope": "vehicle", "tab": "vehicle",  "min": 0, "max": 500 },
+  "energy_ui":   { "type": "enum",   "scope": "view",    "tab": "charge",   "group": "Energy tile", "values": ["ring", "gauge"] },
+  "charge_prompt_min_gain": { "type": "number", "scope": "vehicle", "tab": "charge", "min": 0, "max": 100 },
+  "notify_alert_level":     { "type": "enum",   "scope": "view",    "tab": "look",   "values": ["red", "orange", "yellow", "green"] }
+}</pre>
+    <p class="why">What each consumer becomes:
+      <b>1)</b> <code>build.cjs</code> still writes <code>setting_keys.json</code> from <code>DEFAULTS</code>, but a test asserts every
+      <code>DEFAULTS</code> key exists in the schema and vice versa (that test is what keeps the two from drifting again).
+      <b>2)</b> <code>const.py</code> — delete <code>SHARED_KEYS</code>, <code>VIEW_LOOK_KEYS</code> and <code>RANGES</code>; build them at import from the schema
+      (<code>{k for k, v in SCHEMA.items() if v["scope"] == "vehicle"}</code>).
+      <b>3)</b> <code>api.py</code> — the <code>battery_kwh</code> branch, the <code>RANGES</code> loop, the <code>notify_*_level</code> enum check and the
+      <code>prefix</code>/<code>entities</code> checks collapse into one loop over the schema.
+      <b>4)</b> <code>docs/SETTINGS.md</code> — generate the key list from the same file in a script instead of retyping it.
+      The tab bar stays in <code>source/card.js</code>: it is presentation, not validation.</p>
+    <p class="check">python -m unittest discover -s tests -p "test_setting*.py"   → plus the new schema↔DEFAULTS parity test</p>
+  </section>
+
+  <!-- ══════════════════════════ DON'T ══════════════════════════ -->
+  <h2 class="sec" id="dont">Do not change these — they look like the work, but are already done or load-bearing</h2>
+  <div class="dont">
+    <ol>
+      <li><b><code>charge_curve</code>, <code>charging_reminder</code>, <code>charging_cost</code>.</b> Already gone from <code>DEFAULTS</code> and from
+        <code>setting_keys.json</code>; the Layout rows write <code>hidden[]</code> only. Nothing to delete.</li>
+      <li><b><code>normalise_view()</code>, <code>FLAG_SECTIONS</code>, <code>VIEW_SCHEMA = 2</code> in <code>database.py</code>.</b> This is the shipped migration
+        (CHANGELOG 2.0.1, “Visibility in one place”). Delete it and every pre-2.0.1 profile silently loses the sections it had hidden.</li>
+      <li><b><code>setting_keys.json</code> and <code>defaults.json</code>.</b> Generated by <code>npm run build</code> from <code>DEFAULTS</code>. Hand-editing them
+        is reverted by the next build and creates a diff nobody can explain.</li>
+      <li><b>The old-tab remap in <code>_render()</code>.</b> <code>sections → layout</code>, <code>images → look</code>, <code>tires → vehicle</code>… stay; you only
+        add <code>colours: "look"</code> to it (2a).</li>
+      <li><b><code>SHARED_KEYS</code> membership today.</b> The existing split (vehicle-scoped physical car settings vs per-profile look) is correct; the tab move
+        does not change any key’s scope, and it must not.</li>
+      <li><b>Rejected, so do not “fix” it:</b> storing tab names in the database, renaming keys while regrouping, one settings page per key.</li>
+    </ol>
+  </div>
+
+  <!-- ══════════════════════════ VERIFY ══════════════════════════ -->
+  <h2 class="sec" id="verify">Build, verify, changelog</h2>
+  <section class="edit" style="padding:16px 20px">
+    <div class="steplabel"><b>1</b> build (writes the bundles, <code>defaults.json</code>, <code>setting_keys.json</code> and the <code>.gz</code> files)</div>
+    <pre class="one"><span class="lbl">terminal</span>npm run build</pre>
+    <div class="steplabel" style="margin-top:12px"><b>2</b> every <code>.gz</code> must match its <code>.js</code> — a silent mismatch means Home Assistant serves the old card</div>
+    <pre class="one"><span class="lbl">terminal</span>for f in $(find custom_components -name '*.js.gz'); do gzip -dc "$f" | cmp -s - "${f%.gz}" || echo "STALE $f"; done; echo done</pre>
+    <div class="steplabel" style="margin-top:12px"><b>3</b> the tests that cover these files</div>
+    <pre class="one"><span class="lbl">terminal</span>node tests/settings_menus.cjs &amp;&amp; node tests/settings_roundtrip.cjs
+python -m unittest discover -s tests -p "test_settings*.py"</pre>
+    <div class="steplabel" style="margin-top:12px"><b>4</b> click through once, in the card: 5 tabs + System (admin) / Appearance ends with the colour sections /
+      Charging starts with the Energy tile block / System saves the update rate and the sidebar toggle / a profile that had a custom <code>colours</code> tab state still opens Appearance</div>
+    <div class="steplabel" style="margin-top:12px"><b>5</b> <code>CHANGELOG.md</code>, under 2.0.1</div>
+    <pre class="one"><span class="lbl">add</span>- **Settings:** Colours is now part of Appearance, the Energy-tile switches moved to Charging, and the card name,
+  Card page and Data update rate live in a new admin-only **System** tab. `diag_mode` and `layers_path` were removed
+  from the settings allow-list — neither had a control in the card; a hand-edited `layers_path` now falls back to the bundled images.</pre>
+  </section>
+
+  <footer>
+    Read from the working tree at <code>source/card.js</code> (4829 lines), <code>const.py</code>, <code>database.py</code>, <code>api.py</code>,
+    <code>__init__.py</code>, <code>scripts/build.cjs</code>. Read-only: no source file, setting or database was changed for this page.
+    Line numbers are approximate — match on the code shown.
+  </footer>
+</div>
+</body>
+</html>

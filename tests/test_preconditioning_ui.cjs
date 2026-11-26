@@ -2,12 +2,14 @@
  * module against one mocked backend. Checks shared preferences, commands, schedule editor, battery block and
  * mobile layout. No vehicle or phone is involved. Run: node tests/test_preconditioning_ui.cjs */
 const assert=require('assert'),fs=require('fs'),path=require('path'),http=require('http');
+const segParity=require('./seg_parity.cjs');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright-core');
 const ROOT=path.resolve(__dirname,'..');
 /* the shared interface tokens and rules that the panel and the card always provide */
 const SHARED=(()=>{const css=fs.readFileSync(path.join(__dirname,'../custom_components/deepal_companion/frontend/companion-panel.css'),'utf8');const cp=(css.match(/\/\*cp:begin\*\/([\s\S]*?)\/\*cp:end\*\//)||[])[1]||'';const ui=(css.match(/\/\*ui:begin\*\/([\s\S]*?)\/\*ui:end\*\//)||[])[1]||'';return ':root{'+cp+'}'+ui;})();
 const PAGE=`<!doctype html><meta charset=utf-8><style>${SHARED}</style><body style="background:#121316;color:#eee;font-family:sans-serif;margin:0">
 <div id=card></div><div id=settings></div><div id=notifications></div><div id=quick style="width:440px"></div><div id=f24></div><div id=f12></div><div id=fde></div><div id=fen></div>
+<script src="/custom_components/deepal_companion/frontend/companion-card.js"></script>
 <script type=module>
 import {mountPrecondition} from '/custom_components/deepal_companion/frontend/companion-precondition.js';
 const now=()=>Date.now()/1000;
@@ -67,8 +69,8 @@ window.ready=true;
     await settings.locator('details summary').first().click();
     await settings.locator('.stp:has(input[data-cfg=max_attempts]) [data-stp="-1"]').click();
     await page.waitForFunction(()=>backend.config.max_attempts===2);
-    // aligned controls: every slider/stepper/select is 44 px high
-    const heights=await page.evaluate(()=>[...document.querySelectorAll('#settings .sl,#settings .stp,#settings select,#settings .seg,#settings input[type=time]')].map(n=>Math.round(n.getBoundingClientRect().height)).filter(h=>h));
+    // aligned controls: every slider/stepper/select is 44 px high; a segmented choice keeps the Settings .seg height (checked below)
+    const heights=await page.evaluate(()=>[...document.querySelectorAll('#settings .sl,#settings .stp,#settings select,#settings input[type=time]')].map(n=>Math.round(n.getBoundingClientRect().height)).filter(h=>h));
     assert(heights.every(h=>h===44),'control heights '+heights);
     // start / stop through the backend
     await card.locator('[data-cmd=precondition_start]').click();
@@ -115,36 +117,38 @@ window.ready=true;
       await page.evaluate(()=>{backend.config.default_temperature=22;backend.config.default_duration=15;});
       await page.evaluate(()=>Promise.all(Object.values(window.views).map(v=>v.refresh())));
     }
-    // one notification preference, three places
+    // one notification preference, two places: the card and Notifications (the Preconditioning page only links there)
     await card.locator('label:has(input[data-k="notify.enabled"])').first().click();
     await page.waitForFunction(()=>backend.config.notify.enabled===true);
-    for(const view of ['settings','notifications'])await page.evaluate(v=>views[v].refresh(),view);
-    await page.waitForFunction(()=>document.querySelector('#settings input[data-k="notify.enabled"]').checked&&document.querySelector('#notifications input[data-k="notify.enabled"]').checked);
+    await page.evaluate(()=>views.notifications.refresh());
+    await page.waitForFunction(()=>document.querySelector('#notifications input[data-k="notify.enabled"]').checked);
     await notes.locator('label:has(input[data-k="notify.enabled"])').first().click();
     await page.waitForFunction(()=>backend.config.notify.enabled===false);
     await page.evaluate(()=>views.card.refresh());
     await page.waitForFunction(()=>!document.querySelector('#card input[data-k="notify.enabled"]').checked);
     // regression: notifications off then on keeps the phone list
-    await page.evaluate(()=>views.settings.refresh());await page.waitForFunction(()=>!document.querySelector("#settings input[data-k=\"notify.enabled\"]").checked);
-    await settings.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===true);
-    await settings.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===false);
-    await page.waitForFunction(()=>document.querySelectorAll('#settings button.pill').length===1);
+    await page.evaluate(()=>views.notifications.refresh());await page.waitForFunction(()=>!document.querySelector("#notifications input[data-k=\"notify.enabled\"]").checked);
+    await notes.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===true);
+    await notes.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===false);
+    await page.waitForFunction(()=>document.querySelectorAll('#notifications button.pill').length===1);
     // phones are pills, shared with Live climate
-    assert.equal(await page.evaluate(()=>{const g=document.querySelector('#settings .subgrp');return g.classList.contains('off')&&g.inert;}),true,'everything below the switch is grey and inert while notifications are off');
-    await settings.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===true);
-    await page.waitForFunction(()=>{const g=document.querySelector('#settings .subgrp');return g&&!g.classList.contains('off')&&!g.inert;});
-    await settings.locator('button.pill[data-dev="notify.mobile_app_phone"]').click();
+    await page.waitForFunction(()=>{const g=document.querySelector('#notifications .subgrp');return !!g&&g.classList.contains('off')&&g.inert;});
+    assert.equal(await page.evaluate(()=>{const g=document.querySelector('#notifications .subgrp');return g.classList.contains('off')&&g.inert;}),true,'everything below the switch is grey and inert while notifications are off');
+    await notes.locator('label:has(input[data-k="notify.enabled"])').first().click();await page.waitForFunction(()=>backend.config.notify.enabled===true);
+    await page.waitForFunction(()=>{const g=document.querySelector('#notifications .subgrp');return g&&!g.classList.contains('off')&&!g.inert;});
+    await notes.locator('button.pill[data-dev="notify.mobile_app_phone"]').click();
     await page.waitForFunction(()=>JSON.stringify(backend.config.notify.devices)==='["notify.mobile_app_phone"]');
-    await page.waitForFunction(()=>document.querySelector('#settings button.pill').getAttribute('aria-pressed')==='true');
-    assert.equal(await settings.locator('.sw input[data-k^="dev:"]').count(),0,'phones are not switches');
+    await page.waitForFunction(()=>document.querySelector('#notifications button.pill').getAttribute('aria-pressed')==='true');
+    assert.equal(await notes.locator('.sw input[data-k^="dev:"]').count(),0,'phones are not switches');
     // every switch row has an explanation
     const bare=await page.evaluate(()=>[...document.querySelectorAll('#settings .row')].filter(r=>r.querySelector('.sw')&&!r.querySelector('.note')).map(r=>r.textContent.trim()));
     assert.deepEqual(bare,[],'switches without explanation');
     // battery notification toggle is shared by Settings → Battery protection and Notifications
-    await settings.locator('section:has(h4:has-text("Battery protection")) input[data-k="event:battery"]').click({force:true});
+    // the battery notification switch is only on Notifications; the Preconditioning page has none
+    await notes.locator('input[data-k="event:battery"]').click({force:true});
     await page.waitForFunction(()=>backend.config.notify.events.battery===false);
-    await page.evaluate(()=>views.notifications.refresh());
-    await page.waitForFunction(()=>!document.querySelector('#notifications input[data-k="event:battery"]').checked);
+    await page.evaluate(()=>views.settings.refresh());
+    assert.equal(await settings.locator('input[data-k="event:battery"]').count(),0,'no battery notification switch on Preconditioning');
     // battery protection blocks START with a visible reason
     await settings.locator('input[data-k="bat.enabled"]').click({force:true});
     await page.waitForFunction(()=>backend.config.battery.enabled===true);
@@ -152,6 +156,9 @@ window.ready=true;
     await page.waitForFunction(()=>/START blocked/.test(document.querySelector('#card').textContent)&&document.querySelector('#card [data-cmd=precondition_start]').disabled);
     // schedule editor: weekdays Ready By, then edit to custom days, disable, delete with confirmation
     await settings.locator('[data-act=new]').click();
+    // the choices (repeat, mode) are the Settings .seg: same sliding pill, button font and height (the editor is open here)
+    await page.waitForFunction(()=>document.querySelectorAll('#settings .seg').length>=2);
+    await segParity(page,null,['#settings .seg']);
     await settings.locator('[data-e=time]').fill('07:45');
     await settings.locator('[data-act=save-sched]').click();
     await page.waitForFunction(()=>backend.config.schedules.length===1&&backend.config.schedules[0].mode==='ready_by'&&backend.config.schedules[0].time==='07:45');
@@ -187,6 +194,8 @@ window.ready=true;
       const sc=await page.evaluate(q=>{const h=document.querySelector(q);const cs=getComputedStyle(h);return {rows:h.children.length,over:cs.overflowY,max:cs.maxHeight,sh:h.scrollHeight,ch:h.clientHeight};},sel);
       assert.equal(sc.rows,40);assert.equal(sc.over,'auto');assert(sc.sh>sc.ch,'long history scrolls inside its block');
       await page.evaluate(()=>{document.querySelector('#settings [data-diag]').open=true;});
+      {const w=await page.evaluate(()=>{const t=document.querySelector('#settings .pc .grid .kv.wide');if(!t)return null;const g=t.parentElement;return {label:t.querySelector('small')?.textContent,span:t.getBoundingClientRect().width/g.getBoundingClientRect().width,wb:getComputedStyle(t.querySelector('b')).wordBreak};});
+        assert(w&&w.label==='Last failure','Last failure is a tile inside the diagnostics grid');assert(w.span>0.98,'Last failure spans the full grid width');assert.equal(w.wb,'normal','Last failure text does not break mid-word');}
       await page.evaluate(()=>document.querySelector('#settings [data-act=clear-hist]').click());
       await page.waitForSelector('#settings dialog.pc-confirm [data-yes]');
       await page.evaluate(()=>document.querySelector('#settings dialog.pc-confirm [data-no]').click());
@@ -197,14 +206,13 @@ window.ready=true;
       await page.evaluate(()=>document.querySelector('#settings dialog.pc-confirm [data-yes]').click());
       await page.waitForFunction(()=>!document.querySelector('#settings .pc .hist>div'));
       assert(await page.evaluate(()=>!document.querySelector('#settings [data-act=clear-hist]')),'no button when empty');}
-    await page.evaluate(()=>{backend.globalOff=true;return views.settings.refresh();});
-    await page.waitForFunction(()=>document.querySelector('#settings [data-pc=notifications] .info-box.warn'));
-    assert.equal(await page.evaluate(()=>{const sec=document.querySelector('#settings [data-pc=notifications]');const g=sec.querySelector('.subgrp.off');return !!g&&g.inert&&/Notifications are off/.test(sec.textContent);}),true,'global notifications off: section is grey, inert and explains why');
-    await page.evaluate(()=>{backend.globalOff=false;return views.settings.refresh();});
-    await page.waitForFunction(()=>!document.querySelector('#settings [data-pc=notifications] .info-box.warn'));
+    await page.evaluate(()=>{backend.globalOff=true;return views.notifications.refresh();});
+    await page.waitForFunction(()=>document.querySelector('#notifications [data-pc=notifications] .info-box.warn'));
+    assert.equal(await page.evaluate(()=>{const sec=document.querySelector('#notifications [data-pc=notifications]');const g=sec.querySelector('.subgrp.off');return !!g&&g.inert&&/Notifications are off/.test(sec.textContent);}),true,'global notifications off: section is grey, inert and explains why');
+    await page.evaluate(()=>{backend.globalOff=false;return views.notifications.refresh();});
+    await page.waitForFunction(()=>!document.querySelector('#notifications [data-pc=notifications] .info-box.warn'));
     await page.evaluate(()=>window.dispatchEvent(new CustomEvent('deepal-companion-master',{detail:{on:false}})));
     await page.waitForFunction(()=>{const g=document.querySelector('#notifications [data-pc=notifications] .subgrp.off');return g&&g.inert&&document.querySelector('#notifications .info-box.warn');});
-    assert.equal(await page.evaluate(()=>!document.querySelector('#settings [data-pc=notifications] .info-box.warn')),true,'only the Notifications page follows its own master switch live');
     await page.evaluate(()=>window.dispatchEvent(new CustomEvent('deepal-companion-master',{detail:{on:true}})));
     await page.waitForFunction(()=>!document.querySelector('#notifications .info-box.warn')&&!document.querySelector('#notifications .subgrp.off'));
     assert.deepEqual(errors,[]);

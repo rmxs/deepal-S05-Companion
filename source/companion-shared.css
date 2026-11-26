@@ -22,9 +22,20 @@
 .pcsw input:disabled+i,.preview-click-toggle input:disabled,.design-root label>input.peer:disabled+div,[disabled]>.sw{opacity:.45}
 .pcsw input:focus-visible+i,.preview-click-toggle input:focus-visible,.design-root label>input.peer:focus-visible+div,:focus-visible>.sw{outline:2px solid var(--cp-accent)!important;outline-offset:2px}
 
+/* Segmented controls (.seg): one look on every page. The card's Settings, the Notifications, Charging, Precondition and Energy choices all use this markup. */
+.seg{display:flex;padding:3px;gap:3px;border-radius:14px;background:var(--ds-soft);border:1px solid var(--ds-line)}
+.seg button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:7px 6px;border-radius:11px;border:0;background:transparent;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--ds-fg2);white-space:nowrap}
+.seg button .i{--is:16px}
+.seg.wide{width:100%;box-sizing:border-box}.seg.wide button{flex:1}
 /* Segmented controls and chips: the chosen option is filled with the theme colour. */
-.seg:not(.hp)>button.on,.seg.hp>.vpill,.enpanel .en-period button[aria-pressed="true"],.pc .pill[aria-pressed=true],.carlog-chip[aria-pressed=true],.design-root button.live-chip[aria-pressed=true]{background:var(--cp-accent)!important;border-color:transparent!important;color:var(--cp-ink)!important}
+.seg:not(.hp)>button.on,.seg.hp>.vpill,.pc .pill[aria-pressed=true],.design-root button.live-chip[aria-pressed=true]{background:var(--cp-accent)!important;border-color:transparent!important;color:var(--cp-ink)!important}
 .seg.hp>button.on,.seg.hp>button.on .i{color:var(--cp-ink)}
+/* Sliding pill: the chosen option glides under the buttons. UI.pill (card.js, also __DEEPAL_COMPANION_UI.pill) sets the .vpill's width and position; the buttons sit above it. */
+.hp{position:relative}.hp>button{position:relative;z-index:1}.seg.hp>button.on,.tabs.hp>button.on{background:none}.seg.hp>button.bg-emerald-400{background:transparent!important}
+.hp>.vpill{position:absolute;left:0;top:3px;bottom:3px;border-radius:11px;pointer-events:none;transition:transform .32s cubic-bezier(.3,.8,.3,1),width .32s cubic-bezier(.3,.8,.3,1)}
+.tabs.hp>.vpill{top:0;bottom:0;border-radius:999px;border:1px solid transparent;box-sizing:border-box}
+.tabs.hp>button.on{border-color:transparent}
+@media (prefers-reduced-motion:reduce){.hp>.vpill{transition:none}}
 
 /* Main actions and picked options in the supplied page designs follow the theme colour, not the fixed status green. */
 .design-root button.bg-emerald-400,.supplied-costs button.bg-emerald-400{background-color:var(--cp-accent)!important;border-color:transparent!important;color:var(--cp-ink)!important}
@@ -47,3 +58,12 @@
 .cp-item{box-sizing:border-box;border:1px solid var(--cp-off-line);border-radius:var(--cp-item-r);padding:var(--cp-item-p);background:var(--cp-off-bg)}
 
  @media (prefers-reduced-motion:reduce){.tile .tk,.pc .ptk,.tile .tk::after,.pc .ptk::after{transition:none}:where(button,[role=button],summary,label.ptile,.cp-press,[data-ent],.t2[data-open],.spot):active{scale:none}.sw::after,.pcsw>i::after,.preview-click-toggle input::after,.design-root label>input.peer+div::after{transition:none!important}}
+/* Page head: the one heading for every panel page (icon, title, one-line subtitle). It sits directly on the page, with no card around it, and matches the Charging sessions heading. */
+.page-head{display:flex;align-items:center;gap:12px;min-width:0;margin:0 0 12px;padding:0 2px}
+.ph-icon{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:50%;background:var(--cp-accent);color:var(--cp-ink);box-shadow:0 0 10px rgba(var(--ds-ac,var(--ds-ok,52,211,153)),.15)}
+.ph-icon ha-icon{--mdc-icon-size:20px;color:inherit}
+.ph-text{min-width:0}
+.ph-title{margin:0;font-size:16px;font-weight:700;line-height:1.25;letter-spacing:-.01em;color:var(--ds-fg,var(--primary-text-color,inherit));overflow-wrap:anywhere}
+.ph-sub{margin:2px 0 0;font-size:11px;line-height:1.4;color:var(--ds-fg2,var(--secondary-text-color,inherit));overflow-wrap:anywhere}
+/* One empty state for every page: a dashed box with a short centred message */
+.cp-empty{box-sizing:border-box;grid-column:1/-1;margin:0;padding:24px 16px;border:1px dashed var(--cp-off-line);border-radius:var(--cp-item-r);text-align:center;color:var(--ds-fg2,var(--secondary-text-color,inherit));font-size:13px;line-height:1.6}

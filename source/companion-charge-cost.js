@@ -22,9 +22,11 @@ function ccDemoRow(profile){
   return {id:'demo',s:Date.now()-36e5,e:Date.now(),from:52,to:68,kwh:2.94,capacity:18.4,live:true,dc:false,
     assignment:profile?{profile,energy:null,total:null}:null,pricing:{energy:profile?energy:null,cost,source:'battery',estimated:true,cost_estimated:!!(profile&&!profile.free&&cost!==null)}};
 }
+/* The settings preview shows the real charge cost while it shows live data; only the simulated modes use the demo. */
+DeepalS05Card.prototype._ccDemo=function(){return !!this._isCompanionPreview&&this._previewMode!=='live';};
 DeepalS05Card.prototype._renderChargeCost=function(){
   const card=this._el?.card;if(!this._c||!card)return;
-  const demo=!!this._isCompanionPreview;
+  const demo=this._ccDemo();
   let state=this._cc;
   if(state&&state.generation!==this._compGeneration){this._ccDestroy();state=null;}
   const flowing=CC_CURRENT_SENSORS.some(id=>this._n(id)>.5);
@@ -70,7 +72,7 @@ DeepalS05Card.prototype._ccChip=function(info){
     charge._ccBound=true;
     charge.addEventListener('click',event=>{
       const chip=event.target.closest('[data-cc-chip]'),state=this._cc;if(!chip||!state?.row||state.busy)return;
-      state.editing=!state.editing;state.choice='';this._ccPaint(state,!!this._isCompanionPreview);
+      state.editing=!state.editing;state.choice='';this._ccPaint(state,this._ccDemo());
     });
   }
   if(!info){slot.innerHTML='';return;}
@@ -123,8 +125,8 @@ DeepalS05Card.prototype._ccPaint=function(state,demo){
     node.addEventListener('click',event=>{
       const button=event.target.closest('[data-cc]');if(!button||button.disabled)return;
       const action=button.dataset.cc;
-      if(action==='change'){state.editing=true;state.choice='';this._ccPaint(state,!!this._isCompanionPreview);}
-      else if(action==='cancel'){state.editing=false;state.choice='';this._ccPaint(state,!!this._isCompanionPreview);}
+      if(action==='change'){state.editing=true;state.choice='';this._ccPaint(state,this._ccDemo());}
+      else if(action==='cancel'){state.editing=false;state.choice='';this._ccPaint(state,this._ccDemo());}
       else if(action==='save')this._ccSave(state,node);
     });
   }
@@ -160,7 +162,7 @@ DeepalS05Card.prototype._ccSyncSave=function(node){
 DeepalS05Card.prototype._ccSave=async function(state,node){
   const select=node.querySelector('select'),profileId=select?.value;
   if(!profileId||state.busy)return;
-  if(this._isCompanionPreview){
+  if(this._ccDemo()){
     state.demoProfile=CC_DEMO_PROFILES.find(item=>item.id===profileId)||null;state.editing=false;state.choice='';
     this._renderChargeCost();this._toast(T('Demo: location chosen. No costs were saved.'),'ok');return;
   }
@@ -183,7 +185,7 @@ DeepalS05Card.prototype._ccSave=async function(state,node){
     if(state.dead||generation!==this._compGeneration)return;
     state.busy=false;
     if(/changed elsewhere/i.test(error.message||''))this._toast(T('Settings changed elsewhere and were reloaded. Please repeat your change.'),'error');
-    else this._toast(error.message||String(error),'error');
+    else this._toast(tError(error.message||String(error)),'error');
     state.reloadProfiles=true;state.editing=false;state.choice='';
   }
   if(state.dead||generation!==this._compGeneration)return;

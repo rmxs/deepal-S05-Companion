@@ -517,6 +517,83 @@ class Notifications(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.engine.explain("battery"))["steps"][-1]["id"], "cooldown")
 
 
+    def limiter(self, target=80, delivers=True, holds=False, stopping=False):
+        self.runtime.charger_limit = types.SimpleNamespace(target=lambda: target, delivers=lambda: delivers, holds=lambda: holds, stopping=lambda: stopping or holds)
+
+    async def test_alert_context_reports_the_charger_limit(self):
+        self.assertEqual(self.engine.limit_vars(), {"charge_target_pct": 0, "limit_stopped": False, "limit_stopping": False}, "no limiter: nothing is held back")
+        self.runtime.config["charge_target"] = 75
+        self.assertEqual(self.engine.limit_vars()["charge_target_pct"], 75)
+        self.limiter(target=60, holds=True)
+        self.assertEqual(self.engine.limit_vars(), {"charge_target_pct": 60, "limit_stopped": True, "limit_stopping": True})
+        self.limiter(target=60, holds=True, delivers=False)
+        self.assertEqual(self.engine.limit_vars(), {"charge_target_pct": 60, "limit_stopped": False, "limit_stopping": False}, "a limit that cannot tell the phones leaves the alerts alone")
+        self.limiter(target=0, stopping=True)
+        self.assertEqual((await self.engine.context(rule()))["limit_stopping"], True)
+
+    async def test_complete_interrupted_and_idle_stay_quiet_while_the_limit_holds_the_charger(self):
+        for preset in ("charge_done", "charge_interrupted", "plugged_idle"):
+            self.assertTrue((await self.engine.preview(rule(preset=preset)))["active"], preset)
+            self.limiter(holds=True)
+            self.assertFalse((await self.engine.preview(rule(preset=preset)))["active"], preset)
+            self.limiter(holds=True, delivers=False)
+            self.assertTrue((await self.engine.preview(rule(preset=preset)))["active"], preset + " (the limit cannot deliver)")
+            self.limiter(holds=False)
+            self.assertTrue((await self.engine.preview(rule(preset=preset)))["active"], preset + " (limit not engaged)")
+        self.limiter(holds=True)
+        self.assertTrue((await self.engine.preview(rule(preset="charge_started")))["active"], "other alerts are untouched")
+        self.assertTrue((await self.engine.preview(rule()))["active"], "a rule without a preset is untouched")
+
+    async def test_reached_target_gives_way_to_the_limit_message(self):
+        self.limiter(target=80, stopping=True)
+        self.assertFalse((await self.engine.preview(rule(preset="charge_target")))["active"])
+        self.limiter(target=80, stopping=False)
+        self.assertTrue((await self.engine.preview(rule(preset="charge_target")))["active"], "dry run, off or paused: it fires as before")
+        self.limiter(target=80, stopping=True, delivers=False)
+        self.assertTrue((await self.engine.preview(rule(preset="charge_target")))["active"], "no phone for the limit: this alert is the only message")
+
+    async def test_a_saved_reached_target_rule_follows_the_target_without_saving_again(self):
+        old = "{{ ((is_state('binary_sensor.s05_charging', 'on') or states('sensor.s05_ac') | float(0) >= 0.5) and states('sensor.s05_battery_level') | float(0) >= 80) }}"
+        seen = []
+        async def render(text, variables):
+            if "float(0)" in text:
+                seen.append(text)
+            return "true"
+        self.engine.render = render
+        self.limiter(target=65)
+        await self.engine.preview(rule(preset="charge_target", condition=old))
+        self.assertIn("float(0) >= 65) }}", seen[-1])
+        self.assertIn(">= 0.5)", seen[-1], "the 0.5 A current check is not the number")
+        self.limiter(target=72)
+        await self.engine.preview(rule(preset="charge_target", condition=old))
+        self.assertIn("float(0) >= 72) }}", seen[-1], "the target changed: the alert follows it")
+        for target in (0, 100):
+            self.limiter(target=target)
+            await self.engine.preview(rule(preset="charge_target", condition=old))
+            self.assertIn("float(0) >= 80) }}", seen[-1], "Off or 100 %: the alert's own number")
+        new = "{{ states('b') | float(0) >= (charge_target_pct if true else 80) }}"
+        self.limiter(target=65)
+        await self.engine.preview(rule(preset="charge_target", condition=new))
+        self.assertEqual(seen[-1], new, "a rule that already follows the target is left alone")
+        await self.engine.preview(rule(preset="charge_done", condition=old))
+        self.assertIn("float(0) >= 80) }}", seen[-1], "other alerts keep their number")
+
+    async def test_the_limit_uses_the_quiet_hours_of_the_first_alert_that_has_them(self):
+        quiet = {"enabled": True, "from": "22:00", "to": "07:00", "mode": "skip"}
+        self.engine.config = {"enabled": True, "rules": [rule(id="a"), rule(id="b", quiet=quiet)]}
+        self.assertTrue(self.engine.limit_quiet(), "23:00 is inside 22:00-07:00, even for the hold mode (the message is not held)")
+        self.engine.config = {"enabled": True, "rules": [rule(id="a"), rule(id="b", quiet={**quiet, "from": "01:00", "to": "05:00"})]}
+        self.assertFalse(self.engine.limit_quiet())
+        self.engine.config = {"enabled": True, "rules": [rule(id="b", quiet=quiet, enabled=False)]}
+        self.assertFalse(self.engine.limit_quiet(), "a switched-off alert does not set quiet hours")
+        self.engine.config = {"enabled": True, "rules": []}
+        self.assertFalse(self.engine.limit_quiet())
+
+    def test_the_silent_look_is_one_shared_helper(self):
+        data = mod.apply_silent({"tag": "x"})
+        self.assertEqual((data["push"], data["channel"], data["tag"]), ({"interruption-level": "passive", "sound": "none"}, "Deepal Companion Silent", "x"))
+
+
 class SavedDelayIsKept(unittest.TestCase):
     def test_startup_migration_does_not_change_the_saved_wait_before_showing(self):
         for value in (0, 60, 120, 300):

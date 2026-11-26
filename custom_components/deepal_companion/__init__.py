@@ -33,16 +33,24 @@ class Hub:
         self.setting_keys = set()
         self.card_panel_in_sidebar = False  # default off; an admin can turn it on in Card Settings > Advanced
         self._card_panel_registered = False
-        self._card_panel_store = None
-        self._language_store = None
-        self._rate_store = None
+        self._settings_store = None  # one Home Assistant Store for page, language and update rate
+        self.language = "auto"
         self.update_rate = 0  # seconds; 0 = live. Spacing of saved readings and live notification refreshes, for every vehicle
         self.card_panel_pin = {"vehicle_id": "", "view_id": "", "design": ""}  # profile and design fixed for the card page
 
+    def settings_snapshot(self):
+        """Everything kept in the single settings store."""
+        return {"sidebar": self.card_panel_in_sidebar, **self.card_panel_pin,
+                "language": self.language, "update_rate": self.update_rate}
+
+    async def _save_settings(self, **changes):
+        snapshot = {**self.settings_snapshot(), **changes}
+        if self._settings_store is not None:
+            await self._settings_store.async_save(snapshot)
+
     async def set_card_panel_pin(self, pin):
         self.card_panel_pin = {**self.card_panel_pin, **pin}
-        if self._card_panel_store is not None:
-            await self._card_panel_store.async_save({"sidebar": self.card_panel_in_sidebar, **self.card_panel_pin})
+        await self._save_settings()
 
     async def set_language(self, choice):
         """The one notification language for everything Companion writes into phone notifications."""
@@ -50,8 +58,8 @@ class Hub:
         if choice not in MESSAGE_LANGUAGES:
             raise ValueError("Unknown notification language")
         set_language(self.hass, choice)
-        if self._language_store is not None:
-            await self._language_store.async_save({"language": choice})
+        self.language = choice
+        await self._save_settings()
         return language_choice(self.hass)
 
     async def set_update_rate(self, seconds):
@@ -60,16 +68,14 @@ class Hub:
         if type(seconds) is not int or seconds not in UPDATE_RATES:
             raise ValueError("Unknown update rate")
         self.update_rate = seconds
-        if self._rate_store is not None:
-            await self._rate_store.async_save({"seconds": seconds})
+        await self._save_settings()
         return seconds
 
     async def set_card_panel(self, visible):
         """Show or hide the card-only page in the sidebar. The page itself stays reachable by its address."""
         visible = bool(visible)
-        if self._card_panel_store is not None:
-            await self._card_panel_store.async_save({"sidebar": visible, **self.card_panel_pin})
         self.card_panel_in_sidebar = visible
+        await self._save_settings()
         await _register_card_panel(self.hass, self)
 
     async def db(self, method, *args):
@@ -81,6 +87,9 @@ class Hub:
         return await self.hass.async_add_executor_job(self.archive.read_snapshot, load)
 
     def changed(self, vehicle):
+        runtime = self.vehicles.get(vehicle)
+        if runtime is not None:
+            runtime.signal_revision += 1
         async_dispatcher_send(self.hass, SIGNAL, vehicle)
 
 
@@ -96,6 +105,27 @@ async def _register_card_panel(hass, hub):
         require_admin=False,
     )
     hub._card_panel_registered = True
+
+
+async def _import_old_settings(hass):
+    """Read the three older stores once. They are left on disk and never written again."""
+    from homeassistant.helpers.storage import Store
+    out = {"sidebar": False, "vehicle_id": "", "view_id": "", "design": "", "language": "auto", "update_rate": 0}
+    complete = True
+    for name, read in (
+        ("card_panel", lambda d: {"sidebar": d.get("sidebar") is True,
+                                  **{k: d[k] for k in ("vehicle_id", "view_id", "design") if isinstance(d.get(k), str)}}),
+        ("language", lambda d: {"language": d["language"]} if isinstance(d.get("language"), str) else {}),
+        ("update_rate", lambda d: {"update_rate": d["seconds"]} if type(d.get("seconds")) is int and d["seconds"] in (0, 300, 600) else {}),
+    ):
+        try:
+            data = await Store(hass, 1, DOMAIN + "." + name).async_load()
+            if isinstance(data, dict):
+                out.update(read(data))
+        except Exception:
+            complete = False  # a store that could not be read must not be replaced by defaults for good
+            _LOGGER.exception("Could not import the older %s setting", name)
+    return out, complete
 
 
 async def async_setup(hass, config):
@@ -118,30 +148,21 @@ async def async_setup(hass, config):
     )
     try:
         from homeassistant.helpers.storage import Store
-        hub._card_panel_store = Store(hass, 1, DOMAIN + ".card_panel")
-        saved = await hub._card_panel_store.async_load()
-        if isinstance(saved, dict) and isinstance(saved.get("sidebar"), bool):
-            hub.card_panel_in_sidebar = saved["sidebar"]
-        if isinstance(saved, dict):
-            hub.card_panel_pin = {k: saved[k] if isinstance(saved.get(k), str) else "" for k in ("vehicle_id", "view_id", "design")}
-    except Exception:
-        _LOGGER.exception("Could not read the card page setting; showing it in the sidebar")
-    try:
-        from homeassistant.helpers.storage import Store
-        hub._language_store = Store(hass, 1, DOMAIN + ".language")
         from .phone_text import set_language
-        saved = await hub._language_store.async_load()
-        set_language(hass, saved.get("language") if isinstance(saved, dict) else "auto")
+        hub._settings_store = Store(hass, 1, DOMAIN + ".settings")
+        saved = await hub._settings_store.async_load()
+        if not isinstance(saved, dict):  # first start after the upgrade: import the three older stores once
+            saved, complete = await _import_old_settings(hass)
+            if complete:  # otherwise the import runs again on the next start; the defaults only apply until then
+                await hub._settings_store.async_save(saved)
+        hub.card_panel_in_sidebar = saved.get("sidebar") is True
+        hub.card_panel_pin = {k: saved[k] if isinstance(saved.get(k), str) else "" for k in ("vehicle_id", "view_id", "design")}
+        hub.language = saved["language"] if isinstance(saved.get("language"), str) else "auto"
+        set_language(hass, hub.language)
+        if type(saved.get("update_rate")) is int and saved["update_rate"] in (0, 300, 600):
+            hub.update_rate = saved["update_rate"]
     except Exception:
-        _LOGGER.exception("Could not read the notification language; following the Home Assistant language")
-    try:
-        from homeassistant.helpers.storage import Store
-        hub._rate_store = Store(hass, 1, DOMAIN + ".update_rate")
-        saved = await hub._rate_store.async_load()
-        if isinstance(saved, dict) and type(saved.get("seconds")) is int and saved["seconds"] in (0, 300, 600):
-            hub.update_rate = saved["seconds"]
-    except Exception:
-        _LOGGER.exception("Could not read the data update rate; using live")
+        _LOGGER.exception("Could not read the saved Companion settings; using the defaults")
     await _register_card_panel(hass, hub)
     # Register the bundled card in Lovelace's resource collection when using storage mode.
     from homeassistant.components.lovelace.const import LOVELACE_DATA
@@ -160,7 +181,9 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass, entry):
     from .phone_text import async_preload
+    from .live_charging import async_preload as preload_live_defaults
     await async_preload(hass)
+    await preload_live_defaults(hass)
     hub = hass.data[DOMAIN]
     # A reload does not rerun async_setup. Recheck the idempotent schema here
     # in case the archive file was removed/replaced while HA was running.

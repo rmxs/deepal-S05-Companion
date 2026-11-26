@@ -19,6 +19,7 @@ import re
 import time
 import uuid
 
+from .const import vehicle_entity
 from .phone_text import tr
 
 _LOGGER = logging.getLogger(__name__)
@@ -389,8 +390,7 @@ class Preconditioning:
 
     # -- vehicle readings
     def entity(self, logical):
-        mapped = self.runtime.config.get("entities", {}).get(logical)
-        return mapped or logical.replace(".", "." + self.runtime.config.get("prefix", "s05") + "_", 1)
+        return vehicle_entity(self.runtime, logical)
 
     def get(self, logical):
         return self.hass.states.get(self.entity(logical))

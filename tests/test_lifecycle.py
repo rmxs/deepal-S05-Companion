@@ -34,7 +34,8 @@ async def register_panel(hass, **kwargs):
 module("homeassistant.components.panel_custom", async_register_panel=register_panel)
 module("homeassistant.components.lovelace")
 module("homeassistant.components.lovelace.const", LOVELACE_DATA="lovelace")
-module("homeassistant.helpers.entity_registry", async_get=lambda hass: hass.registry, EVENT_ENTITY_REGISTRY_UPDATED="entity_registry_updated")
+module("homeassistant.helpers.entity_registry", async_get=lambda hass: hass.registry, EVENT_ENTITY_REGISTRY_UPDATED="entity_registry_updated",
+       async_entries_for_device=lambda registry, device_id, include_disabled_entities=False: [e for e in registry.entities.values() if e.device_id == device_id])
 module("homeassistant.helpers.config_validation", config_entry_only_config_schema=lambda domain: {"config_entry_only": domain})
 module("homeassistant.helpers.device_registry", DeviceInfo=lambda **kwargs: kwargs, async_get=lambda hass: getattr(
     hass, "device_registry", types.SimpleNamespace(async_get=lambda ident: None)))
@@ -478,6 +479,25 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         await hub.set_card_panel(True)
         self.assertEqual(card()[0]["sidebar_title"], "Deepal Card")
 
+    async def test_three_older_settings_stores_are_imported_once_into_one(self):
+        Store.saved.pop("deepal_companion.settings", None)  # the stand-in Store is shared between tests
+        Store.saved["deepal_companion.card_panel"] = {"sidebar": True, "vehicle_id": "v1", "view_id": "profile-a", "design": "wide"}
+        Store.saved["deepal_companion.language"] = {"language": "el"}
+        Store.saved["deepal_companion.update_rate"] = {"seconds": 300}
+        await integration.async_setup(self.hass, {})
+        hub = self.hass.data["deepal_companion"]
+        self.assertTrue(hub.card_panel_in_sidebar)
+        self.assertEqual(hub.card_panel_pin, {"vehicle_id": "v1", "view_id": "profile-a", "design": "wide"})
+        self.assertEqual((hub.language, hub.update_rate), ("el", 300))
+        self.assertEqual(Store.saved["deepal_companion.settings"], {
+            "sidebar": True, "vehicle_id": "v1", "view_id": "profile-a", "design": "wide", "language": "el", "update_rate": 300})
+        await hub.set_update_rate(600)
+        await hub.set_language("es")
+        self.assertEqual(Store.saved["deepal_companion.settings"]["update_rate"], 600)
+        self.assertEqual(Store.saved["deepal_companion.settings"]["language"], "es")
+        self.assertEqual(Store.saved["deepal_companion.settings"]["vehicle_id"], "v1")  # a save never drops the other settings
+        self.assertEqual(Store.saved["deepal_companion.update_rate"], {"seconds": 300})  # the old store is left untouched
+
     async def test_setup_resources_and_backend_start_stop(self):
         self.assertTrue(await integration.async_setup(self.hass, {}))
         self.assertEqual(len(self.hass.commands), 5)  # request, card panel, live updates, charge plan, car log
@@ -631,9 +651,9 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         for view in (first, second):
             config = (await hub.db("config", "vehicle", view))["config"]
             self.assertEqual((config["car_color"], config["powertrain"]), ("blue", "ev"))
-        # ...while display settings stay with the profile that changed them.
-        self.assertEqual((await hub.db("config", "vehicle", first))["config"]["hero_style"], "photo")
-        self.assertNotEqual((await hub.db("config", "vehicle", second))["config"].get("hero_style"), "photo")
+        # Picture style is part of the physical car look too, so every profile shows the same one.
+        for view in (first, second):
+            self.assertEqual((await hub.db("config", "vehicle", view))["config"]["hero_style"], "photo")
 
     def add_battery(self, ident, platform="deepal", key="battery_level", disabled=None):
         entry = types.SimpleNamespace(id=ident+"_registry", entity_id=ident, platform=platform,
@@ -643,6 +663,50 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.hass.registry.async_get = lambda ident: self.hass.registry.entities.get(ident)
         self.hass.values[ident] = self.hass.state(ident, "79", "%")
         return entry
+
+    async def test_other_language_entities_are_found_by_translation_key(self):
+        """Home Assistant in Spanish: entity ids follow the translated names, the translation_key stays fixed."""
+        const = importlib.import_module("companion_lifecycle.const")
+        battery = self.add_battery("sensor.s05_battery_level")
+        def car(ident, key, platform="deepal", value="on"):
+            self.hass.registry.entities[ident] = types.SimpleNamespace(
+                id=ident + "_registry", entity_id=ident, platform=platform, translation_key=key, unique_id="vehicle_" + key,
+                config_entry_id="source", device_id=battery.device_id, disabled_by=None)
+            self.hass.values[ident] = self.hass.state(ident, value, "")
+        car("climate.s05_climatizacion", "cabin_climate", value="off")
+        car("sensor.s05_temperatura_interior", "inside_temperature", value="21")
+        car("binary_sensor.s05_conexion_a_la_nube", "connected")
+        car("binary_sensor.s05_ventana_delantera_izquierda", "window_open_front_left", value="off")
+        car("sensor.otro_temperatura_exterior", "outside_temperature", platform="other", value="9")
+        self.assertTrue(await integration.async_setup(self.hass, {}))
+        self.assertTrue(await integration.async_setup_entry(self.hass, self.entry))
+        self.runtime = self.entry.runtime_data
+        await self.runtime.queue.join()
+        resolve = self.runtime.resolve_entity
+        self.assertEqual(resolve("climate.cabin_climate"), "climate.s05_climatizacion")
+        self.assertEqual(resolve("sensor.inside_temperature"), "sensor.s05_temperatura_interior")
+        self.assertEqual(resolve("binary_sensor.front_left_window_open"), "binary_sensor.s05_ventana_delantera_izquierda")
+        self.assertEqual(self.runtime.entities["cloud"], "binary_sensor.s05_conexion_a_la_nube")
+        # Matching English ids are unchanged; another integration's entity is never taken; nothing found keeps the English id.
+        self.assertEqual(resolve("sensor.battery_level"), "sensor.s05_battery_level")
+        self.assertEqual(resolve("sensor.outside_temperature"), "sensor.s05_outside_temperature")
+        # Preconditioning and Live status use the same resolver.
+        self.assertEqual(self.runtime.preconditioning.entity("climate.cabin_climate"), "climate.s05_climatizacion")
+        self.assertEqual(const.vehicle_entity(self.runtime, "sensor.inside_temperature"), "sensor.s05_temperatura_interior")
+        # The user's own mapping always wins.
+        self.runtime.config = {**self.runtime.config, "entities": {"climate.cabin_climate": "climate.my_car"}}
+        self.assertEqual(resolve("climate.cabin_climate"), "climate.my_car")
+        self.assertEqual(self.runtime.preconditioning.entity("climate.cabin_climate"), "climate.my_car")
+
+    async def test_translation_keys_match_the_card_table(self):
+        const = importlib.import_module("companion_lifecycle.const")
+        self.assertEqual(const.translation_key_of("binary_sensor.cloud_connection"), "connected")
+        self.assertEqual(const.translation_key_of("sensor.rear_right_window_opening"), "window_opening_rear_right")
+        self.assertEqual(const.translation_key_of("binary_sensor.front_left_door"), "door_front_left")
+        self.assertEqual(const.translation_key_of("climate.cabin_climate"), "cabin_climate")
+        runtime = types.SimpleNamespace(config={"prefix": "car", "entities": {"lock.doors": "lock.mine"}})
+        self.assertEqual(const.vehicle_entity(runtime, "lock.doors"), "lock.mine")
+        self.assertEqual(const.vehicle_entity(runtime, "sensor.power_status"), "sensor.car_power_status")
 
     async def test_single_vehicle_hides_technical_fields(self):
         self.add_battery("sensor.mycar_battery_level")

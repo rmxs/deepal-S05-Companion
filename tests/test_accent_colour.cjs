@@ -1,6 +1,6 @@
 const assert=require('assert');
 /* Theme colour: six colour blocks in Appearance (no dropdown), green by default, saved per profile, theme-aware,
-   and never touching status colours, battery levels or the info tile icons. */
+   and never touching status colours or battery levels (the info tile icons do follow the theme colour). */
 module.exports=async page=>{
   const panel=()=>document.querySelector('deepal-companion-panel');
   const first=await page.evaluate(()=>{const p=document.querySelector('deepal-companion-panel'),w=p.settings;w._setTab('look');
@@ -24,7 +24,7 @@ module.exports=async page=>{
       tile:tile?getComputedStyle(tile).color:null,cfg:p.settings._cfg.accent_color,on:[...p.settings.shadowRoot.querySelectorAll('[data-sset^="accent_color|"].on')].map(b=>b.dataset.sset)};});
   assert.equal(blue.saved,true,'the choice is sent to the backend');assert.equal(blue.cfg,'blue');assert.deepEqual(blue.on,['accent_color|blue']);
   assert.equal(blue.ok,'52,211,153','status green is not the accent');assert.equal(blue.rot,JSON.parse(require('fs').readFileSync('source/colour-tokens.json','utf8')).accents.find(a=>a.id==='blue').hue+'deg');
-  if(blue.tile)assert.equal(blue.tile,'rgb(52, 211, 153)','info tile icons keep their own colour');
+  if(blue.tile)assert.equal(blue.tile,'rgb(0, 145, 255)','info tile icons follow the theme colour');
   // light Home Assistant theme uses the deeper shade; switching back restores the bright one
   await page.evaluate(()=>{window.testHass.themes={darkMode:false};document.querySelector('deepal-companion-panel').preview.hass={...window.testHass};});
   await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').preview._el.card.style.getPropertyValue('--ds-ac')==='0,92,190');

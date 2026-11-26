@@ -6,14 +6,14 @@
 
 1. Open **Deepal Companion** from the Home Assistant sidebar. For just the card, open **Deepal Card** (`/deepal-companion-card`) instead; it shows the profile you last chose in Card Settings. On a phone it fills the whole screen; on a computer it stays a normal card.
 
-The card and the Companion pages follow your Home Assistant theme, light or dark. The vehicle photo areas (Car View and the interior view) always stay dark, with white text. To show it in the sidebar, turn on **Show “Deepal Card” in the sidebar** under **Card Settings → Advanced** (off by default).
+The card and the Companion pages follow your Home Assistant theme, light or dark. The vehicle photo areas (Car View and the interior view) always stay dark, with white text. To show it in the sidebar, turn on **Show “Deepal Card” in the sidebar** under **Card Settings → Advanced → App** (off by default).
 2. Choose your vehicle if you have more than one configured.
 3. Use the five pages at the top:
    - **Card Settings** — customise the dashboard card.
    - **Notifications** — choose phone alerts and Live notifications.
    - **Preconditioning** — start the climate remotely, set schedules and battery protection. See the [Preconditioning guide](PRECONDITIONING.md).
    - **Sessions** — browse charging sessions, curves and costs.
-   - **Charging Profiles** — set up charging locations and prices.
+   - **Charging page** — set up charging locations and prices, and the Charger limit.
 
 The selected page is kept in the URL, so refreshing returns you to it.
 
@@ -40,7 +40,7 @@ Each dashboard card selects a profile. You can use a compact mobile profile and 
 8. Drag the Info rows, or use their up/down buttons, to set their order.
 9. Use the same controls to arrange your custom information tiles.
 
-New/reset profiles use this section order: Vehicle image → Control buttons → Status → Charging → Charging curve → Temperature & battery → Info → Charging costs. The separate **Charging** and **Charging costs** sections start off; **Charging curve** starts on and appears while charging.
+New/reset profiles use this section order: Vehicle image → Control buttons → Status → Charging → Temperature & battery → Info → Charging costs. The separate **Charging** and **Charging costs** sections start off. **Charging curve** (in **Advanced → Charging records**) starts on and appears while charging.
 
 The charging text on the vehicle image is configured separately in **Card Settings → Charging**.
 
@@ -67,9 +67,10 @@ Simulated states use the same card display with example vehicle readings. Demo c
 3. Adjust image zoom, aspect ratio and space around the car.
 4. Choose a plain background, an automatic day/night background, or a fixed time of day. Morning and afternoon show a deeper blue sky that suits the dark theme, the evening shows a dusk sky, and the night keeps the moon and stars.
 5. Set margins and on-screen messages.
-6. Open **Card Settings → Colours**. Choose Green, Grey or Blue tile icons, or select **Custom** and pick a colour. Set airflow colours, battery/fuel level colours and the colour of each live notification state here too.
+6. Set the airflow colours, the battery and fuel level colours and the colour of each live notification state in **Card Settings → Advanced → Look → Colours**.
 7. In **Appearance**, pick a **Theme colour** from nine colours. In Car View, **Neon city** is a background that changes between day, afternoon and night.
-8. Open **Card Settings → Advanced** to change paint, wheels, custom photos or the **Data update rate** (Live, 5 min or 10 min).
+8. In **Appearance → Car View**, set **Car side** to Auto, Driver or Passenger side to mirror the 3/4 picture so the car faces the side you prefer. The plate text stays readable.
+9. Open **Card Settings → Vehicle** to change the car colour and wheels. Use **Card Settings → Advanced → Vehicle and sensors** for custom photos, and **Card Settings → Advanced → App** for the **Data update rate** (Live, 5 min or 10 min).
 
 Card appearance changes update the preview as you work. Check the save feedback before leaving a page. Where **Save** and **Cancel changes** are shown, save to keep edits or cancel to return to the saved values.
 
@@ -80,11 +81,11 @@ Card appearance changes update the preview as you work. Check the save feedback 
 3. Check the card’s response message and the next vehicle update.
 4. Open climate, cabin or tyres for the detailed controls and readings.
 
-Every command that asks first (lock, unlock, windows, trunk, climate, lights, horn, locate and refresh) uses the same window as the lock on the car image: the current state, **Cancel** and **Confirm**, with the question underneath. To change which commands ask, open **Card Settings → Controls**. That menu also contains climate tile style, temperature selector and climate-on mode. Available actions depend on your vehicle entities.
+Every command that asks first (lock, unlock, windows, trunk, climate, lights, horn, locate and refresh) uses the same window as the lock on the car image: the current state, **Cancel** and **Confirm**, with the question underneath. To change which commands ask, open **Card Settings → Controls**. That menu also contains the climate tile style and temperature selector. The climate-on mode is in **Advanced → Vehicle and sensors**. Available actions depend on your vehicle entities.
 
 ## 7. Set up a charging location
 
-1. Open **Charging Profiles**.
+1. Open **Charging**.
 2. Expand a location, such as **Home** or **Work**, or choose **Add location**.
 3. Enter its name. Start typing to choose a suggested charging network, or enter your own name. Suggestions do not set a tariff.
 4. For a free location, enable **Free charging**.
@@ -104,7 +105,7 @@ Home, Work, Free, Ionity and Public are provided as starting locations. Work and
 
 ### Delete a charging profile
 
-1. Expand the profile in **Charging Profiles**.
+1. Expand the profile in **Charging**.
 2. Choose **Delete profile** and read the confirmation.
 3. Confirm deletion, then choose **Save profiles**.
 4. Use **Cancel changes** before saving if you want to restore it.
@@ -126,11 +127,11 @@ Suggested network names include Zunder, Iberdrola | bp pulse, Repsol, Wenea and 
 
 You can enter a one-off payment without creating a location. Entering **Total paid** automatically selects **Manual charge (no profile)** and clears the free-charging selection. A total payment overrides the calculated amount. **Not priced** means a price has not been assigned; **Free charging** means zero cost. Changing a location’s tariff does not reprice charges already assigned to it.
 
-If a **Charging detected** reminder appears on the card, select a profile and assign it, open charging costs, or dismiss it until the next charge. Assigning the cost from the Sessions page clears the reminder too. Enable **Card Settings → Layout → Sections → Charging reminder** to show these reminders. **Charging costs** controls the separate cost block. Either block can stay off while the other is on; your saved sessions and costs are kept.
+If a **Charging detected** reminder appears on the card, select a profile and assign it, open charging costs, or dismiss it until the next charge. Assigning the cost from the Sessions page clears the reminder too. Enable **Card Settings → Advanced → Charging records → Charging reminder** to show these reminders. **Charging costs** controls the separate cost block. Either block can stay off while the other is on; your saved sessions and costs are kept.
 
 ### Test the charging-detected reminder
 
-1. Open **Card Settings → Layout → Sections** and enable **Charging reminder**. Charging costs can stay off.
+1. Open **Card Settings → Advanced → Charging records** and enable **Charging reminder**. Charging costs can stay off.
 2. In **Live preview**, select **Charging detected**.
 3. Enable **Allow clicks**.
 4. Choose a sample profile and select **Assign**, or try **Dismiss until next charge**.
@@ -138,11 +139,11 @@ If a **Charging detected** reminder appears on the card, select a profile and as
 
 Preview actions do not save costs, dismiss real reminders or send vehicle commands. The sample profiles and prices are demonstration values.
 
-On the real card, the reminder needs a finished charge that added at least the minimum set in **Card Settings → Advanced → Ask for a charging profile after at least (%)** (3 percentage points by default), without a data gap, and no location assigned. A charge that is still in progress does not ask. If you missed several charges, they are offered one at a time, oldest first, among the latest charges set in **Recent charges checked for the reminder** (10 by default). It is an on-card reminder. Assigning a location from Sessions clears it; dismissing a charge hides only that charge, for that user, and the next unanswered charge is shown.
+On the real card, the reminder needs a finished charge that added at least the minimum set in **Card Settings → Advanced → Charging records → Ask for a charging profile after at least (%)** (3 percentage points by default), without a data gap, and no location assigned. A charge that is still in progress does not ask. If you missed several charges, they are offered one at a time, oldest first, among the latest charges set in **Recent charges checked for the reminder** (10 by default). It is an on-card reminder. Assigning a location from Sessions clears it; dismissing a charge hides only that charge, for that user, and the next unanswered charge is shown.
 
 **Ignore one-off battery jumps above (%)** (default 20) protects the recorded charge: a single battery reading far above the charge so far is ignored until the next reading confirms it. A real fast jump is counted as soon as one more reading agrees.
 
-**Charging target.** Set **Card Settings → Charging → Charging target (%)** to a goal from 50 to 100 %. While charging, the Energy tile shows the goal with an estimated time, for example “80 % at ~22:21”; at 100 % it shows “Full at” that time. The card cannot stop charging. To receive a phone alert when the target is reached, enable the charging notification and use it together with this setting in **Notifications**.
+**Charging target.** Set **Stop charging at** in the **Charger limit** block (**Charging** page) to a goal from 50 to 95 % (or the presets Off, 70, 80 or 90 %). 100 % does nothing as a Charger limit. While charging, the Energy tile shows the goal with an estimated time, for example “80 % at ~22:21”; at 100 % it shows “Full at” that time. The card itself cannot stop charging; the Charger limit can, when you connect your own charger there. To receive a phone alert when the target is reached, enable the charging notification and use it together with this setting in **Notifications**.
 
 ## 9. Browse sessions and charts
 
@@ -173,9 +174,9 @@ In the costs dashboard, the energy total is labelled **Energy from charger**. It
 
 Curves use amps over time and fit the recorded charging interval. Dots mark changed readings. Battery percentages appear below the time axis when battery readings are available. The final zero reading marks the charging stop; Low/High describe the active charging current.
 
-To display the current charge on the main card, enable **Card Settings → Layout → Sections → Charging curve**. It appears while charging. Saved curves remain available from each archived charge when readings were captured or imported.
+To display the current charge on the main card, enable **Card Settings → Advanced → Charging records → Charging curve**. It appears while charging. Saved curves remain available from each archived charge when readings were captured or imported.
 
-The curve is a step line: each reported current is held until the next change, so nothing is drawn between readings the car never sent. Changes smaller than 0.2 A are not drawn. Dots mark the moments the charging current changed. A stretch with no battery progress for longer than **Card Settings → Advanced → A stop longer than this starts a new charge (min)** is joined by a lighter grey line; hover or touch it to see that data is missing, and when it started and ended. Turn this off with **Highlight Missing Data**. While the car charges, the line continues from the last dot to the current time and battery level, so a steady current still shows progress. If the car reports nothing new, the line is refreshed every few minutes (**Card Settings → Advanced → Refresh the charging curve every (min)**, default 5).
+The curve is a step line: each reported current is held until the next change, so nothing is drawn between readings the car never sent. Changes smaller than 0.2 A are not drawn. Dots mark the moments the charging current changed. A stretch with no battery progress for longer than **Card Settings → Advanced → Charging records → A stop longer than this starts a new charge (min)** is joined by a lighter grey line; hover or touch it to see that data is missing, and when it started and ended. Turn this off with **Highlight Missing Data**. While the car charges, the line continues from the last dot to the current time and battery level, so a steady current still shows progress. If the car reports nothing new, the line is refreshed every few minutes (**Card Settings → Advanced → Charging records → Refresh the charging curve every (min)**, default 5).
 
 ### Correct or delete a charge (administrators)
 
@@ -213,38 +214,50 @@ Saved sessions, prices and charging readings remain in Companion’s archive aft
 4. Send a test and confirm it reaches the phone.
 5. Configure quiet hours and save.
 6. Follow the [notification guide](NOTIFICATIONS.md) to customise individual alerts and enable Live notifications.
-7. In **Card Settings → Colours**, choose Red, Orange, Yellow or Green for each live notification state.
+7. In **Card Settings → Advanced → Look → Colours**, choose Red, Orange, Yellow or Green for each live notification state.
 
 ## 13. Warm or cool the car before you leave
 
-1. On the card, open **Preconditioning** (in **More**), or open **Preconditioning** in the Companion dashboard.
+Quick start: in the climate pop-up, use the slim line: pick **Cool**, **Comfort** or **Hot**, then **5**, **10** or **15** minutes, then **Start**. While it runs the line shows the countdown and **Stop**. The seat heating and ventilation buttons are in the Seats view.
+
+For more options:
+
+1. On the card, open **Preconditioning** (in **More**).
 2. Move the **Temperature** and **Duration** bars, then press **Start preconditioning**. Press **Stop preconditioning** to end it early.
 3. To start automatically, open the dashboard page, turn on **Scheduled preconditioning** under **General** (it is off by default), then choose **Create schedule**. Pick **Start at** a time, or **Ready by** a time to start earlier.
 4. Under **Notifications**, choose the phones and the events you want to hear about, then press **Send test notification**.
 5. Optional: turn on **Battery protection** and choose a minimum battery level.
 
-The box at the top of the page, **Your setup in short**, explains your choices in plain words. The car allows remote climate for 15 minutes and only while it is parked and switched off. Read the [Preconditioning guide](PRECONDITIONING.md) for every option.
+The box at the top of the page, **Summary**, explains your choices in plain words. The car allows remote climate for 15 minutes and only while it is parked and switched off. Read the [Preconditioning guide](PRECONDITIONING.md) for every option.
 
 ## 14. Set the charging schedule (Charge plan)
 
 1. Tap the clock button on the **Energy** tile, or the **Charge plan** tile if you added it to the Information row.
-2. Turn **Plan is on**, then choose the **Start** and **End** times. The end must be at least 30 minutes after the start.
-3. To charge without a cut-off, press **Until full** next to End. The field then reads **Until battery full / No cutoff**.
+2. Turn on **Scheduled charging**, then choose the **Start** and **End** times. The end must be at least 30 minutes after the start.
+3. To charge without a cut-off, press **Until full** next to End. The field then reads **Until full / No cutoff**.
 4. Press **Save plan**. The tile shows the plan and the Health tab checks that the car agrees.
 
 The window opens only when the car has the schedule entities from Deepal Alternative. A plan set in the Deepal app or on the car (S05 PHEV) cannot be changed here: turn it off there first.
 
 ## 15. Read the car logs
 
-Open **Car logs** in the Companion dashboard. Events are listed in plain language, newest first, grouped by day: **Security** (locks, doors, windows, left unlocked), **Charging** (cable and every charge) and **Others** (warnings, key fob battery, tyre alarms, preconditioning). Tap a tile to filter the list. The page only reads what Companion has recorded; nothing is sent to the car.
+Open **Car logs** in the Companion dashboard. Events are listed in plain language, newest first, grouped by day: **Security** (locks, doors, windows, left unlocked), **Charging** (cable and every charge) and **Others** (warnings, key fob battery, tyre alarms, preconditioning). Tap a tile to filter the list. Companion loads the newest 30 entries; **Show older** loads the next 30. The page only reads what Companion has recorded; nothing is sent to the car.
 
 ## 16. Open a statistics window
 
 Tap a number tile on the card, such as **Odometer**, **Fuel**, **Inside** or **Humidity**. Choose **7 days**, **30 days** or **12 months** for the chart. The figures below show distance (today, this week, this month), fuel used and the last refuel, or the average, lowest and highest value. Sensors without long-term statistics show up to 30 days.
 
-## 17. Check that everything works
+## 17. See your real range
 
-Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. A problem says what is wrong and what to do, in the Home Assistant language where a translation exists. Electric cars are not checked for fuel sensors. A pulsing red dot on the tab means a warning or error. The page only reads; it never changes settings or sends a notification.
+1. Tap the big range number on the card.
+2. Choose **7 days**, **30 days** or **12 months** for the chart. Plug-in hybrids also show the petrol tank level as a dashed line.
+3. Read the figures under the chart: **Efficiency** (your real range compared with the car’s figure), **Per 1% battery** (real kilometres per 1 % of battery) and **Per 100 km** (battery energy in kWh, plus petrol in litres on hybrids). Once there is enough data, bars show the real range by outside temperature.
+
+The car’s own range is only the battery level times a fixed factor, so Companion works out the real range from the kilometres you drove and the battery you used. Short trips count. Trips with the engine running, trips that end below 15 % battery and trips with charging in the middle are left out, so a few days of driving are needed before the figures settle.
+
+## 18. Check that everything works
+
+Open the **Health** tab in Companion. It lists the vehicle sensors, the charging recorder, the database, notification devices, the last notification and charging prices, each marked OK, Warning or Error. Passing checks are folded into one **N checks passed** dropdown; failing checks and the Charge plan stay visible. A problem says what is wrong and what to do, in the Home Assistant language where a translation exists. Electric cars are not checked for fuel sensors. A pulsing red dot on the tab means a warning or error. The page only reads; it never changes settings or sends a notification.
 
 In **Notifications**, choose **Why isn’t it sending?** on an alert to see why it is or is not being sent right now: switches, condition (each part with its current value), delay, send limit, repeat, quiet hours and devices. Tap **?** beside a line to learn what the sensor is and when it changes.
 

@@ -20,7 +20,7 @@ export async function alignNavigationField(picker){
   await visit(picker);
 }
 export const LIVE_DEFAULTS = {
-  climate: {enabled: false, devices: [], min_interval: 120, max_age: 1800, start_delay: 0, end_delay: 30, temp_step: 1, ready_margin: 1, show_target: true, show_outside: false, show_progress: true, show_timer: true, show_updated: false, turn_off_button: true, max_run: 0, ...LOOK},
+  climate: {enabled: false, devices: [], min_interval: 120, max_age: 1800, start_delay: 0, end_delay: 30, parked_after: 360, temp_step: 1, ready_margin: 1, show_target: true, show_outside: false, show_progress: true, show_timer: true, show_updated: false, turn_off_button: true, max_run: 0, only_parked: true, ...LOOK},
   open: {enabled: false, devices: [], min_interval: 30, max_age: 3600, start_delay: 300, end_delay: 10, parked_after: 360, items: OPEN_ITEMS, include_unlocked: true, only_parked: true, lock_button: true, max_shown: 4, show_count: true, show_timer: true, show_updated: false, ...LOOK},
 };
 const GROUPS = {doors: OPEN_ITEMS.slice(0, 4), windows: OPEN_ITEMS.slice(4, 8), hood: ['hood'], trunk: ['trunk']};
@@ -39,8 +39,9 @@ const KINDS = {
     rows: [sw('show_timer', 'Show time remaining', 'Time left until the charge finishes'), num('min_interval', 'Update at most every', 'Shortest time between Lock Screen updates', 'min', 60, 1, 60), num('battery_step', 'Update every', 'Refresh when the battery changes by this much', '%', 1, 1, 20)]},
   climate: {name: 'Live climate', icon: 'mdi:fan', sub: 'Cabin temperature while the climate is on', info: 'Shown while the climate is on, with the cabin temperature against the target.',
     presets: ['mdi:fan', 'mdi:air-conditioner', 'mdi:thermometer-lines', 'mdi:snowflake'],
-    rows: [sw('show_target', 'Show target temperature', 'The temperature the climate is heading to'), sw('show_outside', 'Show outside temperature', 'Outdoor reading next to the cabin value'), sw('show_progress', 'Show progress bar', 'How close the cabin is to the target'), sw('show_timer', 'Show running time', 'How long the climate has been on'),
-      sw('turn_off_button', '“Turn off” button', 'Stop the climate from the notification', 'Android only'), num('min_interval', 'Update at most every', 'Shortest time between Lock Screen updates', 'min', 60, 1, 60), num('start_delay', 'Wait before showing', 'Skip short runs by waiting first', 'min', 60, 0, 10)]},
+    rows: [sw('only_parked', 'Only when the car is parked', 'Nothing while driving', null, 'watch'), sw('show_target', 'Show target temperature', 'The temperature the climate is heading to'), sw('show_outside', 'Show outside temperature', 'Outdoor reading next to the cabin value'), sw('show_progress', 'Show progress bar', 'How close the cabin is to the target'), sw('show_timer', 'Show running time', 'How long the climate has been on'),
+      sw('turn_off_button', '“Turn off” button', 'Stop the climate from the notification', 'Android only'), num('min_interval', 'Update at most every', 'Shortest time between Lock Screen updates', 'min', 60, 1, 60),
+      num('parked_after', 'Count as parked after', 'Time stopped before the car counts as parked', 'min', 60, 1, 60), num('start_delay', 'Wait before showing', 'Skip short runs by waiting first', 'min', 60, 0, 10)]},
   open: {name: 'Left open or unlocked', icon: 'mdi:car-door-lock-open', sub: 'Open doors, windows and an unlocked car', info: 'One notification lists what is open or unlocked. Items drop off as they close; it disappears when all is secure.',
     presets: ['mdi:car-door-lock-open', 'mdi:lock-open-variant-outline', 'mdi:window-open', 'mdi:shield-lock'],
     rows: [grp('doors', 'Doors', 'All four doors'), grp('windows', 'Windows', 'All four windows'), grp('hood', 'Bonnet', 'The front bonnet'), grp('trunk', 'Trunk', 'The rear trunk'), sw('include_unlocked', 'Unlocked car', 'Also alert when the car is unlocked', null, 'watch'), sw('only_parked', 'Only when the car is parked', 'Nothing while driving', null, 'watch'),
@@ -157,7 +158,7 @@ export function mountLive({q, getState, getUrl, setUrl, getDevices, getHass, req
       page.feedback.hidden = false; page.feedback.dataset.kind = failures.length ? 'error' : 'success';
       page.feedback.textContent = failures.length ? failures.map((row) => row.error).join('; ') : stop ? (sent.length ? T('Test ended. Your real notification is unchanged.') : T('No test is running.')) : T('Test sent to {0} device(s). Phone delivery is not confirmed.', sent.length);
       toast(failures.length ? 'Test could not be delivered.' : stop ? 'Test ended.' : 'Test sent. Check your phone.', !!failures.length);
-    } catch (error) { page.feedback.hidden = false; page.feedback.dataset.kind = 'error'; page.feedback.textContent = error.message || String(error); toast(page.feedback.textContent, true); } finally { busy(false); refresh(); }
+    } catch (error) { page.feedback.hidden = false; page.feedback.dataset.kind = 'error'; page.feedback.textContent = window.__DEEPAL_COMPANION_UI.tError(error.message) || String(error); toast(page.feedback.textContent, true); } finally { busy(false); refresh(); }
   };
   // Where the phone opens when a notification is tapped: next to "Old data protection", in the same box.
   const tapPicker = document.createElement('ha-selector'), tapPanel = el('div', 'space-y-3');

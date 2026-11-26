@@ -12,7 +12,7 @@ module.exports=async page=>{
         throw error;
       }
       if(mode==="settings")await page.waitForFunction(()=>!!document.querySelector("deepal-companion-panel").preview?._c);
-      if(mode==="settings")await panel.evaluate(root=>root.settings._setTab('colours'));
+      if(mode==="settings")await panel.evaluate(root=>root.settings._setTab('advanced'));
       if(mode==="chargers")await panel.locator(".cc-profile").first().waitFor({state:"attached"});
       if(mode==="history")await panel.locator(".archive .charge-session-list").waitFor();
       await page.waitForTimeout(200);
@@ -40,7 +40,7 @@ module.exports=async page=>{
         assert(colours.swatchWidth>colours.swatchHeight,'Swatches must be rectangular at '+width);
         assert(colours.radius<colours.swatchHeight/2,'Swatches must not be circular at '+width);
         assert.deepEqual(colours.labels,['Cool','Mild','Warm','Red','Orange','Yellow','Green']);
-        for(const tab of ['layout','look','controls','charge','colours','sensors','notify','vehicle']){
+        for(const tab of ['layout','look','controls','charge','vehicle','advanced']){
           const fits=await panel.evaluate((root,tab)=>{
             root.settings._setTab(tab);
             const widget=root.settings,sr=widget.shadowRoot,bounds=widget.getBoundingClientRect();
@@ -48,7 +48,7 @@ module.exports=async page=>{
           },tab);
           assert.equal(fits,true,tab+' fields overflow at '+width);
         }
-        await panel.evaluate(root=>root.settings._setTab('colours'));
+        await panel.evaluate(root=>root.settings._setTab('advanced'));
         if(width===1440||width===390)await page.screenshot({path:path.resolve(__dirname,'../settings-colours-'+width+'.png'),fullPage:true});
       }
       report.push({width,mode,passed:true});

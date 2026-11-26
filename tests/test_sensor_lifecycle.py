@@ -203,11 +203,13 @@ class SensorLifecycleTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 active -= 1
         entity = self.sensor_with(summary)
-        entity.SUMMARY_TIMEOUT = 0.05
+        # The timeout must be much longer than the burst below, or a slow machine lets the first timeout
+        # fire while changes are still arriving, which adds a third read and makes this test flaky.
+        entity.SUMMARY_TIMEOUT = 0.5
         for _ in range(20):
             entity._changed("car")
             await asyncio.sleep(0)
-        await wait_until(lambda: entity._update_task.done(), timeout=2)
+        await wait_until(lambda: entity._update_task.done(), timeout=5)
         self.assertEqual(max_active, 1)
         self.assertEqual(calls, 2)  # the first read, plus exactly one retry for the pending change
 

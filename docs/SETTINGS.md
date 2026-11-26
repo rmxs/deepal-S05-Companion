@@ -4,7 +4,7 @@
 
 Open **Deepal Companion** from the sidebar. The paths below use the English menu names. Vehicle-specific controls and fields appear when the required entities are available.
 
-## Card Settings → Profile and Card design
+## Card Settings → Card profile and Card design
 
 The **Profile** box starts closed. Use the arrow next to the connection badge to open or close it; the badge stays visible.
 
@@ -15,13 +15,16 @@ The **Profile** box starts closed. Use the arrow next to the connection badge to
 - **Design style:** Profile default, Mobile, Tablet or Energy.
 - **Max width:** automatic (0), or 280–1600 px. Dashboard column width still limits the card.
 
+Card Settings has six tabs: **Layout**, **Appearance**, **Controls**, **Charging**, **Vehicle** and **Advanced**. Advanced groups the less-often-changed settings into four categories: **App**, **Vehicle and sensors**, **Look** and **Charging records**.
+
+Every settings section starts closed. Tap a section title to open or close it, or use **Expand all**. Your choice is remembered in this browser.
+
 ## Card Settings → Layout
 
 | Setting | Available choices |
 | --- | --- |
-| Sections | Show/hide and reorder Vehicle image, Control buttons, Status, Charging, Charging curve, Temperature & battery, Info, Charging costs and Charging reminder |
+| Sections | Show/hide and reorder Vehicle image, Status (on the image), Control buttons, Status, Charging, Temperature & battery, Info and Charging costs. Charging curve and Charging reminder are in **Advanced → Charging records** |
 | On the image | Show/hide Name, Plate, Total range, Cloud connection, Last update (the age badge on the refresh button) and the Settings button (the gear at the bottom right of the image) |
-| Message under the status | None, Rolling or With dots |
 | Top-right buttons | Show/hide and reorder Notifications, View, Diagnostics and Refresh |
 | Control buttons | Show/hide and reorder Lock, Windows, Trunk, Climate, Preconditioning, Tyres, Cabin, Flash, Sound signal and Locate |
 | Button layout | Main buttons + More, Main buttons + More on the image (More opens a panel under the image, or takes a free slot in the row), All buttons in More on the image, Swipe pages, or Rows (5 per row) |
@@ -32,26 +35,38 @@ The **Profile** box starts closed. Use the arrow next to the connection badge to
 | Info | Show/hide and reorder odometer, outside/inside temperature, humidity, fuel level, petrol volume, power status and charging status, when available |
 | Custom info tiles | Add, reorder or remove entities; choose a label, built-in/HA icon and tap action. Optional action targets let a read-only sensor control a switch or button. Long press always opens the original entity’s info |
 
-**Defaults:** the separate Charging and Charging costs sections are off. Charging curve is on and is displayed while charging. Use the Charging curve switch here to control its visibility.
+**Defaults:** the separate Charging and Charging costs sections are off. Charging curve is on and is displayed while charging; its switch is in **Advanced → Charging records**.
+
+**Status (on the image)** is its own tile right after Vehicle image, with its own switch. It is greyed out, and its switch is disabled, while the vehicle image is off; its saved value is kept.
 
 ## Card Settings → Appearance
+
+Appearance has three sections: **Style**, **Car image and Car View** and **Messages**.
+
+### Style
+
+| Setting | Available choices |
+| --- | --- |
+| Theme colour | Green, Blue, Violet, Amber, Rose, Cyan, Lime, Coral or Silver. Colours buttons, bars, selected pills and icons; status colours (OK, warning, error) stay the same |
+
+### Car image and Car View
 
 | Setting | Available choices |
 | --- | --- |
 | Image style | Photos or Car View |
 | Default Car View | 3/4 or Top |
-| Image zoom | Adjust the car image size |
-| Aspect ratio | Automatic or a ratio such as 16 / 9 |
-| Space around the car | Compact, Standard or Roomy |
 | Car View background | Black, Automatic, Neon city, Morning, Afternoon, Evening or Night. Neon city is a palm-lined coastal city that follows day, afternoon and night. Morning and afternoon are a deeper blue sky, evening is a dusk sky, night keeps the moon and stars. Automatic follows the sun. |
-| Theme colour | Green, Blue, Violet, Amber, Rose, Cyan, Lime, Coral or Silver. Colours buttons, bars, selected pills and icons; status colours (OK, warning, error) stay the same |
-| Paint colour | Black, blue, grey, silver or white |
-| Wheels | 20-inch with covers, 20-inch without covers or 18-inch Pro |
-| Card margins | Normal, Half or None |
-| Popup margins | Normal, Half or None |
+
+### Messages
+
+| Setting | Available choices |
+| --- | --- |
+| Message under the status | None, Rolling or With dots (under Locked / Unlocked) |
 | On-screen messages | On/off |
 | Message position | Up or Down |
 | Message duration | 3, 5, 8 or 12 seconds |
+
+Image zoom, aspect ratio and space around the car are in **Advanced → Look → Size and margins**.
 
 The view button changes the view on the device you are using. The default view setting selects the opening view.
 
@@ -61,38 +76,103 @@ The view button changes the view on the device you are using. The default view s
 | --- | --- |
 | Climate tile | Target with − / +, or Large circle |
 | Temperature selector | Wheel or Bar |
-| Climate on-mode | HVAC mode used when turning climate on |
-| Action confirmations | Choose confirmation for Lock, Unlock, Open windows, Open trunk, Climate, Lights, Horn, Locate and Refresh data |
 | Confirm temperature change while climate is off | On/off |
-| Waiting effect | Spinning arc, Soft pulse or Neon ring while a command waits for the car |
 
-## Card Settings → Charging
+### Button behaviour
 
 | Setting | Available choices |
 | --- | --- |
-| Charging details style | Line, Text, Large or At the port |
-| Charging effect | Cable flow + port pulse, cable flow, port pulse, light sweep or None |
-| Energy sheet on the tile | Open energy history when tapping the Energy tile |
-| Alternate charging text | Alternate Charging now and reported time left |
-| Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
-| Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
-| Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
-| A stop longer than this starts a new charge (min) | In the live curve, a stop shorter than this stays part of the same charge, so a charge you stopped and restarted shows as one curve. It is also the silent time after which a stretch with no battery progress counts as missing data. 1–120, default 15 |
-| Refresh the charging curve every (min) | While charging, the curve's line follows the latest car report. When the car reports nothing new, the line still moves to the current time this often. 1–60, default 5 |
-| Highlight Missing Data | On by default. Gaps between readings where the car reported no battery progress are joined by a lighter grey line and shaded area, and hovering or touching one explains that data is missing with its start, end and duration. Off keeps one plain continuous line. Applies to the card and to saved charges |
+| Waiting effect | Spinning arc, Soft pulse or Neon ring while a command waits for the car |
+| Action confirmations | Choose confirmation for Lock, Unlock, Open windows, Open trunk, Climate, Lights, Horn, Locate and Refresh data |
 
-The image’s charging details remain visible when the separate Charging section is hidden. The charging-curve switch is in **Layout → Sections**.
+Climate on-mode (the HVAC mode used when turning climate on) is in **Advanced → Vehicle and sensors**.
+
+## Card Settings → Charging
+
+### Charging on the card
+
+| Setting | Available choices |
+| --- | --- |
+| Charging details | Line, Text, Large or At the port |
+| Charging effect | Cable flow + port pulse, cable flow, port pulse, light sweep or None |
+
+The image’s charging details remain visible when the separate Charging section is hidden. The charging-curve switch is in **Advanced → Charging records**.
+
+### Energy tile
+
+| Setting | Available choices |
+| --- | --- |
+| Alternate charging text | Alternate Charging now and reported time left |
+| Energy tile style | Ring or Half gauge |
+| Charge plan button | On/off. Shows the clock button on the Energy tile for setting the charging schedule |
+| Cost selector while charging | On/off. Shows the cost selector while the car charges |
 
 **“Energy” sheet on the tile** (on by default for new setups):
 
 - **On:** a tap on the Energy or Battery tile opens the Energy sheet with battery, charging and driving history. A long press opens the battery sensor’s more-info window.
 - **Off:** a tap opens the battery sensor’s more-info window instead. The Energy sheet is not available from the tile.
 
-## Card Settings → Colours
+Charging reminder, charge detection and charging curve settings are in **Advanced → Charging records**.
+
+## Card Settings → Vehicle
+
+| Setting | What you can change |
+| --- | --- |
+| Entity prefix | Vehicle entity prefix |
+| Vehicle type | Automatic, Plug-in hybrid or Electric. Automatic treats the car as a hybrid when it has a fuel level, fuel range or fuel volume sensor, and as electric otherwise. Electric hides fuel tiles, fuel colour settings, fuel history and fuel health checks. See [Vehicle type](#vehicle-type) |
+| Battery capacity | Automatic capacity (18.4 kWh for plug-in hybrids, 68.8 kWh for electric cars) or a kWh override, when Energy history is enabled |
+| Car colour | Black, blue, grey, silver or white (used by the Car View image) |
+| Wheels (Car View) | 20-inch with covers, 20-inch without covers or 18-inch Pro |
+| Diagnostic indicators | Enable/disable individual available warning indicators |
+| All / None | Enable or disable the diagnostic selection together |
+| Tyre unit | bar, kPa or psi |
+| Pressure check | From the vehicle, My own limits or Both |
+| Minimum / Maximum pressure | Custom limits in the selected unit |
+
+Empty numeric fields display the default as a hint. Enter your own value to override it. Clearing an override restores the default.
+
+Built-in indicators include Airbag, ABS, Brakes, Brake fluid, 12V battery, Low traction battery, Power system, Power limited, Power steering, Tyre pressure, the four individual tyre alarms and Key battery.
+
+## Card Settings → Advanced
+
+Advanced holds the settings most people set once. It has four categories: **App**, **Vehicle and sensors**, **Look** and **Charging records**.
+
+### App
+
+| Setting | What you can change |
+| --- | --- |
+| Card name | Name shown on the card |
+| Card page | The profile and design the Deepal Card page always uses, whatever is chosen elsewhere |
+| Show “Deepal Card” in the sidebar | Lists the **Deepal Card** page (just the card) in the sidebar. Off by default; an administrator changes it, then reloads the browser. The page keeps working from its address (`/deepal-companion-card`) and from notifications while hidden |
+| Data update rate | Live, 5 min or 10 min. See [Data update rate](#data-update-rate) |
+
+### Vehicle and sensors
+
+| Setting | What you can change |
+| --- | --- |
+| Full-tank fuel range | Automatic 940 km for hybrids, or a positive override. For hybrid range, 0 selects the automatic value. Fuel litres are read from the fuel-volume sensor; there is no tank-capacity setting |
+| Hero photos folder | Automatic image folder or a custom folder |
+| State-specific photos | Replace individual available vehicle-state images and check their previews |
+| Climate on-mode | HVAC mode used when turning climate on |
+| New sensors | Search for new sensors, ignore suggestions and restore ignored ones |
+| Entity mapping | Choose a sensor role, select its HA entity and add/remove the mapping |
+
+### Look
+
+#### Size and margins
 
 | Setting | Available choices |
 | --- | --- |
-| Bottom tile icons | Green, Grey, Blue or a custom colour |
+| Image zoom | Adjust the car image size |
+| Aspect ratio | Automatic or a ratio such as 16 / 9 |
+| Space around the car | Compact, Standard or Roomy |
+| Card margins | Normal, Half or None |
+| Popup margins | Normal, Half or None |
+
+#### Colours
+
+| Setting | Available choices |
+| --- | --- |
 | Cool airflow | Colour and upper temperature limit |
 | Mild airflow | Colour and upper temperature limit |
 | Warm airflow | Colour above the mild limit |
@@ -101,37 +181,28 @@ The image’s charging details remain visible when the separate Charging section
 | Battery thresholds | Three percentage boundaries for the four level colours |
 | Fuel thresholds | Three percentage boundaries for the four level colours, on plug-in hybrids only; electric cars show only the battery thresholds |
 
-## Card Settings → Diagnostics & tyres
+### Charging records
+
+#### Charging reminder
 
 | Setting | Available choices |
 | --- | --- |
-| Diagnostic indicators | Enable/disable individual available warning indicators |
-| All / None | Enable or disable the diagnostic selection together |
-| Tyre unit | bar, kPa or psi |
-| Pressure check | From the vehicle, My own limits or Both |
-| My diagnostics | Add, reorder or remove custom entities; choose labels, icons and tap actions. Long press always opens entity info |
-| Minimum / Maximum pressure | Custom limits in the selected unit |
+| Ask for a charging profile after at least (%) | Minimum battery gain a finished charge needs before the Charging detected reminder appears. 0–100, default 3; 0 asks after every charge that adds battery. Shared by all cards of the vehicle |
+| Recent charges checked for the reminder | How many of the latest charges the reminder looks at, so earlier unanswered charges are still offered. 1–20, default 10 |
 
-Built-in indicators include Airbag, ABS, Brakes, Brake fluid, 12V battery, Low traction battery, Power system, Power limited, Power steering, Tyre pressure, the four individual tyre alarms and Key battery.
+#### Charge detection
 
-New warning sensors are managed in Advanced.
-
-## Card Settings → Advanced
-
-| Setting | What you can change |
+| Setting | Available choices |
 | --- | --- |
-| Card name | Name shown on the card |
-| Show “Deepal Card” in the sidebar | Lists the **Deepal Card** page (just the card) in the sidebar. Off by default; an administrator changes it, then reloads the browser. The page keeps working from its address (`/deepal-companion-card`) and from notifications while hidden |
-| Entity prefix | Vehicle entity prefix |
-| Vehicle type | Automatic, Plug-in hybrid or Electric. Automatic treats the car as a hybrid when it has a fuel level, fuel range or fuel volume sensor, and as electric otherwise. Electric hides fuel tiles, fuel colour settings, fuel history and fuel health checks. See [Vehicle type](#vehicle-type) |
-| Battery capacity | Automatic capacity (18.4 kWh for plug-in hybrids, 68.8 kWh for electric cars) or a kWh override, when Energy history is enabled |
-| Full-tank fuel range | Automatic 940 km for hybrids, or a positive override |
-| Hero photos folder | Automatic image folder or a custom folder |
-| State-specific photos | Replace individual available vehicle-state images and check their previews |
-| New sensors | Discover, add, add all, ignore or restore ignored diagnostic suggestions |
-| Entity mapping | Choose a sensor role, select its HA entity and add/remove the mapping |
+| Ignore one-off battery jumps above (%) | A single battery reading this many percent above the charge so far is ignored until the next reading confirms it, so one wrong reading cannot inflate a charge. 5–50, default 20 |
+| A stop longer than this starts a new charge (min) | In the live curve, a stop shorter than this stays part of the same charge, so a charge you stopped and restarted shows as one curve. It is also the silent time after which a stretch with no battery progress counts as missing data. 1–120, default 15 |
 
-Empty numeric fields display the default as a hint. Enter your own value to override it. Clearing an override restores the default. For hybrid range, 0 selects the automatic value. Fuel litres are read from the fuel-volume sensor; there is no tank-capacity setting.
+#### Charging curve
+
+| Setting | Available choices |
+| --- | --- |
+| Refresh the charging curve every (min) | While charging, the curve's line follows the latest car report. When the car reports nothing new, the line still moves to the current time this often. 1–60, default 5 |
+| Highlight Missing Data | On by default. Gaps between readings where the car reported no battery progress are joined by a lighter grey line and shaded area, and hovering or touching one explains that data is missing with its start, end and duration. Off keeps one plain continuous line. Applies to the card and to saved charges |
 
 ## Card Settings → Live preview
 
@@ -141,12 +212,13 @@ Empty numeric fields display the default as a hint. Enter your own value to over
 - **Live mode:** uses vehicle data; enabled controls can operate the vehicle.
 - **Simulated modes:** use demo states and keep commands inside the preview.
 
-## Charging Profiles → Locations
+## Charging page → Locations
 
 | Setting | What you can change |
 | --- | --- |
 | Location name | Name shown on charges |
 | Free charging | Zero-cost charging; hides paid fields |
+| Suggest for new charges | Marks one charging profile as the usual place. The Charging detected reminder then has it preselected, so one tap confirms. Nothing is assigned until you save, and past charges are never changed. Only one profile can be suggested. |
 | Price | Euro price per kWh |
 | Energy source | Battery estimate, Total energy meter, Session energy meter or Charger power |
 | Charger entity | Matching energy or power sensor for that location |
@@ -173,16 +245,42 @@ The **Preconditioning** page (and the card’s Preconditioning panel) controls r
 | --- | --- |
 | Temperature | 18–32 °C in 0.5 °C steps. The last value you use is remembered for the next Start and for new schedules |
 | Duration | 1–15 minutes (the car limits remote climate to 15 minutes). The last value you use is remembered |
-| Start / Stop | Manual control. Start is disabled while an operation runs or when battery protection blocks it |
+| Start / Stop | Not on this page; use the card's Preconditioning panel. Start is disabled while an operation runs or when battery protection blocks it |
 | Scheduled preconditioning | Main switch for all schedules. Off by default; manual Start still works |
 | Schedules (up to 20) | Name, Repeat (Once, Daily, Mon–Fri, Custom days), Mode (Start at, Ready by), Date (Once), Start or Ready time, Duration or Preparation time, Temperature and an on/off switch |
 | Battery protection | Off by default. Minimum battery 10–50 % in 5 % steps, Block START at or below the minimum, Request STOP at the minimum, Apply while charging (on by default) |
-| Preconditioning notifications | Main switch, phones (shared with Live climate), and one switch per event: climate on confirmed, climate off confirmed, session ended by the vehicle, command failed, state could not be confirmed, scheduled run result, battery protection, retry warning, start requested, stop requested |
-| Send test notification | Sends an example message to the chosen phones |
+| Notifications | A row that opens **Notifications → Preconditioning**, where the main switch, phones, events and test button are set |
 | Advanced: retries and checks | Attempts 1–3 (default 3), Wait between attempts 10–120 s (default 30 s), Wait for the car to answer 30–180 s (default 90 s) |
 | Diagnostics | Current operation and session IDs, last confirmed state, last successful Start and Stop, last failure, retry count and session history (kept for 30 days, scrolls when long, with a Clear history button for administrators) |
 
-The notification choices and the phones are the same on the card, on this page and on **Notifications → Preconditioning**. **Your setup in short** at the top of the page explains the current choices in plain words. See the [Preconditioning guide](PRECONDITIONING.md).
+Preconditioning notifications (the switch, phones, events and test) are set only on **Notifications → Preconditioning**. **Summary** at the top of the page explains the current choices in plain words. See the [Preconditioning guide](PRECONDITIONING.md).
+
+## Charging page → Charger limit
+
+The **Charger limit** block, under the charging profiles on the **Charging** page, stops charging at the **charging target**, which you set here with **Stop charging at** (Off, 70, 80, 90 % or a slider from 50 to 95 %). A limit of 100 % does nothing, and the block says so. The card's ring, estimate and notices use the same target. Companion needs no charger brand: you only pick your charger and it finds the rest. Settings need Home Assistant administrator rights; everyone can see the status. The same status also shows as the **Charger limit** tile in the card's info row, which you can hide or move under Card Settings → Layout → Info.
+
+| Setting | Available choices |
+| --- | --- |
+| Stop charging at | The charging target: **Off**, **70%**, **80%**, **90%** or the slider (50–95 %). Shared by every display profile of the car and shown on the card |
+| Charger | The device of your wallbox. Choosing it fills in the stop control, the power and energy sensors, and which way it stops, from the device's own lock or switch. Changing it resets only the stop control and its direction; the power and energy sensors you chose are kept |
+| Charger type | **Auto (switch or lock)** (default) works as before. **Feyree (Tuya Local)** is for a wallbox that takes Start and Stop commands. Companion picks the charger's Start/Stop charging command (a dropdown or buttons), its power sensor and its status sensor. A line shows which command stops and which restarts the charge. Two small pickers appear only if the commands cannot be found. The stop is confirmed by the power and status sensors |
+| Stop control | The lock or switch that stops the charging, from any device. Filled in automatically from the charger, and you can change it. **Choose another…** (last in the list) lists every lock and switch except the car's own door lock |
+| Power sensor (optional) | A power sensor from any device. Filled in automatically from the charger when it has one, and you can change it. **None / not used** clears it. kW is converted automatically. Its current value shows beside its name |
+| Energy sensor (optional) | An energy sensor from any device. Filled in automatically from the charger, preferring a "this charge" counter over a lifetime total, and you can change it. Wh is converted automatically. Its current value shows beside its name. The card shows the energy after the limit has stopped the charger |
+| Stops charging when it is | **Locked / Unlocked** for a lock, **On / Off** for a switch. Filled in by itself from the entity type and name. A short note under it says when Companion guessed the position from the names |
+| Mode | **Off**, **Dry run** (decides and tells you, never touches the charger) or **Live** |
+
+How it behaves:
+
+- It acts when the car is plugged in and charging, the battery has been at or above the target for about 45 seconds, and the battery reading is recent. One wrong reading cannot stop a charge. The car reports now and then, so the battery can pass the target by a little before the stop.
+- It stops **once per plug-in**. When the car is unplugged, everything starts over.
+- **If you restart the charger yourself** after Companion stopped it (for example you unlock it), Companion sees that and **pauses the limit until the next plug-in**. It never fights you. **Charge anyway** does the same.
+- If you **raise the target** above the battery, turn the target off, leave Live mode, or **unplug the car**, Companion puts the control back to "charging allowed", so an earlier stop should not hold the next charge.
+- A stop is checked: the control must read "stopped" and, if the charger has a power sensor, the power must drop. If not, Companion tries up to three times, puts the control back, tells you and waits. Health shows the error.
+- The stop is saved before it is sent, so a Home Assistant restart cannot lose track of it. If the charger cannot be put back to charging (for example it is offline), Companion keeps trying, Health shows a warning and your phone is told once.
+- Messages go to the phones of your enabled alerts (see **Notifications**), and to **Notifications → Recent activity**.
+- **On the main card**, the charging block shows one row while the limit is on and the car is plugged in: the power while it waits, `Stopped at 80% · 12.4 kWh` with a **Charge anyway** button (administrators) once stopped, or the dry run, paused, failed and unavailable states. Nothing shows when the limit is off.
+- **Health** has a Charger limit check. It warns when the car's plug sensor has not answered for 10 minutes, when the energy sensor looks like a lifetime total, when the car's last report is too old for the limit to act, and when the target is 100 %, which does nothing.
 
 ## Notifications
 
@@ -201,13 +299,15 @@ The **Notifications** page contains the integration’s notification controls:
 - Per-alert reset, preview and test.
 - Ignore old data threshold.
 - Save and Cancel changes.
-- Live notifications (Live charging, Live climate, Left open or unlocked): switches, options, title, icon and tests. For Left open or unlocked: **Only when the car is parked** and **Wait before showing** (5 minutes by default).
+- Live notifications (Live charging, Live climate, Left open or unlocked): switches, options, title, icon and tests. For Live climate and Left open or unlocked: **Only when the car is parked** (on by default) and **Count as parked after** (6 minutes by default). For Left open or unlocked, also **Wait before showing** (5 minutes by default).
 - Where the phone opens when you tap a notification.
 - Recent activity pagination, delete and delete all.
 
 Configure alerts, phones, quiet hours and Live notifications on the separate **Notifications** page. Settings need Home Assistant administrator rights: the gear on the card opens the Companion dashboard and is hidden for other users.
 
 See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup steps.
+
+**Notification settings:** alerts, timing, messages, devices and quiet hours are set only on the Notifications page. The colour of each live notification state is the only notification setting in Card Settings (**Advanced → Look → Colours**).
 
 ## Automatic features
 
@@ -222,7 +322,7 @@ See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup
 - Charging cost estimates from the selected energy source, with an estimate label when applicable.
 - Import of available Recorder charging sessions/readings on the Sessions page.
 - Saved tariff/payment assignments and saved charging curves in the archive.
-- Charging-detected reminders for every unanswered recent charge, oldest first; dismissal applies to one charge and one user, and a reminder clears after assignment elsewhere. The minimum battery gain and the number of recent charges checked are set in Card Settings → Advanced.
+- Charging-detected reminders for every unanswered recent charge, oldest first; dismissal applies to one charge and one user, and a reminder clears after assignment elsewhere. The minimum battery gain and the number of recent charges checked are set in Card Settings → Advanced → Charging records.
 - Background notification checks, repeats, quiet hours and stopping reminders after their condition clears or they are dismissed.
 - Live charging start/update/end handling from reported charging state.
 - Preconditioning: fresh vehicle data before and after every start and stop and while waiting for the car’s answer, confirmation from the car’s own report, limited retries, schedules, battery protection and a hand-over to the driver when the car is switched on.
@@ -231,7 +331,7 @@ See [Notifications](NOTIFICATIONS.md) for each alert, its purpose and full setup
 
 ## Charging profile names and deletion
 
-In **Charging Profiles**, start typing a network name to see suggestions, or enter any custom name. Choose **Delete profile** inside an expanded profile, confirm, then save. Earlier sessions retain their saved location and cost. **Total paid** in a session selects **Manual charge** automatically.
+In **Charging**, start typing a network name to see suggestions, or enter any custom name. Choose **Delete profile** inside an expanded profile, confirm, then save. Earlier sessions retain their saved location and cost. **Total paid** in a session selects **Manual charge** automatically.
 
 To test the on-card cost reminder, choose **Charging detected** under **Card Settings → Live preview**, enable **Charging costs** in Layout and turn on **Allow clicks**. The scenario uses sample data and never saves real assignments.
 
@@ -243,7 +343,7 @@ Custom entity action options start collapsed. Expand Tap action to edit them; on
 
 ### Vehicle type
 
-The vehicle type is chosen at setup from the vehicle’s registered entities and can be changed under **Card Settings → Advanced**.
+The vehicle type is chosen at setup from the vehicle’s registered entities and can be changed under **Card Settings → Vehicle**.
 
 - **Automatic** follows the vehicle: with a fuel level, fuel range or fuel volume sensor it is a plug-in hybrid, otherwise it is electric. It re-checks whenever the sensors change.
 - **Plug-in hybrid** always shows battery and fuel items.
@@ -262,7 +362,7 @@ At the top of the Notifications page, **Notification language** sets the languag
 
 ### Data update rate
 
-In **Card Settings → Advanced**, **Data update rate** sets how often Companion saves the car's readings and refreshes live notifications. It applies to every vehicle and to the whole integration, and only an administrator can change it.
+In **Card Settings → Advanced → App**, **Data update rate** sets how often Companion saves the car's readings and refreshes live notifications. It applies to every vehicle and to the whole integration, and only an administrator can change it.
 
 - **Live** (the default): every change the car reports is saved and shown. Notifications follow their own **Update at most every** setting.
 - **5 min** or **10 min**: a reading is saved at most once in that time, and live notifications are never sent more often than that. A change that arrives sooner is not lost; it is saved as soon as the time has passed. Charging curves and history become coarser, but use less storage.

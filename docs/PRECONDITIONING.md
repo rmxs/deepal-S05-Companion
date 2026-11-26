@@ -15,8 +15,8 @@ Remote climate works only when the car is **parked and switched off**.
 ## Where to find it
 
 - **Vehicle card:** open **Preconditioning** in the **More** panel (or in the main button row if you moved it there). A small panel opens with the temperature, the duration, Start and Stop. **More settings in the Companion dashboard** opens the full page.
-- **Companion dashboard → Preconditioning:** the full page with your setup in short, manual control, schedules, battery protection, notifications and diagnostics.
-- **Companion dashboard → Notifications → Preconditioning:** the same notification choices as on the other pages.
+- **Companion dashboard → Preconditioning:** an information page with the cabin and target temperatures in one row at the top, the battery, charging and climate chips, a Summary, the status pill (for example “Stopped · Ready”, or “START blocked” when battery protection stops a Start), schedules, battery protection and diagnostics, plus a link to Notifications. Start and Stop stay on the card.
+- **Companion dashboard → Notifications:** the preconditioning notification choices and the notification language.
 
 The button on the card is coloured while Companion’s own preconditioning is running. A small pulsing dot shows that a schedule is set.
 
@@ -24,15 +24,15 @@ Everything is saved in one place. A choice you change on the card, on the Precon
 
 ## Start and stop by hand
 
-1. Open **Preconditioning** (card or dashboard).
+1. Open **Preconditioning** on the card.
 2. Move the **Temperature** bar (18–32 °C, in 0.5 °C steps) and the **Duration** bar (1–15 minutes).
-   In the card popup you can also use the temperature slider, the **Cool**, **Comfort** and **Warm** quick choices, and the **5**, **10** and **15** minute buttons. The refresh button asks the car for fresh data and keeps spinning until the new report arrives. The sliders icon at the top opens the Preconditioning page of the Companion dashboard, and tapping the notifications text opens it at the notification settings (administrators only).
+   In the card popup you can also use the temperature slider, the **Cool**, **Comfort** and **Hot** quick choices, and the **5**, **10** and **15** minute buttons. The refresh button asks the car for fresh data and keeps spinning until the new report arrives. The sliders icon at the top opens the Preconditioning page of the Companion dashboard, and tapping the notifications text opens it at the link to Notifications (administrators only).
 3. Press **Start preconditioning**. While it runs, the button is replaced by a countdown with a **Stop** button.
 4. Watch the status chip: **Starting**, **Verifying**, then **Active**. Press **Stop preconditioning** at any time to end it early.
 
 The last temperature and duration you choose are remembered for next time and for new schedules. There is no separate “default” setting to maintain.
 
-If the climate is already on, Companion changes nothing and says so. If someone starts the climate in the Deepal app or in the car, Companion does not stop it for you.
+If the climate is already on, Companion changes nothing and says so. The climate pop-up on the card then shows **Running** instead of the choices, with **Stop** only when Companion started it. If someone starts the climate in the Deepal app or in the car, Companion does not stop it for you.
 
 ## What happens on every Start and Stop
 
@@ -78,18 +78,7 @@ The car often sleeps deeply, so its last battery reading may be 30–60 minutes 
 
 ## Notifications
 
-Open **Preconditioning → Notifications** (or **Notifications → Preconditioning**).
-
-- **Preconditioning notifications:** the switch for phone messages about preconditioning.
-- **Phones:** choose the phones as pills, the same way as on the Notifications page. The list is **shared with Live climate**: changing the phones here also changes them in **Notifications → Live climate**.
-- **Events:** choose which events send a message, each with a short explanation. By default you get results and problems only: confirmed on and off, failures, unknown state, schedule results, a session ended by the car and battery protection. Requested starts and stops and retry warnings are off.
-- **Send test notification:** sends an example message to the chosen phones. “Sent to 1 of 1 phones” means Home Assistant accepted it; arrival on the phone is not confirmed.
-
-A message with a Stop button appears while the climate is running. The running status on the lock screen comes from Live climate, so you never get two climate notifications.
-
-Turning notifications off never turns off verification, battery protection or the activity log. The global **Notifications** switch and the phone’s notification permission still apply.
-
-Messages follow the Home Assistant language (English, Italian, Spanish, German or Greek).
+Preconditioning notifications and the notification language are set only on the Notifications page; a row on the Preconditioning page opens it. See [NOTIFICATIONS.md](NOTIFICATIONS.md#preconditioning-messages).
 
 ## If someone drives the car
 
@@ -116,10 +105,6 @@ The session history keeps the last 30 days and removes older entries automatical
 - Preconditioning needs the **Deepal Alternative** climate entity, its **Refresh vehicle data** button and its battery level sensor.
 - Companion sends climate commands only when you press Start or Stop, when a schedule you created is due, or when battery protection stops a session you started.
 - Restart Home Assistant after updating, because preconditioning runs in the backend.
-
-## Notification language
-
-The language of every notification is set once at the top of **Notifications** (see [NOTIFICATIONS.md](NOTIFICATIONS.md)). Preconditioning messages follow it.
 
 ## Confirmations
 

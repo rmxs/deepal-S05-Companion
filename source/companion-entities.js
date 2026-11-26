@@ -17,7 +17,7 @@ const settingsLayout=DeepalS05Settings.prototype._tabLayout;
 DeepalS05Settings.prototype._tabLayout=function(config){
   if(this.mode==="app")return settingsLayout.call(this,config);
   const lang=this._hass?.locale?.language||"en";
-  return '<h4>'+ico('sliders')+esc(T("Card design"))+'</h4>'+this._opt(T("Design"),this._sel("companion_design",config.companion_design||"",[["",T("Profile default")],["mobile",T("Mobile")],["tablet",T("Tablet")],["energy",T("Energy")],["minimal",T("Minimal")],["cockpit",T("Modern Cockpit")],["ultra",T("Ultra minimal")]]))+this._opt(T("Maximum width (px)"),this._num("companion_width",config.companion_width||0,"1"),T("0 = automatic; otherwise 280–1600 px."))+settingsLayout.call(this,config);
+  return '<h4>'+ico('sliders')+esc(T("Card design"))+'</h4>'+this._opt(T("Design"),this._sel("companion_design",config.companion_design||"",[["",T("Card profile default")],["mobile",T("Mobile")],["tablet",T("Tablet")],["energy",T("Energy")],["minimal",T("Minimal")],["cockpit",T("Modern Cockpit")],["ultra",T("Ultra minimal")]]))+this._opt(T("Maximum width (px)"),this._num("companion_width",config.companion_width||0,"1"),T("0 = automatic; otherwise 280–1600 px."))+settingsLayout.call(this,config);
 };
 DeepalS05Settings.prototype._bind=function(){
   settingsBind.call(this);

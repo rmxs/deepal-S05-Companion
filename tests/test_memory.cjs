@@ -12,7 +12,7 @@ module.exports=async function memoryAudit(page){
       for(let i=0;i<100&&!panel.preview;i++)await new Promise(r=>setTimeout(r,10));
       if(!panel.preview)throw Error('Memory audit panel did not load');
       for(const mode of ['notifications','history','chargers','settings']){panel.mode=mode;await panel.mount();}
-      const widget=panel.settings;widget._setTab('colours');widget._setTab('layout');
+      const widget=panel.settings;widget._setTab('look');widget._setTab('layout');
       const card=panel.preview;card._enSheet=true;card._force();await new Promise(r=>setTimeout(r,20));card._closeSheet();
       const curve=await import('/deepal_companion/frontend/charging-curve.js?v=0.1.0');
       const dialog=curve.openCurveDialog(document,window.testHass,()=>Promise.resolve({start:1000,end:2000,mode:'AC',series:{ac:[{lu:1,s:'8'},{lu:2,s:'16'}]}}));

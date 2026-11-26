@@ -35,7 +35,7 @@
 5. Choose paint colour and wheels, then complete setup.
 6. Open **Deepal Companion** in the sidebar.
 
-Paint, wheels and vehicle type can be changed later in **Card Settings → Advanced**. With **Automatic**, a car with fuel sensors is a hybrid and any other car is electric; Electric hides all fuel items (see [Vehicle type](SETTINGS.md#vehicle-type)). Hybrid full-tank range defaults to **940 km**. Fuel percentage and litres come from the vehicle’s fuel-level and fuel-volume sensors; no tank capacity is required.
+Car colour and wheels can be changed later in **Card Settings → Vehicle**, and the vehicle type there too. With **Automatic**, a car with fuel sensors is a hybrid and any other car is electric; Electric hides all fuel items (see [Vehicle type](SETTINGS.md#vehicle-type)). Hybrid full-tank range defaults to **940 km**. Fuel percentage and litres come from the vehicle’s fuel-level and fuel-volume sensors; no tank capacity is required.
 
 ## Add the card to a dashboard
 

@@ -5,10 +5,12 @@
 (function () {
 "use strict";
 const EN = (window.__DEEPAL_COMPANION_ENERGY = window.__DEEPAL_COMPANION_ENERGY || {});
+let infoOpen = false; /* the calculation notes at the bottom of the Energy window are folded until the user asks */
 let K = null; /* shared card tools: { esc, T, ico, I18N, resolveId } — given by the card in init() */
 const fill = (s, a) => String(s).replace(/\{(\d+)\}/g, (m, i) => (a[i] ?? ""));
 const T = (s, ...a) => (K ? K.T(s, ...a) : fill(s, a));
 const ico = (n, c) => (K ? K.ico(n, c) : "");
+const tError = (m) => (K && K.tError ? K.tError(m) : m);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 /* ───── Data: history → series → charges, drives, daily figures ───── */
 const DAYS_BACK = 5, CHG_A = 0.5, GAP = 15 * 60e3, MIN_CHG = 8 * 60e3, DRV_GAP = 12 * 60e3, DEF_KWH = 18.4;
@@ -169,6 +171,9 @@ const PCSS = `
 .enpanel .cc-button {border:1px solid var(--cp-off-line);padding:8px 14px;background:var(--cp-off-bg);color:var(--ds-fg);font:inherit;min-height:var(--cp-ctl-h);border-radius:var(--cp-ctl-r);font-size:13px;font-weight:600;cursor:pointer}
 .enpanel .cc-button.primary {background:rgba(var(--ds-ac,var(--ds-ok,52,211,153)),.16);border-color:rgba(var(--ds-ac,var(--ds-ok,52,211,153)),.35)}
 .enpanel .cc-button:disabled {opacity:.5}
+.enpanel .cc-close {width:var(--cp-ctl-h,40px);min-width:var(--cp-ctl-h,40px);padding:0;display:inline-grid;place-items:center} .enpanel .cc-close .i {--is:18px}
+/* Icons are SVG strokes. The card's global .i rule (stroke: currentColor) is not in this sheet when it opens in the panel, so the X drew nothing: give the sheet the same rule. */
+.enpanel .i {width:var(--is,20px);height:var(--is,20px);fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .enpanel .cc-button.danger{color:rgb(var(--ds-bad));border-color:rgba(var(--ds-bad),.35);background:rgba(var(--ds-bad),.08);margin-top:10px}
 .enpanel .cc-delete-confirm{border:1px solid rgba(var(--ds-bad),.35);border-radius:12px;padding:12px;margin-top:12px}.enpanel .cc-delete-confirm p{font-size:12px;line-height:1.5;margin:0 0 8px}
 .enpanel .cc-name-field{position:relative}.enpanel .cc-name-options{position:absolute;top:100%;left:0;right:0;z-index:5;padding:4px;background:var(--ds-card);border:1px solid var(--ds-line);border-radius:11px;box-shadow:0 8px 24px #0004}.enpanel .cc-name-options[hidden]{display:none}.enpanel .cc-name-options button{display:block;width:100%;min-height:42px;border:0;border-radius:7px;padding:8px 10px;text-align:left;font:inherit;color:var(--ds-fg);background:transparent}.enpanel .cc-name-options button:hover,.enpanel .cc-name-options button[aria-selected=true]{background:var(--cp-on-bg);color:var(--cp-accent)}
@@ -200,7 +205,7 @@ const PCSS = `
 .enpanel { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; display:flex; flex-direction:column; gap:22px; padding:8px 6px 26px; color: var(--ds-fg); }
 .enpanel .en-nav [data-wk]{color:var(--ds-fg,var(--primary-text-color,#eee))}.enpanel .en-nav [data-wk] .i{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.enpanel .en-nav [data-wk] .i path{fill:none;stroke:inherit}
 .enpanel .en-nav { display:flex; align-items:center; flex-wrap:wrap; gap:10px; } .enpanel .en-nav .btn { width:44px; height:40px; padding:0; display:grid; place-items:center; } .enpanel .en-nav .btn[disabled] { opacity:.35; cursor:default; pointer-events:none; } .enpanel .en-wk { flex:1; text-align:center; } .enpanel .en-wk b { display:block; font-size:14.5px; font-weight:600; } .enpanel .en-wk small { display:block; margin-top:1px; font-size:12px; color: var(--ds-fg2); } .enpanel .en-lim { flex-basis:100%; text-align:center; }
-.enpanel .en-period { display:flex; gap:3px; padding:3px; border:1px solid var(--cp-off-line); border-radius:14px; background:var(--cp-off-bg); } .enpanel .en-period button { border:0; border-radius:11px; min-height:36px; padding:7px 14px; background:transparent; color:var(--ds-fg2); font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; } .enpanel .en-dates { display:flex; align-items:center; gap:8px; margin-left:auto; } .enpanel .en-dates .en-wk { min-width:140px; } .enpanel .en-nav { justify-content:center; padding:10px; border:1px solid var(--ds-line); border-radius:14px; gap:10px; } @media(max-width:480px) { .enpanel .en-dates { margin-left:0; } }
+.enpanel .en-dates { display:flex; align-items:center; gap:8px; margin-left:auto; } .enpanel .en-dates .en-wk { min-width:140px; } .enpanel .en-nav { justify-content:center; padding:10px; border:1px solid var(--ds-line); border-radius:14px; gap:10px; } @media(max-width:480px) { .enpanel .en-dates { margin-left:0; } }
 .enpanel .en-body { display:flex; flex-direction:column; gap:20px; }
 .enpanel .en-now { border-radius:18px; padding:14px 16px; background: rgba(var(--rgb-primary-text-color, 255,255,255), .045); border:1px solid var(--ds-line); }
 .enpanel .en-now.chg { background: rgba(var(--ds-ac,var(--ds-ok,52,211,153)), .12); border-color: rgba(var(--ds-ac,var(--ds-ok,52,211,153)), .35); }
@@ -215,15 +220,16 @@ const PCSS = `
 .enpanel .en-tb { display:grid; grid-template-columns: 1.1fr .7fr 1fr 1fr; gap:6px; font-size:13px; padding:8px 2px; border-top:1px solid var(--ds-line); font-variant-numeric: tabular-nums; }
 .enpanel .en-tb.f4 { grid-template-columns: 1fr .65fr 1fr 1fr .85fr; } .enpanel .en-tb .fu { color: #f3bd62; }
 .enpanel .en-tb .bu { color:rgb(var(--ds-info)); } .enpanel .en-tb > span { min-width:0; overflow-wrap:anywhere; }
+.enpanel .en-infotog { width:100%; display:flex; align-items:center; gap:8px; min-height:44px; margin-top:10px; padding:10px 12px; border-radius:14px; border:1px solid var(--ds-line); background: var(--ds-soft); color: var(--ds-fg); font:inherit; font-size:13px; font-weight:600; cursor:pointer; } .enpanel .en-infotog span { flex:1; text-align:left; } .enpanel .en-infotog .i { --is:20px; flex:none; } .enpanel .en-info[hidden] { display:none; }
 .enpanel .en-info { display:flex; align-items:flex-start; gap:8px; padding:10px 12px; border:1px solid var(--ds-line); border-radius:12px; background:rgba(128,128,128,.05); color:var(--ds-fg2); font-size:11px; line-height:1.45; } .enpanel .en-info p { margin:0; font:inherit; } .enpanel .en-info p + p { margin-top:3px; } .enpanel .en-info-icon { flex:none; font-size:14px; line-height:1.3; }
-.enpanel .en-tb.h { border-top:0; padding:0 2px 4px; font-size:11.5px; color: var(--ds-fg2); } .enpanel .en-tb > :not(:first-child) { text-align:right; } .enpanel .en-tb .z { color: var(--ds-fg2); } .enpanel .en-tb .ok { color: rgb(var(--ds-ok)); }
+.enpanel .en-tb.h { border-top:0; padding:0 2px 4px; font-size:11.5px; color: var(--ds-fg2); } .enpanel .en-tb > :not(:first-child) { text-align:right; } .enpanel .en-tb .z { color: var(--ds-fg2); } .enpanel .en-tb .ok { color: rgb(var(--ds-ac,var(--ds-ok,52,211,153))); }
 .enpanel .en-li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 2px; border-top:1px solid var(--ds-line); font-size:13.5px; }
 .enpanel .en-li .a { display:flex; gap:12px; min-width:0; flex:1; align-items:center; } .enpanel .en-li .ic { flex:none; width:34px; height:34px; border-radius:50%; background: rgba(var(--ds-ac,var(--ds-ok,52,211,153)), .14); color: rgb(var(--ds-ac,var(--ds-ok,52,211,153))); display:flex; align-items:center; justify-content:center; } .enpanel .en-li .ic .i { --is:18px; }
 .enpanel .en-li .mid { flex:1; min-width:0; } .enpanel .en-li .bd { font-size:10px; font-weight:600; padding:1px 7px; border-radius:8px; margin-left:6px; background: rgba(var(--ds-ac,var(--ds-ok,52,211,153)), .14); color: rgb(var(--ds-ac,var(--ds-ok,52,211,153))); vertical-align:1px; }
 .enpanel .en-li .bar { position:relative; height:6px; border-radius:3px; background: var(--ds-line); margin:7px 0 4px; overflow:hidden; } .enpanel .en-li .bar i { position:absolute; top:0; bottom:0; border-radius:3px; background: rgb(var(--ds-ac,var(--ds-ok,52,211,153))); }
 .enpanel .en-li .b { text-align:right; font-size:16px; font-weight:600; color: rgb(var(--ds-ac,var(--ds-ok,52,211,153))); font-variant-numeric: tabular-nums; white-space:nowrap; }
 .enpanel .en-li small { display:block; color: var(--ds-fg2); font-size:12px; font-variant-numeric: tabular-nums; }
-.enpanel .en-tot { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:8px; } .enpanel .en-tot div { border-radius:12px; padding:9px 12px; background: rgba(var(--rgb-primary-text-color, 255,255,255), .04); border:1px solid var(--ds-line); font-size:12px; color: var(--ds-fg2); } .enpanel .en-tot b { display:block; margin-top:2px; font-size:18px; font-weight:600; color: var(--ds-fg); font-variant-numeric: tabular-nums; } .enpanel .en-tot b.ok { color: rgb(var(--ds-ok)); }
+.enpanel .en-tot { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:8px; } .enpanel .en-tot div { border-radius:12px; padding:9px 12px; background: rgba(var(--rgb-primary-text-color, 255,255,255), .04); border:1px solid var(--ds-line); font-size:12px; color: var(--ds-fg2); } .enpanel .en-tot b { display:block; margin-top:2px; font-size:18px; font-weight:600; color: var(--ds-fg); font-variant-numeric: tabular-nums; } .enpanel .en-tot b.ok { color: rgb(var(--ds-ac,var(--ds-ok,52,211,153))); }
 .enpanel .en-empty { display:flex; flex-direction:column; align-items:center; gap:10px; padding:30px 18px; text-align:center; color: var(--ds-fg2); font-size:13.5px; line-height:1.5; }
 `;
 const CL_OK = "var(--energy-charge)", CL_DRV = "var(--energy-drive)", CL_FUEL = "var(--energy-fuel)";
@@ -310,6 +316,7 @@ class ChargingCosts {
       if(e.target.name==="total")this.manualTotal(e.target.closest("form"));
       if(e.target.matches("[data-cc-source]")){const group=e.target.closest(".cc-profile");group.querySelector("[data-cc-entity-field]").hidden=e.target.value==="battery";this.bindEntityPicker(group);}
       if(e.target.matches("[name=free]")&&e.target.closest(".cc-profile")){e.target.closest(".cc-profile").querySelector(".cc-paid").hidden=e.target.checked;}
+      if(e.target.matches(".cc-profile [name=default]")&&e.target.checked)e.target.closest("[data-cc-form]").querySelectorAll(".cc-profile [name=default]").forEach(box=>{if(box!==e.target)box.checked=false;}); /* only one profile is suggested */
       if(e.target.matches("[name=profile]"))this.selectLocation(e.target.closest("form"));
       const group=e.target.closest('.cc-profile'),summary=group?.parentElement.querySelector('summary');
       if(summary){group.parentElement.classList.toggle('is-free',group.querySelector('[name=free]').checked);summary.querySelector('span').textContent=group.querySelector('[name=name]').value;summary.querySelector('small').textContent=group.querySelector('[name=free]').checked?T("Free charging"):group.querySelector('[name=price]').value?group.querySelector('[name=price]').value+' €/kWh':T("Set price");}
@@ -325,14 +332,14 @@ class ChargingCosts {
     clearTimeout(this.autoTimer);
     if(this.saving||this.editor!=='profiles'||!this.editorNode?.querySelector('form'))return;
     const status=this.editorNode.querySelector('[role="status"]'),show=text=>{this.message=text;if(status){status.hidden=false;status.textContent=text;}};
-    let profiles;try{profiles=this.collectProfiles();}catch(error){show(error.message);return;}
+    let profiles;try{profiles=this.collectProfiles();}catch(error){show(tError(error.message));return;}
     if(!this.editorNode.querySelector('form').reportValidity())return;
     if(JSON.stringify(profiles)===JSON.stringify(this.data.profiles)&&JSON.stringify(this.data)===this.savedData)return;
     this.data.profiles=profiles;this.saving=true;const before=this.formState(),ui=this.captureUi();
     try{await this.save();this.formBaseline=before;this.updateDirty();
       if(this.formState()===before){await this.history(this.model);this.decorate(this.model,this.ctx);this.restoreUi(ui);const note=this.editorNode?.querySelector('[role="status"]');if(note){note.hidden=false;note.textContent=T("Saved automatically.");}this.message=T("Saved automatically.");}
       else this.scheduleProfileSave();}
-    catch(error){show(error.message);}
+    catch(error){show(tError(error.message));}
     finally{this.saving=false;}
   }
   formState(){const form=this.editorNode?.querySelector("form");return form?JSON.stringify([...form.querySelectorAll("input,select,textarea")].map(n=>[n.name,n.type==="checkbox"?n.checked:n.value])):null;}
@@ -353,7 +360,7 @@ class ChargingCosts {
       return this.card._hass.callWS({type:"frontend/set_user_data",key:this.key,value:snapshot});
     });this.queue=send;
     try{await send;this.savedData=JSON.stringify(snapshot);this.onSaved?.();this.message=T("Saved to your HA account.");return true;}
-    catch(error){throw Error(T("Saved on this device only. Account save failed.")+" "+(error.message||String(error)));}
+    catch(error){throw Error(T("Saved on this device only. Account save failed.")+" "+tError(error.message||String(error)));}
   }
   record(g){return g?this.data.sessions[String(Math.round(g.s/1000))]:undefined;}
   profileRemoved(profile){return !!profile?.id&&profile.id!=='manual'&&!this.data.profiles.some(p=>p.id===profile.id);}
@@ -427,11 +434,11 @@ class ChargingCosts {
   options(value){return [["battery",T("Battery estimate")],["total",T("Total energy meter")],["session",T("Session energy meter")],["power",T("Charger power")]].map(([v,l])=>'<option value="'+v+'"'+(v===value?" selected":"")+">"+esc(l)+"</option>").join("");}
   renderEditor() {
     if(!this.editorNode)return;if(!this.editor){this.editorNode.innerHTML="";return;}
-    const close='<button class="cc-button" data-cc="close">'+esc(T("Close"))+' ×</button>',message=this.message?'<p class="cc-info" role="status">ⓘ '+esc(this.message)+"</p>":'<p class="cc-info" role="status" hidden></p>';
+    const close='<button class="cc-button cc-close" data-cc="close" aria-label="'+esc(T("Close"))+'" title="'+esc(T("Close"))+'">'+ico("close")+'</button>',message=this.message?'<p class="cc-info" role="status">ⓘ '+esc(this.message)+"</p>":'<p class="cc-info" role="status" hidden></p>';
     if(this.editor==="profiles"){
       const sensorOptions=Object.entries(this.card._hass.states||{}).filter(([id,s])=>id.startsWith("sensor.")&&["Wh","kWh","W","kW"].includes(s.attributes?.unit_of_measurement)).map(([id,s])=>'<option value="'+esc(id)+'">'+esc(s.attributes?.friendly_name||id)+"</option>").join("");
       const usage={};for(const r of Object.values(this.data.sessions||{})){const id=r?.profile?.id;if(id==null)continue;const u=usage[id]||(usage[id]={n:0,kwh:0});u.n++;u.kwh+=Number(r.energy)||0;}
-      const profiles=this.data.profiles.map((p,i)=>{const u=usage[p.id]||{n:0,kwh:0};return '<details class="cc-location-details'+(p.free?' is-free':'')+'"><summary><i class="cc-loc-ic" aria-hidden="true">'+ico(p.free?'leaf':'bolt')+'</i><span class="cc-loc-t"><b>'+esc(profileName(p))+'</b><em>'+esc(!u.n?T("No charges yet"):(u.n===1?T("1 charge"):T("{0} charges",u.n))+(u.kwh>0?" · "+new Intl.NumberFormat(this.ctx?.lang,{maximumFractionDigits:1}).format(u.kwh)+" kWh":""))+'</em></span><small class="cc-loc-p'+(p.free?' free':p.price==null?' unset':'')+'">'+esc(p.free?T("Free charging"):p.price!=null?p.price+' €/kWh':T("Set price"))+'</small><span aria-hidden="true">›</span></summary><fieldset class="cc-profile" data-index="'+i+'"><legend>'+esc(profileName(p))+'</legend><div class="cc-profile-head">'+this.field(T("Name"),"name",p.name||profileName(p))+'<label class="cc-check"><input name="free" type="checkbox"'+(p.free?' checked':'')+'>'+esc(T("Free charging"))+'</label></div><div class="cc-paid"'+(p.free?' hidden':'')+'><div class="cc-grid">'+this.field("€/kWh","price",p.price,"number")+'<label class="cc-field">'+esc(T("Energy source"))+'<select name="source" data-cc-source>'+this.options(p.source)+'</select></label><div data-cc-entity-field'+(p.source==="battery"?' hidden':'')+'>'+'<input type="hidden" name="entity" value="'+esc(p.entity||'')+'"><div class="cc-entity-picker"></div><small class="cc-entity-name"></small>'+'</div></div></div><div class="cc-grid">'+this.field(T("Battery estimate efficiency (%)"),"efficiency",p.efficiency,"number",'min="1" max="100"')+'</div><p class="cc-hint">'+esc(T("Efficiency applies only to battery-based estimates. Charger and receipt energy are used as measured."))+'</p><button type="button" class="cc-button danger" data-cc="remove-profile">'+esc(T("Delete profile"))+'</button></fieldset></details>';}).join("");
+      const profiles=this.data.profiles.map((p,i)=>{const u=usage[p.id]||{n:0,kwh:0};return '<details class="cc-location-details'+(p.free?' is-free':'')+'"><summary><i class="cc-loc-ic" aria-hidden="true">'+ico(p.free?'leaf':'bolt')+'</i><span class="cc-loc-t"><b>'+esc(profileName(p))+'</b><em>'+esc(!u.n?T("No charges yet"):(u.n===1?T("1 charge"):T("{0} charges",u.n))+(u.kwh>0?" · "+new Intl.NumberFormat(this.ctx?.lang,{maximumFractionDigits:1}).format(u.kwh)+" kWh":""))+'</em></span><small class="cc-loc-p'+(p.free?' free':p.price==null?' unset':'')+'">'+esc(p.free?T("Free charging"):p.price!=null?p.price+' €/kWh':T("Set price"))+'</small><span aria-hidden="true">›</span></summary><fieldset class="cc-profile" data-index="'+i+'"><legend>'+esc(profileName(p))+'</legend><div class="cc-profile-head">'+this.field(T("Name"),"name",p.name||profileName(p))+'<label class="cc-check"><input name="free" type="checkbox"'+(p.free?' checked':'')+'>'+esc(T("Free charging"))+'</label><label class="cc-check"><input name="default" type="checkbox"'+(p.default?' checked':'')+'>'+esc(T("Suggest for new charges"))+'</label></div><div class="cc-paid"'+(p.free?' hidden':'')+'><div class="cc-grid">'+this.field("€/kWh","price",p.price,"number")+'<label class="cc-field">'+esc(T("Energy source"))+'<select name="source" data-cc-source>'+this.options(p.source)+'</select></label><div data-cc-entity-field'+(p.source==="battery"?' hidden':'')+'>'+'<input type="hidden" name="entity" value="'+esc(p.entity||'')+'"><div class="cc-entity-picker"></div><small class="cc-entity-name"></small>'+'</div></div></div><div class="cc-grid">'+this.field(T("Battery estimate efficiency (%)"),"efficiency",p.efficiency,"number",'min="1" max="100"')+'</div><p class="cc-hint">'+esc(T("Efficiency applies only to battery-based estimates. Charger and receipt energy are used as measured."))+'</p><button type="button" class="cc-button danger" data-cc="remove-profile">'+esc(T("Delete charging profile"))+'</button></fieldset></details>';}).join("");
       this.editorNode.innerHTML='<form data-cc-form="profiles"><div class="cc-editor-head"><b>'+esc(T("Charging profiles"))+'</b>'+close+'</div><p class="cc-hint">'+esc(T("Each location has its own tariff and optional charger sensor. Saved sessions keep their price."))+'</p><datalist id="cc-sensors">'+sensorOptions+'</datalist><div class="cc-profiles">'+profiles+'</div><div class="cc-actions"><button class="cc-button" data-cc="add">'+esc(T("Add location"))+'</button></div>'+message+'</form>';
     } else {
       const g=this.model.chg.find(g=>String(g.s)===String(this.editor));if(!g){this.editor=null;return;}const r=this.record(g),p=r?.profile,result=this.result(g);
@@ -490,7 +497,7 @@ class ChargingCosts {
       const old=this.data.profiles[Number(group.dataset.index)],get=n=>group.querySelector('[name="'+n+'"]'),source=get("source").value,entity=get("entity").value.trim(),efficiency=cn(get("efficiency").value)??90;
       if(validate&&!(efficiency>=1&&efficiency<=100))throw Error(T("Efficiency must be between 1 and 100%."));
       if(validate&&!get("free").checked&&source!=="battery"){const unit=this.card._hass.states?.[entity]?.attributes?.unit_of_measurement;if(!(source==="power"?["W","kW"]:["Wh","kWh"]).includes(unit))throw Error(T("Select W/kW for power or Wh/kWh for energy."));}
-      return {...old,name:get("name").value.trim().slice(0,60),price:cn(get("price").value),free:get("free").checked,source,entity,efficiency};
+      return {...old,name:get("name").value.trim().slice(0,60),price:cn(get("price").value),free:get("free").checked,default:get("default").checked,source,entity,efficiency};
     });
   }
   async click(e) {
@@ -499,7 +506,7 @@ class ChargingCosts {
     if(action==='remove-profile'){
       const group=button.closest('.cc-profile');if(group.querySelector('.cc-delete-confirm'))return;
       const notice=document.createElement('div');notice.className='cc-delete-confirm';notice.setAttribute('role','group');notice.setAttribute('aria-label','Confirm profile deletion');
-      notice.innerHTML='<p>'+esc(T("Delete this profile? Existing charging sessions and saved costs will be kept."))+'</p><button type="button" class="cc-button" data-cc="remove-cancel">'+esc(T("Cancel"))+'</button> <button type="button" class="cc-button danger" data-cc="remove-confirm">'+esc(T("Delete profile"))+'</button>';group.append(notice);notice.querySelector('button').focus();return;
+      notice.innerHTML='<p>'+esc(T("Delete this charging profile? Existing charging sessions and saved costs will be kept."))+'</p><button type="button" class="cc-button" data-cc="remove-cancel">'+esc(T("Cancel"))+'</button> <button type="button" class="cc-button danger" data-cc="remove-confirm">'+esc(T("Delete charging profile"))+'</button>';group.append(notice);notice.querySelector('button').focus();return;
     }
     if(action==='remove-cancel'){button.closest('.cc-delete-confirm').remove();return;}
     if(action==='remove-confirm'){
@@ -512,14 +519,17 @@ class ChargingCosts {
       const g=this.model?.chg.find(row=>String(row.s)===button.dataset.start);if(!g)return;
       button.disabled=true;
       try{
-        const module=await import('/deepal_companion/frontend/charging-curve.js?v=2.0.0&rev=20261122-04');if(!this.host.isConnected)return;
+        const module=await import('/deepal_companion/frontend/charging-curve.js?v=2.0.1-b1&rev=20261126-01');if(!this.host.isConnected)return;
         this.curveDialog?.remove();
         this.curveDialog=module.openCurveDialog(this.host.getRootNode(),this.card._hass,async()=>{
           if(g.id&&!String(g.id).startsWith('recorder_')){const data=await this.card._hass.companionRequest('session_curve',{session_id:g.id});return {...data,mode:data.mode||(typeof g.dc==='boolean'?(g.dc?'DC':'AC'):null)};}
           const series=EN.captureChargingCurve(this.model.curveRaw||{},g);
           return {start:g.s,end:g.e,mode:typeof g.dc==='boolean'?(g.dc?'DC':'AC'):null,series:Object.fromEntries(Object.entries(series).map(([key,rows])=>[key,rows.map(([t,value])=>({lu:t/1000,s:value}))]))};
         },this.card._c);
-      }catch(error){this.message=error.message;this.renderEditor();}finally{button.disabled=false;}return;
+      }catch(error){this.message=tError(error.message);this.renderEditor();}finally{button.disabled=false;}return;
+    }
+    if((action==="profiles"&&this.editor==="profiles")||(action==="session"&&this.editor!==null&&String(this.editor)===String(button.dataset.start))){ /* the same opener again closes what it opened, like the close button */
+      const profiles=this.editor==='profiles';if(profiles&&this.autoTimer){await this.autoSaveProfiles();}this.cancelChanges();if(profiles){this.editor=null;this.renderEditor();}return;
     }
     if(action==="profiles"||action==="session"){this.editor=action==="profiles"?"profiles":button.dataset.start;this.message="";this.dirty=false;const anchor=action==="session"?(button.closest('.cc-session-row')||button):this.host.querySelector(".cc-summary");if(anchor)anchor.after(this.editorNode);this.renderEditor();return;}
     if(action==="cancel"){this.cancelChanges();return;}
@@ -535,13 +545,13 @@ class ChargingCosts {
         const form=this.editorNode.querySelector("form"),g=this.model.chg.find(g=>String(g.s)===String(this.editor)),id=form.elements.profile.value,p=id==="__manual__"?{id:"manual",name:"",price:null,free:false,source:"battery",entity:"",efficiency:90}:this.data.profiles.find(p=>p.id===id);
         if(!p||!g)throw Error(T("Choose a location first."));
         if(id==="__manual__"&&!form.elements.free.checked&&cn(form.elements.price.value)===null&&cn(form.elements.total.value)===null)throw Error(T("Enter a price per kWh or a total paid."));
-        const previous=this.record(g),snapshot=previous?.profile?.id===id?previous.profile:p;
+        const previous=this.record(g),{default:_suggested,...snapshot}=previous?.profile?.id===id?previous.profile:p; /* a receipt keeps the price it was saved with, not the suggestion flag */
         if(form.elements.free.checked&&cn(form.elements.total.value)>0)throw Error(T("Leave Total paid empty for a free session."));
         this.data.sessions[String(Math.round(g.s/1000))]={start:g.s,capacity:previous?.capacity||this.ctx.cap,profile:{...snapshot,price:cn(form.elements.price.value),free:form.elements.free.checked},energy:cn(form.elements.energy.value),total:cn(form.elements.total.value)};
       }
       this.saving=true;this.editorNode.querySelectorAll("[data-cc]").forEach(node=>node.disabled=true);
       await this.save();this.dirty=false;await this.history(this.model);this.decorate(this.model,this.ctx);
-    } catch(error){this.message=error.message;const status=this.editorNode.querySelector('[role="status"]');if(status){status.hidden=false;status.textContent=this.message;}}
+    } catch(error){this.message=tError(error.message);const status=this.editorNode.querySelector('[role="status"]');if(status){status.hidden=false;status.textContent=this.message;}}
     finally{this.saving=false;button.disabled=false;this.editorNode.querySelectorAll("[data-cc]").forEach(node=>node.disabled=false);}
   }
 }
@@ -596,7 +606,7 @@ function view(m, ctx) {
     const last = m.chg.filter((g) => !g.live).slice(-1)[0];
     h += `<div class="en-now"><div class="en-st"><span class="s">${ico(on ? "engine" : "info")}${esc(on ? T("Vehicle on") : T("Parked"))}</span><small>${Number.isFinite(range) ? esc(f(range, 0)) + " km" : ""}</small></div>
       <div class="en-big"><b>${Number.isFinite(bat) ? esc(f(bat, 0)) + "%" : "–"}</b>${hasFuel && Number.isFinite(num(v("fuel"))) ? `<span>${esc(T("Fuel {0}%", f(num(v("fuel")), 0)))}</span>` : ""}</div>
-      <div class="en-sub">${last ? esc(T("Last charge: {0} {1} – {2}, {3}% → {4}%", lbl(last.s), hm(last.s), hm(last.e), f(last.from, 0), f(last.to, 0))) + (last.kwh ? ` · <span class="ok-t" style="color:rgb(var(--ds-ok))">${esc(f(last.kwh, 1))} kWh</span>` : "") : esc(T("No charge in the period shown."))}</div></div>`;
+      <div class="en-sub">${last ? esc(T("Last charge: {0} {1} – {2}, {3}% → {4}%", lbl(last.s), hm(last.s), hm(last.e), f(last.from, 0), f(last.to, 0))) + (last.kwh ? ` · <span class="ok-t" style="color:rgb(var(--ds-ac,var(--ds-ok,52,211,153)))">${esc(f(last.kwh, 1))} kWh</span>` : "") : esc(T("No charge in the period shown."))}</div></div>`;
   }
   { /* totals of the period */
     const km = m.days.reduce((a, d) => a + (d.km > 0 ? d.km : 0), 0), kwh = m.chg.reduce((a, g) => a + (g.kwh > 0 ? g.kwh : 0), 0);
@@ -618,7 +628,7 @@ function view(m, ctx) {
     const ok = Number.isFinite(g.from) && Number.isFinite(g.to), lo = ok ? Math.min(100, Math.max(0, Math.min(g.from, g.to))) : 0, wd2 = ok ? Math.min(100, Math.max(1, Math.abs(g.to - g.from))) : 0;
     h += `<div class="en-li"><span class="a"><span class="ic">${ico("plug")}</span><span class="mid">${esc(lbl(g.s))} · ${esc(hm(g.s))} – ${esc(g.live ? T("now") : hm(g.e))}<span class="bd">${esc(g.dc ? "DC" : "AC")}</span>${ok ? `<span class="bar"><i style="left:${lo}%;width:${wd2}%"></i></span>` : ""}<small>${ok ? esc(f(g.from, 0)) + " → " + esc(f(g.to, 0)) + "% · " : ""}${esc(dh)}</small></span></span><span class="b">${g.kwh ? esc(f(g.kwh, 1)) + " kWh" : ""}</span></div>`;
   });
-  h += `<aside class="en-info"><span class="en-info-icon" aria-hidden="true">ⓘ</span><div><p>${esc(T("Battery use: net level drop during drives × {0} kWh capacity.", f(cap, 1)))}</p>${fu ? `<p>${esc(T("Petrol use: fuel drops recorded while driving. No tank size is assumed."))}</p>` : ""}<p>${esc(T("Charging: battery increase × capacity. All figures are estimates; delayed readings and small top-ups may be missed."))}</p><p>${esc(T("History follows Recorder retention. For 30 days, set purge_keep_days: 30 or more."))}</p></div></aside></div>`;
+  h += `<button type="button" class="en-infotog" data-eninfo aria-expanded="${infoOpen}"><span>${esc(T("How it is calculated"))}</span>${ico(infoOpen ? "chevu" : "chevd")}</button><aside class="en-info"${infoOpen ? "" : " hidden"}><span class="en-info-icon" aria-hidden="true">ⓘ</span><div><p>${esc(T("Battery use: net level drop during drives × {0} kWh capacity.", f(cap, 1)))}</p>${fu ? `<p>${esc(T("Petrol use: fuel drops recorded while driving. No tank size is assumed."))}</p>` : ""}<p>${esc(T("Charging: battery increase × capacity. All figures are estimates; delayed readings and small top-ups may be missed."))}</p><p>${esc(T("History follows Recorder retention. For 30 days, set purge_keep_days: 30 or more."))}</p></div></aside></div>`;
 
   return h;
 }
@@ -683,7 +693,7 @@ EN.loadChargingSessions=async(card)=>{
       await EN.importChargeRows(hass,completed);
       const persisted=await hass.companionRequest('sessions',{});
       return {rows:[...recovered.filter(row=>!persisted.some(a=>a.s<=row.e&&a.e>=row.s)),...persisted].sort((a,b)=>a.s-b.s),warning};
-    }catch(error){warning=T("Recovered charges couldn’t be archived and still depend on Recorder history: ")+(error.message||String(error));}
+    }catch(error){warning=T("Recovered charges couldn’t be archived and still depend on Recorder history: ")+tError(error.message||String(error));}
   }
   return {rows:[...recovered,...archived].sort((a,b)=>a.s-b.s),warning};
 };
@@ -794,7 +804,8 @@ EN.panel = (d, card, options = {}) => {
     const n = d.querySelector(".en-nav"); if (!n) return;
     const now=Date.now(),t0=wkStart(off,now),t1=wkEnd(off,now)-1, fm = { format: (t) => K.haFmt(get()).dm(t) };
     const noPrev = !options.chartOnly && limitT !== null && limitT > t0, days = limitT !== null ? Math.max(1, Math.round((Date.now() - limitT) / 86400000)) : 0;
-    n.innerHTML = `<div class="en-period" role="group" aria-label="${esc(T("Period"))}"><button data-period="7" aria-pressed="${period === 7}">${esc(T("Weekly"))}</button><button data-period="30" aria-pressed="${period === 30}">${esc(T("Monthly"))}</button></div><div class="en-dates"><button class="btn" data-wk="-1" aria-label="${esc(T("Previous period"))}"${noPrev ? " disabled" : ""}>${ico("chevl")}</button><div class="en-wk"><b>${esc(fm.format(t0))} – ${esc(fm.format(t1))}</b><small>${esc(T(off === 0 ? "Last {0} days" : "{0}-day period", period))}</small></div><button class="btn" data-wk="1" aria-label="${esc(T("Next period"))}"${off >= 0 ? " disabled" : ""}>${ico("chevr")}</button></div>${noPrev ? `<p class="hint en-lim">${esc(T("Recorder limit: history goes back about {0} days.", days))}</p>` : ""}`;
+    const pillSnap = window.__DEEPAL_COMPANION_UI?.pillSnap?.(n); n.innerHTML = `<div class="seg" role="group" aria-label="${esc(T("Period"))}"><button data-period="7" data-k="period" class="${period === 7 ? "on" : ""}" aria-pressed="${period === 7}">${esc(T("Weekly"))}</button><button data-period="30" data-k="period" class="${period === 30 ? "on" : ""}" aria-pressed="${period === 30}">${esc(T("Monthly"))}</button></div><div class="en-dates"><button class="btn" data-wk="-1" aria-label="${esc(T("Previous period"))}"${noPrev ? " disabled" : ""}>${ico("chevl")}</button><div class="en-wk"><b>${esc(fm.format(t0))} – ${esc(fm.format(t1))}</b><small>${esc(T(off === 0 ? "Last {0} days" : "{0}-day period", period))}</small></div><button class="btn" data-wk="1" aria-label="${esc(T("Next period"))}"${off >= 0 ? " disabled" : ""}>${ico("chevr")}</button></div>${noPrev ? `<p class="hint en-lim">${esc(T("Recorder limit: history goes back about {0} days.", days))}</p>` : ""}`;
+    window.__DEEPAL_COMPANION_UI?.pillApply?.(n,pillSnap);
 
   };
   const startPeriodLoading = () => {
@@ -875,6 +886,7 @@ m.curveRaw=raw;
   };
   d.classList.add("enpanel");
   d.innerHTML = `<style>${PCSS}</style><div class="en-body"><div class="en-nav"></div>${LOAD()}</div>`;
+  infoOpen = false;
   if(get()?.companionRequest&&!options.chartOnly){
     const tabs=document.createElement("div");tabs.className="en-cost-tabs";
     tabs.innerHTML='<button data-en-mode="energy" aria-pressed="true">'+esc(T("Energy"))+'</button><button data-en-mode="costs" aria-pressed="false">'+esc(T("Charging costs"))+'</button>';
@@ -891,6 +903,8 @@ m.curveRaw=raw;
 
   d.addEventListener("click", (e) => {
     if (e.target.closest("[data-cc]")) return;
+    const tog = e.target.closest("[data-eninfo]");
+    if (tog) { infoOpen = !infoOpen; tog.setAttribute("aria-expanded", String(infoOpen)); const box = d.querySelector(".en-info"); if (box) box.hidden = !infoOpen; const ic0 = tog.querySelector(".i"); if (ic0) ic0.outerHTML = ico(infoOpen ? "chevu" : "chevd"); return; }
     const p = e.target.closest("[data-period]");
     if (costs.dirty && e.target.closest("[data-period],[data-wk]")) { const status = d.querySelector(".cc-editor [role=status]"); if (status) status.textContent = T("Save or close the editor before changing dates."); return; }
     if (p && Number(p.dataset.period) !== period) { period = Number(p.dataset.period); off = 0; selT = null;chartRange=null; startPeriodLoading();run(true, true); return; }

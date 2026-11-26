@@ -44,7 +44,7 @@ DeepalS05CardEditor.prototype._editorLoad = async function() {
     this._config={...response.config,type:"custom:deepal-companion-card",...this._editorOwner};
     this._editorLoaded=true;this._editorError="";this._draw();
     this._editorEmit();
-  }catch(error){this._editorError=error.message||String(error);this._draw();console.error("Deepal Companion editor",error);}
+  }catch(error){this._editorError=tError(error.message||String(error));this._draw();console.error("Deepal Companion editor",error);}
   finally{this._editorLoading=false;if(this._editorReload){this._editorReload=false;queueMicrotask(()=>this._editorLoad());}}
 };
 DeepalS05CardEditor.prototype._editorEmit = function() {
@@ -66,7 +66,7 @@ DeepalS05CardEditor.prototype._commit = function() {
     if(this._editorOwner.vehicle_id===owner.vehicle_id&&this._editorOwner.view_id===owner.view_id){
       this._editorOwner.view_id=response.view_id;this._editorEmit();
     }
-  }).catch(error=>{console.error("Deepal Companion editor save",error);if(/changed elsewhere/i.test(error.message||""))this._editorLoad();if(this._s){this._s._note=error.message||String(error);this._s._render();}});
+  }).catch(error=>{console.error("Deepal Companion editor save",error);if(/changed elsewhere/i.test(error.message||""))this._editorLoad();if(this._s){this._s._note=tError(error.message||String(error));this._s._render();}});
   this._draw();
 };
 DeepalS05CardEditor.prototype._draw = function() {

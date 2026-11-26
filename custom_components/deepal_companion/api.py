@@ -15,7 +15,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 
-from .const import CAR_LOG_SIGNAL, CARD_PANEL_URL, DEFAULT_PROFILES, DOMAIN, PLAN_SIGNAL, RANGES, SIGNAL
+from .const import CAR_LOG_SIGNAL, CARD_PANEL_URL, DEFAULT_PROFILES, DOMAIN, PLAN_SIGNAL, RANGES, SHARED_KEYS, SIGNAL
 from .database import UNDO_DAYS
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,6 +61,8 @@ def validate_costs(data):
             raise ValueError("Choose an energy or power sensor")
         if not isinstance(p.get("free"), bool):
             raise ValueError("Free must be true or false")
+        if "default" in p and not isinstance(p["default"], bool):
+            raise ValueError("Default must be true or false")
         n = p.get("efficiency")
         if isinstance(n, bool) or not isinstance(n, (int, float)) or not 1 <= n <= 100:
             raise ValueError("Efficiency must be between 1 and 100")
@@ -73,6 +75,8 @@ def validate_costs(data):
         if p["id"] in ids:
             raise ValueError("Duplicate location identity")
         ids.add(p["id"])
+    if sum(1 for p in data["profiles"] if p.get("default")) > 1:
+        raise ValueError("Only one charging profile can be suggested for new charges")
     for key, record in data["sessions"].items():
         if not key.isdigit() or not 0 <= int(key) <= time.time() + 86400:
             raise ValueError("Invalid charging session timestamp")
@@ -88,6 +92,56 @@ def validate_costs(data):
             raise ValueError("A free charge cannot have a nonzero total paid")
     check_json(data)
     return data
+
+
+def validate_import_rows(rows):
+    """Check every recovered session row before anything is written. Pure: no Home Assistant or database access."""
+    for row in rows:
+        if not isinstance(row, dict) or row.get("live") or row.get("gap"):
+            raise ValueError("Only completed, continuous sessions can be archived")
+        for key, maximum in (("s", (time.time()+60)*1000), ("e", (time.time()+60)*1000), ("from", 100), ("to", 100), ("kwh", 500), ("capacity", 500)):
+            n = row.get(key)
+            if type(n) not in (int, float) or not math.isfinite(n) or not 0 <= n <= maximum:
+                raise ValueError("Invalid recovered session " + key)
+        if row["e"] <= row["s"] or row["to"] <= row["from"]:
+            raise ValueError("Invalid charging interval")
+        hours = (row["e"] - row["s"]) / 3600000
+        if hours > 7 * 24:
+            raise ValueError("A charging session cannot last more than 7 days")
+        if row["kwh"] > 400 * hours + 1:
+            raise ValueError("Charged energy is not plausible for the session length")
+        curve = row.get("curve", {})
+        if not isinstance(curve, dict) or set(curve) - {"ac", "dc", "battery"}:
+            raise ValueError("Invalid charging curve")
+        for samples in curve.values():
+            if not isinstance(samples, list) or len(samples) > 10000:
+                raise ValueError("Charging curve is too large")
+            last_time = None
+            for point in samples:
+                if not isinstance(point, list) or len(point) != 2 or type(point[0]) not in (int,float) or not math.isfinite(point[0]) or not row["s"]-86400000 <= point[0] <= row["e"]:
+                    raise ValueError("Invalid charging curve timestamp")
+                if last_time is not None and point[0] < last_time:
+                    raise ValueError("Charging curve readings must be in time order")
+                last_time = point[0]
+                if point[1] is not None and (type(point[1]) not in (int,float) or not math.isfinite(point[1]) or not 0 <= point[1] <= 100000):
+                    raise ValueError("Invalid charging curve reading")
+        pricing = row.get("pricing", {})
+        if not isinstance(pricing, dict):
+            raise ValueError("Invalid recovered pricing")
+        for key in ("energy", "cost"):
+            n = pricing.get(key)
+            if n is not None and (type(n) not in (int,float) or not math.isfinite(n) or not 0 <= n <= 1000000000):
+                raise ValueError("Invalid recovered " + key)
+
+
+
+async def _reload_vehicle_config(runtime):
+    """Shared settings changed but the entity mapping did not: read the vehicle settings again without a full refresh."""
+    try:
+        runtime.config = (await runtime.hub.db("config", runtime.vehicle))["config"]
+        runtime._summary_revision += 1
+    except Exception:
+        _LOGGER.warning("Saved, but Companion could not reload the vehicle settings yet; they apply on the next update", exc_info=True)
 
 
 async def _refresh_after_write(runtime):
@@ -136,6 +190,43 @@ async def request(hass, connection, msg):
                     except PermissionError:
                         pass
             connection.send_result(msg["id"], result)
+            return
+        if op in {"user_hint_get", "user_hint_dismiss"}:
+            if data.get("hint", "start") != "start":
+                raise ValueError("Unknown hint")
+            user = str(connection.user.id)
+            if op == "user_hint_dismiss":
+                await hub.db("set_user_flag", user, "hint_start")
+            connection.send_result(msg["id"], {"dismissed": bool(await hub.db("user_flag", user, "hint_start"))})
+            return
+        if op == "settings_get":
+            # One read for a whole page: the profile and vehicle (when a vehicle is chosen) plus the integration settings.
+            from .phone_text import language_choice
+            profile = vehicle_settings = None
+            if vehicle:
+                runtime = hub.vehicles.get(vehicle)
+                if runtime is None:
+                    raise ValueError("Vehicle is not loaded")
+                authorize(connection, runtime)
+                def load(snap):
+                    listed = next((item for item in snap.list_vehicles() if item["id"] == vehicle), None)
+                    if listed is None:
+                        raise ValueError("Vehicle is not loaded")
+                    return snap.config(vehicle, msg.get("view_id")), listed
+                profile, listed = await hub.read_db(load)  # one snapshot: the profile and the vehicle list agree
+                profile["charge_prompt"] = await hub.db("charge_prompt", vehicle, str(connection.user.id))
+                vehicle_settings = {"id": listed["id"], "name": listed["name"], "views": listed["views"],
+                                    "config": {k: v for k, v in listed["config"].items() if not k.startswith("_") and k != "battery_entity"}}
+            connection.send_result(msg["id"], {
+                "profile": profile, "vehicle": vehicle_settings,
+                "integration": {
+                    "update_rate": hub.update_rate, "language": language_choice(hass),
+                    # Everyone may read the card page settings; only an administrator may change them (card_panel op).
+                    "card_panel": {"sidebar": hub.card_panel_in_sidebar, "url": "/" + CARD_PANEL_URL, **hub.card_panel_pin,
+                                   "can_edit": bool(connection.user.is_admin)},
+                    "can_edit": bool(connection.user.is_admin),
+                },
+            })
             return
         if op in {"notification_language_get", "notification_language_set"}:
             from .phone_text import language_choice
@@ -238,6 +329,29 @@ async def request(hass, connection, msg):
             if connection.user.is_admin and getattr(runtime, "notifications", None) is not None:
                 # every answer carries the phone list, so the page never loses it after a save or command
                 result["recipients"] = [{"svc": r["svc"], "name": r["name"]} for r in runtime.notifications.recipients()]
+        elif op.startswith("charger_limit_"):
+            ctl = getattr(runtime, "charger_limit", None)
+            if ctl is None:
+                raise ValueError("Companion is still starting. Try again in a moment.")
+            if op == "charger_limit_get":
+                result = ctl.snapshot()
+                if connection.user.is_admin:
+                    result["devices"] = ctl.devices()
+                    result.update(ctl.choices())
+                    if ctl.config["device_id"]:
+                        result["entities"] = ctl.entities_of(ctl.config["device_id"])
+            elif not connection.user.is_admin:
+                raise PermissionError("Administrator access is required to change the charger limit")
+            elif op == "charger_limit_set":
+                result = await ctl.save(data.get("value", {}))
+                result["devices"] = ctl.devices()
+                result.update(ctl.choices())
+                if ctl.config["device_id"]:
+                    result["entities"] = ctl.entities_of(ctl.config["device_id"])
+            elif op == "charger_limit_resume":
+                result = await ctl.resume()
+            else:
+                raise ValueError("Unknown charger limit operation")
         elif op == "health_get":
             from .health import build_health
             result = await build_health(runtime)
@@ -290,7 +404,15 @@ async def request(hass, connection, msg):
             if "entities" in patch and (not isinstance(patch["entities"], dict) or any(not ENTITY.fullmatch(v) for v in patch["entities"].values())):
                 raise ValueError("Invalid entity mapping")
             result = await hub.db("patch_config", vehicle, msg.get("view_id"), patch, bool(data.get("reset")), expected_revision)
-            await _refresh_after_write(runtime)
+            shared = set(patch) & SHARED_KEYS
+            if shared & {"prefix", "entities"}:
+                await _refresh_after_write(runtime)  # the entity mapping may have changed: rebuild it
+            elif shared:
+                await _reload_vehicle_config(runtime)  # shared settings only: read them again, no registry scan
+                limiter = getattr(runtime, "charger_limit", None)
+                if "charge_target" in shared and limiter is not None:
+                    limiter._spawn(limiter.evaluate())  # the new target counts now, not at the next 15 s check
+            # a profile's own look settings never reach the runtime, so nothing to reload
         elif op == "view":
             name = str(data.get("name", ""))[:100].strip()
             result = await hub.db("view", vehicle, data.get("action"), msg.get("view_id"), name, data.get("source"))
@@ -325,42 +447,7 @@ async def request(hass, connection, msg):
             rows = data.get("rows")
             if not isinstance(rows, list) or len(rows) > 500:
                 raise ValueError("Import up to 500 completed sessions at a time")
-            for row in rows:
-                if not isinstance(row, dict) or row.get("live") or row.get("gap"):
-                    raise ValueError("Only completed, continuous sessions can be archived")
-                for key, maximum in (("s", (time.time()+60)*1000), ("e", (time.time()+60)*1000), ("from", 100), ("to", 100), ("kwh", 500), ("capacity", 500)):
-                    n = row.get(key)
-                    if type(n) not in (int, float) or not math.isfinite(n) or not 0 <= n <= maximum:
-                        raise ValueError("Invalid recovered session " + key)
-                if row["e"] <= row["s"] or row["to"] <= row["from"]:
-                    raise ValueError("Invalid charging interval")
-                hours = (row["e"] - row["s"]) / 3600000
-                if hours > 7 * 24:
-                    raise ValueError("A charging session cannot last more than 7 days")
-                if row["kwh"] > 400 * hours + 1:
-                    raise ValueError("Charged energy is not plausible for the session length")
-                curve = row.get("curve", {})
-                if not isinstance(curve, dict) or set(curve) - {"ac", "dc", "battery"}:
-                    raise ValueError("Invalid charging curve")
-                for samples in curve.values():
-                    if not isinstance(samples, list) or len(samples) > 10000:
-                        raise ValueError("Charging curve is too large")
-                    last_time = None
-                    for point in samples:
-                        if not isinstance(point, list) or len(point) != 2 or type(point[0]) not in (int,float) or not math.isfinite(point[0]) or not row["s"]-86400000 <= point[0] <= row["e"]:
-                            raise ValueError("Invalid charging curve timestamp")
-                        if last_time is not None and point[0] < last_time:
-                            raise ValueError("Charging curve readings must be in time order")
-                        last_time = point[0]
-                        if point[1] is not None and (type(point[1]) not in (int,float) or not math.isfinite(point[1]) or not 0 <= point[1] <= 100000):
-                            raise ValueError("Invalid charging curve reading")
-                pricing = row.get("pricing", {})
-                if not isinstance(pricing, dict):
-                    raise ValueError("Invalid recovered pricing")
-                for key in ("energy", "cost"):
-                    n = pricing.get(key)
-                    if n is not None and (type(n) not in (int,float) or not math.isfinite(n) or not 0 <= n <= 1000000000):
-                        raise ValueError("Invalid recovered " + key)
+            await hass.async_add_executor_job(validate_import_rows, rows)  # a 500-row check must not block the event loop
             mapping = getattr(runtime, "entities", {})
             result = {"imported": await hub.db("import_sessions", vehicle, rows,
                                                {key: mapping.get(role) for key, role in (("ac","ac"),("dc","dc"),("battery","batt"))})}
@@ -473,7 +560,7 @@ def subscribe(hass, connection, msg):
         if runtime:
             try:
                 authorize(connection, runtime)
-                connection.send_event(msg["id"], {"vehicle_id": vehicle})
+                connection.send_event(msg["id"], {"vehicle_id": vehicle, "revision": getattr(runtime, "signal_revision", 0)})
             except PermissionError:
                 pass
     connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, SIGNAL, changed)

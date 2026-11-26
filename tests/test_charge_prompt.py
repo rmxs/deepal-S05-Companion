@@ -77,6 +77,15 @@ class ChargePromptTests(unittest.TestCase):
         self.db.dismiss_charge_prompt('car', 'user', 'third')
         self.assertIsNone(self.db.charge_prompt('car', 'user'))
 
+    def test_suggested_profile_is_offered_but_never_assigned(self):
+        self.db.save_session('car', self.charge)
+        costs = self.db.get('car', 'costs')
+        costs['profiles'][1]['default'] = True
+        self.db.save_costs('car', costs)
+        prompt = self.db.charge_prompt('car', 'user')
+        self.assertEqual([p['id'] for p in prompt['profiles'] if p.get('default')], [costs['profiles'][1]['id']])
+        self.assertEqual(self.db.get('car', 'costs')['sessions'], {}, 'Nothing is assigned until the user saves')
+
     def test_dismissal_saved_by_an_older_version_still_applies(self):
         self.db.save_session('car', self.charge)
         self.db.put('car', 'charge_prompt_dismissed:user', 'first')

@@ -1,6 +1,6 @@
 {
   "name": "deepal-companion",
-  "version": "2.0.0",
+  "version": "2.0.1-b1",
   "private": true,
   "description": "Development tools only; Home Assistant installation needs no Node or npm.",
   "scripts": {
@@ -8,9 +8,15 @@
     "test:browser": "node tests/test_browser.cjs",
     "test:curve": "node tests/test_curve_math.cjs",
     "test:tokens": "node tests/test_colour_tokens.cjs",
+    "test:language": "node tests/test_language_keys.cjs",
+    "test": "npm run test:curve && npm run test:tokens && npm run test:language",
     "test:contrast": "node tests/test_accent_contrast.cjs",
     "test:plan": "node tests/test_charge_plan.cjs && node tests/test_health_plan.cjs",
-    "test:neon": "node tests/test_neon_scene.cjs"
+    "test:neon": "node tests/test_neon_scene.cjs",
+    "test:turn": "node tests/test_turn_drl.cjs",
+    "test:range": "node tests/test_range_sheet.cjs",
+    "test:nfpopup": "node tests/test_notifications_popup.cjs",
+    "test:ensheet": "node tests/test_energy_sheet.cjs"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "5.2.8",

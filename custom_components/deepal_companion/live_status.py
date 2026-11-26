@@ -8,7 +8,7 @@ import hashlib
 import re
 import time
 
-from .const import update_floor
+from .const import update_floor, vehicle_entity
 from .live_charging import local_time, number, palette_color, stamp, supported
 from .phone_text import tr
 
@@ -30,12 +30,12 @@ PAGE = re.compile(r"/[\w\-./%]{0,160}")
 KINDS = {
     "climate": {
         "key": "live_climate", "name": "Live climate", "icon": "mdi:fan", "title": "Climate",
-        "default": {"enabled": False, "devices": [], "min_interval": 120, "max_age": 1800, "start_delay": 0, "end_delay": 30,
+        "default": {"enabled": False, "devices": [], "min_interval": 120, "max_age": 1800, "start_delay": 0, "end_delay": 30, "parked_after": 360,
                     "temp_step": 1, "ready_margin": 1, "show_target": True, "show_outside": False, "show_progress": True,
-                    "show_timer": True, "show_updated": False, "turn_off_button": True, "max_run": 0, "title": "", "icon": "", "color": "", "url": ""},
+                    "show_timer": True, "show_updated": False, "turn_off_button": True, "max_run": 0, "only_parked": True, "title": "", "icon": "", "color": "", "url": ""},
         "ranges": {"min_interval": (30, 3600), "max_age": (300, 86400), "start_delay": (0, 600), "end_delay": (0, 600),
-                   "temp_step": (1, 5), "ready_margin": (0, 5), "max_run": (0, 240)},
-        "bools": ("enabled", "show_target", "show_outside", "show_progress", "show_timer", "show_updated", "turn_off_button"),
+                   "temp_step": (1, 5), "ready_margin": (0, 5), "max_run": (0, 240), "parked_after": (60, 3600)},
+        "bools": ("enabled", "show_target", "show_outside", "show_progress", "show_timer", "show_updated", "turn_off_button", "only_parked"),
     },
     "open": {
         "key": "live_open", "name": "Live left open or unlocked", "icon": "mdi:car-door-lock-open", "title": "Left open",
@@ -119,8 +119,7 @@ class LiveStatus:
         return options
 
     def entity(self, logical):
-        mapped = self.runtime.config.get("entities", {}).get(logical)
-        return mapped or logical.replace(".", "." + self.runtime.config.get("prefix", "s05") + "_", 1)
+        return vehicle_entity(self.runtime, logical)
 
     def get(self, logical):
         return self.hass.states.get(self.entity(logical))
@@ -159,6 +158,8 @@ class LiveStatus:
         outside = number(self.get("sensor.outside_temperature"))
         unit = getattr(getattr(self.hass.config, "units", None), "temperature_unit", "°C")
         on = on and 0 <= now - stamp(base) <= options["max_age"]  # a reading that stopped updating cannot keep a live notification alive
+        if options["only_parked"] and self.running(options, now):
+            on = False  # same rule as the left-open alert: nothing while the car is moving; a running one ends after its end delay
         return {"active": on, "current": current, "target": target, "outside": outside, "unit": unit if isinstance(unit, str) else "°C",
                 "updated": stamp(base)}
 
@@ -173,14 +174,14 @@ class LiveStatus:
         changed = getattr(odo, "last_changed", None)
         return changed.timestamp() if isinstance(changed, datetime) else stamp(odo)
 
-    def running(self, options=None):
+    def running(self, options=None, now=None):
         """True while the car is moving. The car never switches itself off, so "on" does not mean in use: it counts as moving
         until the odometer value has stayed the same for "Parked after" (set with the notification, to suit how often the
         car reports). Without an odometer, the engine and power status decide."""
         window = (options or {}).get("parked_after", KINDS["open"]["default"]["parked_after"])
         odo = self.get("sensor.total_odometer")
         if odo is not None and str(odo.state).lower() not in {"unknown", "unavailable", "none", ""}:
-            return time.time() - self.moved_at(odo) < window
+            return (time.time() if now is None else now) - self.moved_at(odo) < window
         engine, power = self.get("binary_sensor.engine"), self.get("sensor.power_status")
         if engine is not None and str(engine.state).lower() == "on":
             return True
@@ -191,7 +192,7 @@ class LiveStatus:
             return None
         odo = self.get("sensor.total_odometer")
         stale_odo = bool(options["only_parked"] and odo is not None and not self.fresh(odo, now, options))
-        if options["only_parked"] and self.running(options):
+        if options["only_parked"] and self.running(options, now):
             # Open windows while driving are normal: nothing to report, and a running notification ends.
             lock = self.get("lock.doors")
             return {"active": False, "items": [], "unlocked": False, "updated": stamp(lock) if lock else 0}
@@ -230,11 +231,9 @@ class LiveStatus:
 
     def end_reason(self, kind, options):
         """The plain reason a live notification ended because its condition stopped."""
-        if kind == "climate":
-            return "Climate turned off"
         if options["only_parked"] and self.running(options):
             return "Vehicle moving"
-        return "Everything closed and locked"
+        return "Climate turned off" if kind == "climate" else "Everything closed and locked"
 
     def trigger_details(self, kind, now, options, snap, since=None):
         """Capture the decision when it happens, rather than consulting later sensor values."""
@@ -248,7 +247,8 @@ class LiveStatus:
                 details["sensors"].append({"entity": self.entity(logical), "value": str(sensor.state), "reported": stamp(sensor)})
         if kind == "open":
             details.update(items=list((snap or {}).get("items", [])), unlocked=bool((snap or {}).get("unlocked")),
-                           only_parked=options["only_parked"], moving=self.running(options),
+                           only_parked=options["only_parked"], moving=self.running(options, now),
+                           parked_after_seconds=options["parked_after"],
                            parking_basis=f"Odometer unchanged for {options['parked_after']} seconds means parked; otherwise moving. Without odometer, engine/power status is used.")
         return details
 
@@ -343,10 +343,10 @@ class LiveStatus:
 
     # ---- engine -------------------------------------------------------------------------------------------------
     async def end_on_phone(self, device, tag, kind, now):
-        """iOS ends a Live Activity with its own command, and the silent push behind a clear can be dropped, so the end is
+        """iOS ends a Live Activity with its own command, and the silent push behind a clear can be dropped, so the clear is
         repeated twice more (30 s and 60 s later) unless a new notification took over the tag in the meantime."""
         if getattr(self.owner, "recipient_os", lambda _device: "")(device) == "ios":
-            await self.send(device, {"message": "end_live_activity", "data": {"tag": tag}})
+            await self.send(device, {"message": "end_live_activity", "data": {"tag": tag, "live_activity": True}})  # without live_activity iOS shows the text as a normal alert
         self.repeats = [*getattr(self, "repeats", []), *((device, tag, kind, now + delay) for delay in (30, 60))]
 
     async def repeat_ends(self, now):
@@ -355,9 +355,7 @@ class LiveStatus:
         for device, tag, kind, _ in due:
             if self.state.get(kind, {}).get("active", {}).get(device):
                 continue  # a new notification is showing: it must stay
-            await self.send(device, {"message": "clear_notification", "data": {"tag": tag}})
-            if getattr(self.owner, "recipient_os", lambda _device: "")(device) == "ios":
-                await self.send(device, {"message": "end_live_activity", "data": {"tag": tag}})
+            await self.send(device, {"message": "clear_notification", "data": {"tag": tag}})  # silent; end_live_activity is never repeated: when no activity is left the phone shows it as a visible notification
 
     async def tick(self, now=None):
         now = time.time() if now is None else now
@@ -385,8 +383,9 @@ class LiveStatus:
             state.pop("unknown_since", None)
         lost = enabled and snap is None and now - state.get("unknown_since", now) >= options["max_age"]
         wanted = bool(snap and snap["active"])
-        if kind == "open" and not wanted and not active:
-            state.pop("since", None)  # Restart pending delay on closed, moving, stale or unknown.
+        moving = options.get("only_parked") and self.running(options, now)
+        if (kind == "open" or moving) and not wanted and not active:
+            state.pop("since", None)  # Restart pending delay on closed, moving, stale or unknown. Climate restarts it only when moving.
         if wanted:
             state.pop("stop_since", None)
             state.setdefault("since", now)
@@ -404,6 +403,9 @@ class LiveStatus:
         for device in list(active):
             if not enabled or device not in options["devices"] or stop:
                 if now - self.last_attempt.get(device, 0) < 30:
+                    continue
+                if not state.get("tag"):  # a restored block without a tag: nothing was sent under a known tag, so there is nothing to clear
+                    del active[device]
                     continue
                 result = await self.send(device, {"message": "clear_notification", "data": {"tag": state["tag"]}})
                 self.last_attempt[device] = now

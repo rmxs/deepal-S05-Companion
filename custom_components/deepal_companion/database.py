@@ -9,7 +9,7 @@ import sqlite3
 import time
 from uuid import uuid4
 
-from .const import DEFAULT_PROFILES, DEFAULT_PROMPT_MIN_GAIN, DEFAULT_PROMPT_RECENT, RANGES, SHARED_KEYS
+from .const import DEFAULT_HIDDEN, DEFAULT_PROFILES, DEFAULT_PROMPT_MIN_GAIN, DEFAULT_PROMPT_RECENT, FLAG_SECTIONS, RANGES, SHARED_KEYS, VIEW_LOOK_KEYS
 from .storage import HistoryStorage
 
 UNDO_DAYS = 30  # a deleted charge can be restored for this long
@@ -58,6 +58,24 @@ class _Snapshot:
 
     def summary(self, vehicle):
         return self._archive.summary(vehicle, db=self._db)
+
+
+VIEW_SCHEMA = 2  # marker in a profile's config: its visibility lives in `hidden` only
+
+
+def normalise_view(local):
+    """Fold the three old visibility booleans into `hidden` (a union, so the card shows what it showed before)."""
+    if local.get("_settings_schema") == VIEW_SCHEMA:
+        return local
+    local = dict(local)
+    add = [section for flag, section in FLAG_SECTIONS if local.get(flag) is False]
+    for flag, _ in FLAG_SECTIONS:
+        local.pop(flag, None)
+    if add:
+        base = list(local.get("hidden", DEFAULT_HIDDEN))
+        local["hidden"] = base + [section for section in add if section not in base]
+    local["_settings_schema"] = VIEW_SCHEMA
+    return local
 
 
 class Database(HistoryStorage):
@@ -196,10 +214,12 @@ class Database(HistoryStorage):
 
     def list_vehicles(self, db=None):
         with self._use(db) as db:
+            views = {}  # one query for every vehicle's profiles, kept in rowid order per vehicle
+            for v in db.execute("SELECT id, name, revision, vehicle FROM views ORDER BY rowid"):
+                views.setdefault(v["vehicle"], []).append({"id": v["id"], "name": v["name"], "revision": v["revision"]})
             return [
                 {"id": r["id"], "name": r["name"], "config": json.loads(r["config"]),
-                 "views": [{"id": v["id"], "name": v["name"], "revision": v["revision"]}
-                           for v in db.execute("SELECT * FROM views WHERE vehicle=? ORDER BY rowid", (r["id"],))]}
+                 "views": views.get(r["id"], [])}
                 for r in db.execute("SELECT * FROM vehicles ORDER BY created")
             ]
 
@@ -218,16 +238,18 @@ class Database(HistoryStorage):
             shared = {k: v for k, v in shared.items() if not k.startswith("_")}
             # Car colour and wheels became vehicle-wide: until one is saved at vehicle level, every profile
             # uses the value already chosen in the oldest profile that has one (nothing is overwritten).
-            for key in ("car_color", "iso_wheels"):
+            for key in (*VIEW_LOOK_KEYS, "charge_target"):  # the charging target is vehicle-wide too (the limiter reads it)
                 if key not in shared:
                     for row in db.execute("SELECT config FROM views WHERE vehicle=? ORDER BY rowid", (vehicle,)):
                         local = json.loads(row["config"])
                         if key in local:
                             shared[key] = local[key]
                             break
+            local = normalise_view(json.loads(v["config"]))
+            local.pop("_settings_schema", None)
             return {"vehicle_id": vehicle, "view_id": v["id"], "view_name": v["name"],
                     "revision": [car["revision"], v["revision"]],
-                    "config": {**json.loads(v["config"]), **shared}}
+                    "config": {**local, **shared}}
 
     def patch_config(self, vehicle, view, patch, reset=False, expected_revision=None):
         with self.connect() as db:
@@ -240,7 +262,7 @@ class Database(HistoryStorage):
                 raise ValueError("Settings changed elsewhere. Reload before saving.")
             common = json.loads(car["config"])
             original = json.loads(car["config"])
-            local = {} if reset else json.loads(v["config"])
+            local = {} if reset else normalise_view(json.loads(v["config"]))
             for key, value in patch.items():
                 if key in SHARED_KEYS:
                     common[key] = value
@@ -288,6 +310,20 @@ class Database(HistoryStorage):
         with self.connect() as db:
             db.execute("INSERT INTO kv VALUES(?,?,?) ON CONFLICT(vehicle,key) DO UPDATE SET value=excluded.value",
                        (vehicle, key, encode(value)))
+
+    def user_flag(self, user, name):
+        """A small yes/no kept for one Home Assistant user (for example a dismissed hint). Stored in kv under the first vehicle."""
+        with self.connect() as db:
+            row = db.execute("SELECT value FROM kv WHERE key=? LIMIT 1", ("user_flag:" + name + ":" + user,)).fetchone()
+            return bool(row and json.loads(row["value"]))
+
+    def set_user_flag(self, user, name):
+        with self.connect() as db:
+            if db.execute("SELECT 1 FROM kv WHERE key=? LIMIT 1", ("user_flag:" + name + ":" + user,)).fetchone():
+                return
+            first = db.execute("SELECT id FROM vehicles ORDER BY id LIMIT 1").fetchone()
+            if first:
+                db.execute("INSERT INTO kv VALUES(?,?,?)", (first["id"], "user_flag:" + name + ":" + user, encode(True)))
 
     def sample(self, vehicle, entity, t, state, unit=""):
         with self.connect() as db:
@@ -646,7 +682,7 @@ class Database(HistoryStorage):
         session = pending[0]
         return {**{key: session.get(key) for key in ("id", "s", "e", "from", "to", "kwh", "live")},
                 "gain": session["to"] - session["from"], "more": len(pending) - 1,
-                "profiles": [{key: profile.get(key) for key in ("id", "name", "free", "price")}
+                "profiles": [{key: profile.get(key) for key in ("id", "name", "free", "price", "default")}
                              for profile in value.get("profiles", [])]}
 
     def schema_version(self):

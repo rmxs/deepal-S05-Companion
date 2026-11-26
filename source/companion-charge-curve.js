@@ -3,7 +3,7 @@ const curveRender=DeepalS05Card.prototype._render;
 DeepalS05Card.prototype._render=function(...args){
   const result=curveRender.apply(this,args);
   if(!this._c||!this._el?.card)return result;
-  const enabled=this._c.charge_curve===true&&!this._c.hidden.includes('curve');
+  const enabled=!this._c.hidden.includes('curve');
   const flowing=this._n('sensor.ac_charge_current')>.5||this._n('sensor.dc_charge_current')>.5||this._n('sensor.charge_current')>.5;
   // One zero reading in the middle of a charge must not remove and reload the curve: keep it for a minute after the last current.
   // The simulated preview follows its switch at once.

@@ -15,6 +15,14 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 
 <p align="center"><img src="docs/images/showcase.png" alt="Deepal Companion: live notifications, notifications, charging curve, charging costs and charging networks" width="100%"></p>
 
+## What’s new in 2.0.1
+
+- **Charger limit:** stops charging at your charging target by switching off your own charger. Set it on the **Charging** page with **Stop charging at** (Off, 70%, 80%, 90% or 50–95%; 100% does nothing). Mode is Off, Dry run or Live. For a Feyree (Tuya Local) wallbox, set **Charger type** to **Feyree (Tuya Local)**; Companion finds its Start/Stop command.
+- **Range window:** tap the big range number on the card to see your real range on a full battery, worked out from the kilometres you drove and the battery you used, with kilometres per 1 % of battery and energy per 100 km.
+- **Climate pop-up:** one slim preconditioning line (Cool, Comfort or Hot, then 5, 10 or 15 minutes, then Start) replaces the seat buttons, which stay in the Seats view.
+- **Car side:** mirror the 3/4 picture so the car faces the driver or passenger side. The Black paint now uses neutral jet-black images in every door, hood and tailgate state.
+- **Pop-up windows:** a smoother blur behind sheets, and every dialog closes when you tap outside it. See the [changelog](CHANGELOG.md).
+
 ## What’s new in 2.0.0
 
 > [!IMPORTANT]
@@ -25,7 +33,7 @@ Deepal Companion works with [**Deepal Alternative**](https://github.com/Sunek0/h
 - **Statistics window:** tap Odometer, Fuel, Inside, Humidity or another number tile for a chart (7 days, 30 days, 12 months) and compact figures such as distance, last refuel and temperature range.
 - **Theme colour and one look everywhere:** pick the main colour from nine colours; buttons, switches, tiles and fields now look the same on the card and on every Companion page.
 - **Neon city background:** a coastal city for Car View that follows day, afternoon and night.
-- **Notification colours:** choose Red, Orange, Yellow or Green for each live notification state in the Colours tab. “Left open or unlocked” is red by default and now ends on your iPhone after you lock the car.
+- **Notification colours:** choose Red, Orange, Yellow or Green for each live notification state in **Card Settings → Advanced → Look** (Notification colours). “Left open or unlocked” is red by default and now ends on your iPhone after you lock the car.
 - **Waiting effect and data update rate:** see which step a command is waiting on, and choose Live, 5 min or 10 min for saved readings and live notification refreshes.
 - **Connection recovery:** the card and the dashboard reconnect or reload by themselves after the app was in the background.
 - **Fixes:** the real refuel amount in the statistics, equal-height figure tiles, a more reliable phone menu, and saved profile edits that are no longer lost when the list refreshes. See the [changelog](CHANGELOG.md).
@@ -38,7 +46,7 @@ After updating, restart Home Assistant and refresh the dashboard (Ctrl+F5).
 - **Complete translations on the Sessions page:** the heading, counts, chart, tooltips, period tiles and session cards now read fully in Spanish, Greek, German and Italian.
 - **A fuller gallery:** new screenshots of the settings pages, charging locations, charging profiles on the card and the health checks.
 - **Larger inside temperature:** the Large circle climate tile shows the inside temperature bigger, so it reads at a glance.
-- **New button layouts:** show the main buttons and open the rest from a **More** button on the car image, or put every button in that panel. A **Swipe pages** layout lets you swipe between button pages. Choose one under **Controls → Button style → Layout**.
+- **New button layouts:** show the main buttons and open the rest from a **More** button on the car image, or put every button in that panel. A **Swipe pages** layout lets you swipe between button pages. Choose one under **Layout → Button style → Layout**.
 - **Cleaner control panel:** the More panel opens under the image and closes itself when a button opens a popup, so one tap on X is enough. Rows with fewer than five buttons are centred.
 - **“Free charging” instead of €0.00:** when every priced session is free, the Energy summary and daily totals say so.
 - **Fixes:** Diagnostics says how many sensors are unavailable instead of “All OK”, read-only info tiles no longer ask for a confirmation before failing, and the five main buttons keep their spacing on narrow phones.
@@ -112,7 +120,7 @@ Earlier highlights from 0.2.0:
 
 <table>
 <tr><td width="50%"><img src="docs/images/control-panel-feature.png" alt="Set up the card and see it live"></td><td width="50%"><img src="docs/images/feature-panel-layout.png" alt="Layout: choose what the card shows"></td></tr>
-<tr><td width="50%"><img src="docs/images/feature-panel-advanced.png" alt="Advanced: vehicle setup and sensors, with the live preview"></td><td width="50%"><img src="docs/images/feature-panel-charging-profiles.png" alt="Charging profiles: locations and tariffs"></td></tr>
+<tr><td width="50%"><img src="docs/images/feature-panel-advanced.png" alt="Vehicle: vehicle setup and sensors, with the live preview"></td><td width="50%"><img src="docs/images/feature-panel-charging-profiles.png" alt="Charging profiles: locations and tariffs"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-sessions-page.png" alt="Sessions page with the battery and petrol history"></td><td width="50%"><img src="docs/images/feature-notifications-page.png" alt="Notifications: alerts, devices and quiet hours"></td></tr>
 <tr><td width="50%"><img src="docs/images/feature-car-logs.png" alt="Car logs timeline"></td></tr>
 </table>
@@ -153,10 +161,11 @@ This release adds a Charge plan, Car logs, a statistics window, a theme colour, 
 - Climate temperature controls, seat heating and ventilation, and steering-wheel heating where available.
 - Tyre pressures in bar, kPa or psi, with vehicle warnings and adjustable pressure limits.
 - Vehicle diagnostics, selectable warning indicators and custom sensor tiles.
+- **Range window:** tap the range number for your real range on a full battery, kilometres per 1 % of battery and energy per 100 km, with a 7 day, 30 day or 12 month chart.
 - Statistics window for number tiles: chart for 7 days, 30 days or 12 months, with distance, fuel used, last refuel and temperature range.
 - **Charge plan:** set the charging schedule (start, end or **Until full**) from the Energy tile or a Charge plan tile, with a health check on the Health tab.
 - **Car logs:** plain-language list of locks, doors, windows, charging, warnings and preconditioning, grouped by day, with filters.
-- Car View with five paint colours, three wheel choices, 3/4 or top views, and a neon city background that follows the time of day.
+- Car View with five paint colours, three wheel choices, 3/4 or top views, a **Car side** setting that mirrors the 3/4 picture, and a neon city background that follows the time of day.
 - Vehicle images that reflect doors, windows, bonnet, tailgate, lights and charging state.
 
 ### Make the card your own
@@ -168,7 +177,6 @@ This release adds a Charge plan, Car logs, a statistics window, a theme colour, 
 - Ten additional matching SVG icons: power on/off, wallbox, solar, garage, trip, location, timer, Wi-Fi and shield.
 - Choose button layouts, sizes, labels and action confirmations.
 - Select Photos or Car View, backgrounds, image zoom, spacing, aspect ratio and custom photos.
-- Green, Grey and Blue tile icon presets, plus a custom colour picker.
 - A theme colour (nine choices) that follows through the card, Energy sheet, Notifications, Costs and Preconditioning.
 - A waiting effect for commands (Spinning arc, Soft pulse or Neon ring) and a data update rate of Live, 5 min or 10 min.
 - Custom airflow colours, battery/fuel colours and percentage thresholds.
@@ -205,13 +213,13 @@ This release adds a Charge plan, Car logs, a statistics window, a theme colour, 
 
 ### Preconditioning
 
-- Start and stop the cabin climate from the card (a **Preconditioning** button with a quick panel) or from **Companion → Preconditioning**, with temperature and duration bars. The last choices are remembered.
+- Start and stop the cabin climate from the card (a **Preconditioning** button with a quick panel, or the slim line in the climate pop-up). The **Companion → Preconditioning** page shows the status, schedules and diagnostics. The last choices are remembered.
 - Schedules: once, daily, Mon–Fri or custom days, either **Start at** a time or **Ready by** a time. Scheduling is off by default.
 - Every start and stop refreshes the car’s data first, asks the car for a fresh report right after the command and again while waiting, and refreshes once more afterwards. A command counts only when the car’s fresh report confirms it, with limited retries that are skipped when the car already reached the wanted state.
 - Plain-language explanations when something fails, for example when the car is switched on or being driven, in which case the climate is handed over to the driver.
 - Battery protection with your own minimum level (10–50 %): block a start, stop a running session, and choose whether it applies while charging.
 - Phone notifications for results and problems, sharing the phone list with Live climate, with a Stop button and a test button.
-- A “Your setup in short” summary, a diagnostics box and every action in **Notifications → Recent activity** and the Home Assistant log.
+- A “Summary” summary, a diagnostics box and every action in **Notifications → Recent activity** and the Home Assistant log.
 - The car limits remote climate to 15 minutes. Companion never extends it, and times shown are estimates.
 
 #### How to: warm or cool the car before you leave
@@ -240,14 +248,14 @@ If something does not work, see [Preconditioning troubleshooting](docs/TROUBLESH
 - Alert text, buttons and Live notifications follow the Home Assistant language (English, Italian, Spanish, German, Greek).
 - Supported action buttons, including Lock vehicle and Dismiss.
 - Test notifications and recent activity with Load more, Delete and Delete all.
-- Live charging, Live climate and Left open or unlocked as Live Activities on iPhone and Live Updates on supported Android devices, each in a Red, Orange, Yellow or Green you choose in the Colours tab.
+- Live charging, Live climate and Left open or unlocked as Live Activities on iPhone and Live Updates on supported Android devices, each in a Red, Orange, Yellow or Green you choose in Card Settings → Advanced → Look.
 
 ## Live notifications on your phone
 
 > [!IMPORTANT]
 > **Keep the car on your Lock Screen.** Open **Deepal Companion → Notifications**, select your receiving phone and open one of the three **Live notifications**: **Live charging**, **Live climate** or **Left open or unlocked**. Turn on **Alert enabled**, adjust the options and use **Send test** to check your phone. iPhone Live Activities and Android Live Updates keep working while the dashboard is closed.
 >
-> Updates follow the car’s reported readings. These settings control notification updates; how often the car is read is configured in your vehicle integration (live connection when available, otherwise about every 5 minutes). **Data update rate** in Card Settings → Advanced can slow saving and live updates to every 5 or 10 minutes.
+> Updates follow the car’s reported readings. These settings control notification updates; how often the car is read is configured in your vehicle integration (live connection when available, otherwise about every 5 minutes). **Data update rate** in Card Settings → Advanced → App can slow saving and live updates to every 5 or 10 minutes.
 >
 > Live notifications require **Home Assistant 2026.7.0 or newer**, a compatible Companion App, and **iOS/iPadOS 17.2+** or **Android 16+**. [Full setup and test instructions](docs/NOTIFICATIONS.md#live-notifications-on-the-lock-screen).
 
@@ -277,22 +285,23 @@ On Home Assistant versions before 2026.11, use **HACS → ⋮ → Custom reposit
 
 ## Find your settings
 
-The dashboard has five main pages: **Card Settings → Notifications → Preconditioning → Sessions → Charging Profiles**.
+The dashboard has five main pages: **Card Settings → Notifications → Preconditioning → Sessions → Charging**.
+
+Card Settings has six tabs: **Layout**, **Appearance**, **Controls**, **Charging**, **Vehicle** and **Advanced**.
 
 | Open | What you can configure |
 | --- | --- |
-| **Card Settings → Profile / Card design** | Profile name, Duplicate / New profile / Delete, design style (Mobile/Tablet/Energy), maximum width and the Deepal Alternative connection badge |
+| **Card Settings → Card profile / Card design** | Profile name, Duplicate / New profile / Delete, design style (Mobile/Tablet/Energy), maximum width and the Deepal Alternative connection badge |
 | **Card Settings → Layout** | Section order and visibility, buttons, information tiles and items on the vehicle image |
-| **Card Settings → Appearance** | Image style, view, background, zoom, spacing and on-screen messages |
-| **Card Settings → Controls** | Climate controls, temperature selector and action confirmations |
-| **Card Settings → Charging** | Charging text, visual effects and Energy-tile behaviour |
-| **Card Settings → Colours** | Tile icon presets/custom colour, airflow colours and battery/fuel thresholds |
-| **Card Settings → Diagnostics & tyres** | Warning indicators, tyre units and pressure limits |
-| **Card Settings → Advanced** | Show “Deepal Card” in the sidebar, vehicle type (Automatic, Plug-in hybrid or Electric), paint, wheels, capacities, custom photos, sensor mapping, custom diagnostics and configuration backup/reset |
+| **Card Settings → Appearance** | Theme colour (Style), the car image and Car View: image style, view, background, and on-screen messages |
+| **Card Settings → Controls** | Climate tile, temperature selector, confirm temperature change, and Button behaviour (waiting effect and action confirmations) |
+| **Card Settings → Charging** | Charging details and effect on the card, the Energy tile and charging text, the charge plan button and cost selector |
+| **Card Settings → Vehicle** | Entity prefix, vehicle type, battery capacity, car colour and wheels, diagnostic indicators and tyre pressure limits |
+| **Card Settings → Advanced** | Four categories: **App** (card name, card page, sidebar, data update rate), **Vehicle and sensors** (full-tank range, photos, climate on-mode, new sensors, entity mapping), **Look** (image size and space, margins, airflow, level and notification colours) and **Charging records** (charging reminder, charge detection, charging curve) |
 | **Notifications** | Devices, alerts, timing, messages, quiet hours, Live notifications, tests and recent activity |
-| **Preconditioning** | Manual start and stop, schedules, battery protection, preconditioning notifications, retries and diagnostics |
+| **Preconditioning** | Status, schedules, battery protection, preconditioning notifications, retries and diagnostics. Start and stop are on the card |
 | **Sessions** | Charging history, costs, curves, filters, sorting, charts and data options |
-| **Charging Profiles** | Charging locations, tariffs, free charging, energy sources and charger sensors |
+| **Charging** | Charging profiles (locations, tariffs, free charging, energy sources and charger sensors) and the Charger limit |
 
 For every available option, see the [settings reference](docs/SETTINGS.md). For practical tasks, follow the [step-by-step user guide](docs/USAGE.md).
 

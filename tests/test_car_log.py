@@ -354,13 +354,51 @@ class CarLogTests(unittest.TestCase):
         rows = [{"id": str(i), "time": 1000 - i, "cat": "others"} for i in range(10)]
         rows[3]["session"] = rows[8]["session"] = "s"
         page, more = car_log.page_of(rows, 4)
-        self.assertEqual([r["id"] for r in page], ["0", "1", "2", "3", "8"])
+        # four entries: rows 0-2 and the session (3 and 8); the session pulls the cut down to row 8, so no row is split off
+        self.assertEqual([r["id"] for r in page], ["0", "1", "2", "3", "4", "5", "6", "7", "8"])
         self.assertTrue(more)
         page2, more2 = car_log.page_of(rows, 4, before=page[-1]["time"])
         self.assertEqual([r["id"] for r in page2], ["9"])
         self.assertFalse(more2)
         tied = [{"id": "a", "time": 5, "cat": "x"}, {"id": "b", "time": 5, "cat": "x"}, {"id": "c", "time": 4, "cat": "x"}]
         self.assertEqual(len(car_log.page_of(tied, 1)[0]), 2)
+
+    def test_show_older_asks_for_the_next_page_from_a_cursor(self):
+        """The first call sends one page; each later call continues from the cursor it was given. Pages never repeat or skip
+        a row, the last page says there is nothing older, and the tile counts are the true totals for the range."""
+        hass, runtime, log = build()
+        runtime.car_log = log
+        runtime.preconditioning = SimpleNamespace(history=[])
+        now = time.time()
+
+        async def nothing(op, *args):
+            return []
+        runtime.hub = SimpleNamespace(db=nothing)
+        for i in range(75):
+            log.add("others", "x", "Routine %d" % i, now=now - 60 - i * 60)
+        for i in range(3):
+            log.add("security", "door_open", "Door %d" % i, session="g", now=now - 9000 - i)
+        first = asyncio.run(car_log.view(runtime, {"range": "30"}))
+        self.assertEqual(len(first["rows"]), car_log.PAGE)
+        self.assertTrue(first["more"])
+        self.assertEqual(first["next_before"], first["rows"][-1]["time"])
+        self.assertEqual(first["counts"], {"security": 1, "charging": 0, "others": 75})
+        seen, pages, data = [r["id"] for r in first["rows"]], 1, first
+        lowest = min(r["time"] for r in first["rows"])
+        while data["more"]:
+            data = asyncio.run(car_log.view(runtime, {"range": "30", "before": data["next_before"]}))
+            pages += 1
+            self.assertLessEqual(len(data["rows"]), car_log.PAGE + 3)
+            self.assertEqual(data["counts"], {"security": 1, "charging": 0, "others": 75})
+            self.assertTrue(all(r["time"] < lowest for r in data["rows"]))
+            lowest = min(r["time"] for r in data["rows"])
+            seen += [r["id"] for r in data["rows"]]
+            self.assertLess(pages, 10)
+        self.assertEqual(pages, 3)
+        self.assertFalse(data["more"])
+        self.assertIsNone(data["next_before"])
+        self.assertEqual(len(seen), 78)
+        self.assertEqual(len(set(seen)), 78)
 
     def test_view_filters_pages_counts_and_summarises(self):
         hass, runtime, log = build()
@@ -377,7 +415,9 @@ class CarLogTests(unittest.TestCase):
             return [a]
         runtime.hub = SimpleNamespace(db=db)
         data = asyncio.run(car_log.view(runtime, {"limit": 5}))
-        self.assertEqual(len(data["rows"]), 5)
+        # five entries: the warning, one charge (two rows, one entry) and three routine rows
+        self.assertEqual(len(data["rows"]), 6)
+        self.assertEqual(len({r.get("session") or r["id"] for r in data["rows"]}), 5)
         self.assertTrue(data["more"])
         self.assertEqual(data["summary"]["charging"], {"count": 1, "kwh": 7.4})
         self.assertEqual(data["summary"]["security"]["since"], int(now - 100))
@@ -389,6 +429,41 @@ class CarLogTests(unittest.TestCase):
         junk = asyncio.run(car_log.view(runtime, {"limit": "abc", "cat": "nope", "range": "x", "before": "soon"}))
         self.assertTrue(junk["ready"])
         self.assertLessEqual(len(junk["rows"]), car_log.VIEW_LIMIT)
+
+    def test_tile_counts_follow_the_range_and_count_normal_events(self):
+        """Tiles count every timeline entry of the selected range per category, normal (info) events included.
+        A grouped session counts once, the same way the page shows it."""
+        hass, runtime, log = build()
+        runtime.car_log = log
+        runtime.preconditioning = SimpleNamespace(history=[])
+        now = time.time()
+        async def nothing(op, *args):
+            return []
+        runtime.hub = SimpleNamespace(db=nothing)
+        log.add("security", "unlocked", "Doors unlocked", now=now - 60)
+        for i in range(8):
+            log.add("others", "x", "Routine %d" % i, now=now - 2 * 86400 - i)
+        for i in range(3):
+            log.add("security", "door_open", "Door %d" % i, session="g1", now=now - 2 * 86400 - 100 - i)
+        data = asyncio.run(car_log.view(runtime, {"range": "30"}))
+        self.assertEqual(data["counts"], {"security": 2, "charging": 0, "others": 8})
+        today = asyncio.run(car_log.view(runtime, {"range": "today"}))
+        self.assertEqual(today["counts"], {"security": 1, "charging": 0, "others": 0})
+        filtered = asyncio.run(car_log.view(runtime, {"range": "30", "cat": "others"}))
+        self.assertEqual(filtered["counts"], {"security": 2, "charging": 0, "others": 8})
+
+    def test_window_that_moves_with_its_own_door_is_merged_into_the_door(self):
+        def row(i, t, kind, title):
+            return {"id": str(i), "time": t, "cat": "security", "kind": kind, "title": title}
+        rows = [row(1, 100.0, "window_open", "Front left window opened"), row(2, 101.0, "door_open", "Front left door opened"),
+                row(3, 106.0, "door_open", "Front right door opened"), row(4, 107.0, "window_open", "Front right window opened"),
+                row(5, 150.0, "door_closed", "Front left door closed"), row(6, 150.0, "window_closed", "Front left window closed"),
+                row(7, 160.0, "window_open", "Rear left window opened"), row(8, 300.0, "window_open", "Front left window opened"),
+                row(9, 100.0, "window_closed", "Front right window closed"),
+                row(10, 153.0, "window_open", "Front left window opened")]
+        out = car_log.merge_door_windows(rows)
+        self.assertEqual(sorted(r["id"] for r in out), ["10", "2", "3", "5", "7", "8", "9"])
+        self.assertEqual(len(rows), 10)
 
     def test_security_bursts_are_grouped_without_changing_the_log(self):
         now = 10000.0

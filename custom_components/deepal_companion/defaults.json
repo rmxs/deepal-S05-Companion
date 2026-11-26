@@ -2,7 +2,6 @@
   "prefix": "s05",
   "name": "",
   "image_path": null,
-  "layers_path": null,
   "image_scale": 1.2,
   "hero_space": "standard",
   "image_aspect": null,
@@ -59,8 +58,6 @@
   "button_labels": "status",
   "button_size": "m",
   "diag": null,
-  "diag_mode": "alerts",
-  "diag_custom": [],
   "diag_ignore": [],
   "hero_show": [
     "name",
@@ -71,7 +68,8 @@
   ],
   "info": [
     "odometer",
-    "humidity"
+    "humidity",
+    "charger_limit"
   ],
   "charge_cost_selector": true,
   "info_order": [
@@ -83,7 +81,8 @@
     "fuel_volume",
     "power_status",
     "charge_status",
-    "charge_plan"
+    "charge_plan",
+    "charger_limit"
   ],
   "info_custom": [],
   "entities": {},
@@ -97,15 +96,13 @@
   "hero_view": "iso",
   "car_color": "black",
   "hero_sky": "off",
+  "car_side": "auto",
   "iso_wheels": "cover",
   "charge_style": "beside",
-  "charge_curve": true,
   "charge_target": 0,
   "charge_curve_gap": 15,
   "charge_curve_refresh": 5,
   "charge_curve_missing": true,
-  "charging_reminder": true,
-  "charging_cost": true,
   "plan_button": true,
   "energy_sheet": true,
   "charge_prompt_min_gain": 3,
@@ -127,8 +124,6 @@
   "popup_padding": "half",
   "target_style": "wheel",
   "accent_color": "green",
-  "tile_icons": "accent",
-  "tile_icon_color": "#63cba3",
   "toast_position": "bottom",
   "toast_duration": 5,
   "lvl_red": "#f87171",

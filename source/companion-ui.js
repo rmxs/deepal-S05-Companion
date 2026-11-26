@@ -87,9 +87,16 @@ function watchConnection(getHass, onResume, onDead) {
 window.__DEEPAL_COMPANION_UI = {
   readableError,
   watchConnection,
+  /* the sliding pill of a .seg group (the same code as the card's Car view choices) */
+  pill: (box, prev, now) => UI.pill(box, prev, now),
+  /* snapshot before a group is redrawn, apply after: the same pair the card's Settings use (keyed by the first button's data-sset or data-k) */
+  pillSnap: (root) => UI.pillSnap(root),
+  pillApply: (root, snap) => UI.pillApply(root, snap),
+  pillKey: (box) => UI.pillKey(box),
   /* Pages outside the card (dashboard, notifications) use the same translation dictionary as the card. */
   watchLanguage(root) { I18N.watch(root); },
   t: (s, ...a) => I18N.t(s, a),
+  tError,
   settingsTag: SETTINGS_TAG,
   version: CARD_VERSION,
   credit: CARD_CREDIT,
@@ -132,6 +139,21 @@ window.__DEEPAL_COMPANION_UI = {
       Promise.resolve(picker.updateComplete).then(()=>{if(select.isConnected&&select.value===expected)picker.value=expected;});
     }
   },
+  /* Lamp demos (preview only, simulated sensors): each step lasts a few seconds. l = left signal, r = right signal, p = position lamp (DRL), b = low beam, h = high beam */
+  LAMP_DEMOS:{
+    signals:[{l:1},{},{r:1},{},{l:1,r:1},{}],
+    lights:[{p:1},{p:1,b:1},{p:1,b:1,h:1},{p:1,b:1,l:1},{p:1,b:1,r:1},{p:1,b:1,h:1,l:1,r:1},{p:1,b:1,l:1,r:1},{}]
+  },
+  /* Demo timeline: the Light show first opens all windows (3 s), plays the lamp steps, then closes the windows at a normal pace (6 s) and starts again. t = ms since the demo began */
+  DEMO_STEP_MS:2600,DEMO_OPEN_MS:3000,DEMO_CLOSE_MS:6000,
+  demoAt(mode,t=0){
+    const steps=this.LAMP_DEMOS[mode]||[{}],n=steps.length,ms=this.DEMO_STEP_MS;
+    if(mode!=='lights'){const i=Math.floor(t/ms)%n;return {lamp:steps[i]||{},w:0,i};}
+    const op=this.DEMO_OPEN_MS,cl=this.DEMO_CLOSE_MS,show=n*ms,u=t%(op+show+cl),ease=x=>x*x*(3-2*x);
+    if(u<op)return {lamp:{},w:Math.round(100*ease(u/op)),i:-1};
+    if(u<op+show){const i=Math.floor((u-op)/ms);return {lamp:steps[i]||{},w:100,i};}
+    return {lamp:{},w:Math.round(100*ease(1-(u-op-show)/cl)),i:-2};
+  },
   previewHass(hass,config,mode,interactive=false,card=null){
     const scenario=JSON.stringify([mode,config.prefix,config.entities]);
     if(card&&card._previewScenario!==scenario){card._previewScenario=scenario;card._previewScenarioTime=new Date().toISOString();}
@@ -140,13 +162,17 @@ window.__DEEPAL_COMPANION_UI = {
     if(mode!=='live'){
       OPEN_ITEMS.forEach(([key])=>put(key,'off'));DIAG.forEach(([key])=>put(key,'off'));
       put('lock.doors','locked');put('binary_sensor.cloud_connection','on');
-      const charging=mode==='ac'||mode==='dc',plugged=charging||mode==='plugged'||mode==='complete';
+      const sim=mode==='limit-wait'?'ac':mode==='limit-stop'?'plugged':mode,charging=sim==='ac'||sim==='dc',plugged=charging||sim==='plugged'||sim==='complete';
       put('binary_sensor.charging',charging?'on':'off');put('binary_sensor.charger_plugged',plugged?'on':'off');
-      put('sensor.battery_level',mode==='complete'?100:68,{unit_of_measurement:'%'});
-      put('sensor.ac_charge_current',mode==='ac'?16:0,{unit_of_measurement:'A'});put('sensor.dc_charge_current',mode==='dc'?120:0,{unit_of_measurement:'A'});put('sensor.charge_current',mode==='ac'?16:0,{unit_of_measurement:'A'});
-      put('sensor.charging_type',mode==='dc'?'DC':plugged?'AC':'');put('sensor.remaining_charge_time_h_mm',charging?(mode==='dc'?'00:25':'01:20'):'00:00');
+      put('sensor.battery_level',mode==='complete'?100:mode==='limit-stop'?80:68,{unit_of_measurement:'%'});
+      put('sensor.ac_charge_current',sim==='ac'?16:0,{unit_of_measurement:'A'});put('sensor.dc_charge_current',sim==='dc'?120:0,{unit_of_measurement:'A'});put('sensor.charge_current',sim==='ac'?16:0,{unit_of_measurement:'A'});
+      put('sensor.charging_type',sim==='dc'?'DC':plugged?'AC':'');put('sensor.remaining_charge_time_h_mm',charging?(sim==='dc'?'00:25':'01:20'):'00:00');
       put('sensor.last_updated',now);put('binary_sensor.climate_on',mode==='climate'?'on':'off');put('climate.cabin_climate',mode==='climate'?'cool':'off',{temperature:22,current_temperature:28,hvac_action:mode==='climate'?'cooling':'off',hvac_modes:['off','auto','cool','heat'],min_temp:16,max_temp:30});
       if(mode==='alerts'){put('binary_sensor.tire_pressure_warning','on');put('binary_sensor.12_v_battery_warning','on');}
+      const demo=this.demoAt(mode,card?._demoT||0),lamp=demo.lamp;
+      if(mode==='lights'&&(lamp.l||lamp.r))for(const sd of ['left','right'])put(`binary_sensor.front_${sd}_door`,'on'); /* the front doors open while the signals flash, so both mirrors show theirs */
+      if(this.LAMP_DEMOS[mode]&&mode==='lights')for(const p of ['front','rear'])for(const sd of ['left','right'])put(`sensor.${p}_${sd}_window_opening`,demo.w,{unit_of_measurement:'%'});
+      for(const [key,flag] of [['position_lamp','p'],['low_beam','b'],['high_beam','h'],['left_turn_signal','l'],['right_turn_signal','r']])put('binary_sensor.'+key,lamp[flag]?'on':'off');
       put('cover.trunk',mode==='doors'?'open':'closed',{current_position:mode==='doors'?100:0});
       if(mode==='doors')OPEN_ITEMS.filter(([key])=>/_door$/.test(key)||/\.(hood|trunk)$/.test(key)).forEach(([key])=>put(key,'on'));
     }
@@ -167,7 +193,7 @@ window.__DEEPAL_COMPANION_UI = {
         card?._force();
       };
       if(key==='callWS')return message=>{
-        if(!interactive&&!message.type?.startsWith('history/')&&message.type!=='recorder/statistics_during_period')return Promise.reject(new Error(I18N.t('The preview is read-only.',[]))); /* reading the recorded history is allowed: the card uses it for the real lock and engine times */
+        if(!interactive&&!message.type?.startsWith('history/')&&message.type!=='recorder/statistics_during_period'&&!(mode==='live'&&message.type==='deepal_companion/request'&&['sessions_page','costs_get'].includes(message.op)))return Promise.reject(new Error(I18N.t('The preview is read-only.',[]))); /* reading the recorded history is allowed: the card uses it for the real lock and engine times */
         if(mode==='live')return target.callWS(message);
         const read=message.type?.startsWith('history/')||message.type?.endsWith('/list')||message.type==='frontend/get_user_data'||(message.type==='deepal_companion/request'&&['list','config_get','costs_get','history','sessions','summary','charge_prompt','session_curve'].includes(message.op));
         return read?target.callWS(message):Promise.reject(new Error(I18N.t('Demo mode does not save vehicle or charging data.',[])));
@@ -183,6 +209,10 @@ window.__DEEPAL_COMPANION_UI = {
     card._previewSourceHass=hass;card._previewMode=mode;
     card._last={...(mode==='live'?card._previewInitialLast:{})};card._previewCanClick=interactive;card._isCompanionPreview=true;
     card.inert=!interactive;card.toggleAttribute('aria-hidden',!interactive);card.style.pointerEvents=interactive?'auto':'none';
+    if(this.LAMP_DEMOS[mode]){
+      if(card._demoMode!==mode){clearInterval(card._demoTimer);card._demoMode=mode;card._demoT=0;card._demoSig='';
+        card._demoTimer=setInterval(()=>{if(!card.isConnected||card._previewMode!==mode||!card._previewSourceHass){clearInterval(card._demoTimer);card._demoTimer=null;card._demoMode=null;return;}card._demoT=(card._demoT||0)+150;const d=this.demoAt(mode,card._demoT),sig=d.i+':'+d.w;if(sig===card._demoSig)return;card._demoSig=sig;card.hass=this.previewHass(card._previewSourceHass,card._c,mode,card._previewCanClick,card);},150);}
+    }else if(card._demoTimer){clearInterval(card._demoTimer);card._demoTimer=null;card._demoMode=null;card._demoT=0;}
     card.hass=this.previewHass(hass,card._c,mode,interactive,card);
   },
   preview(hass,owner,config) {

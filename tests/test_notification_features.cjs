@@ -77,10 +77,20 @@ module.exports = async page => {
   await page.setViewportSize({width: 1100, height: 900});
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.supplied-notification-design').shadowRoot.querySelector('.design-why-dialog')); /* Esc closes it */
-  await board.locator('.design-why-help').nth(1).click(); await page.evaluate(() => [...document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.supplied-notification-design').shadowRoot.querySelectorAll('.design-why-dialog button')].find(b => b.textContent === 'Close').click());
+  await board.locator('.design-why-help').nth(1).click(); await page.evaluate(() => [...document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.supplied-notification-design').shadowRoot.querySelectorAll('.design-why-dialog button')].find(b => b.getAttribute('aria-label') === 'Close').click());
   await page.waitForFunction(() => !document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.supplied-notification-design').shadowRoot.querySelector('.design-why-dialog')); /* the dialog removes itself when its close event fires */
-  /* 4. Left open or unlocked (live): parked switch and the 5-minute wait */
+  /* 3b. "Charging reached target" follows the Charger limit's charging target: a read-only line while one is set, the own number otherwise */
   await board.locator('#main-card [data-design-click="switchView(\'overview\')"]').first().click();
+  const followState = async target => { await panel.evaluate((p, value) => { p.config = {...p.config, charge_target: value}; }, target);
+    await board.locator('[data-alert-id=charge_target] [data-alert-open]').first().click(); await board.locator('#view-detail').waitFor({state: 'visible'});
+    const state = await board.evaluate(n => { const r = n.shadowRoot, line = r.querySelector('#design-threshold-follow'), row = r.querySelector('[data-parameter=threshold]'), shown = el => !!el && !el.hidden && getComputedStyle(el).display !== 'none'; return {line: shown(line) ? line.textContent.trim() : null, own: shown(row), value: r.querySelector('#input-threshold').value || r.querySelector('#input-threshold').placeholder}; });
+    await board.locator('#main-card [data-design-click="switchView(\'overview\')"]').first().click(); return state; };
+  let follow = await followState(70);
+  assert.equal(follow.line, 'Follows Stop charging at (70 %)', 'the alert shows the charging target it follows'); assert.equal(follow.own, false, 'no number to edit while it follows');
+  follow = await followState(55); assert.equal(follow.line, 'Follows Stop charging at (55 %)', 'a new target shows at once');
+  for (const off of [0, 100]) { follow = await followState(off); assert.equal(follow.line, null, 'no target (' + off + '): no follow line'); assert.equal(follow.own, true, 'the own number is back'); assert.equal(follow.value, '80', 'its saved number is kept'); }
+  /* 4. Left open or unlocked (live): parked switch and the 5-minute wait */
+  { const back = board.locator('#main-card [data-design-click="switchView(\'overview\')"]').first(); if (await back.isVisible()) await back.click(); } /* already on the overview after 3b */
   await board.locator('[data-live-open=open]').first().click();
   const live = await board.evaluate(n => { const r = n.shadowRoot, sw = r.querySelector('[data-live-switch=only_parked]'), wait = r.querySelector('[data-live-number=start_delay]'); return {text: sw && r.textContent.includes('Only when the car is parked') ? 'Only when the car is parked' : '', switchOn: sw && sw.checked, wait: wait && wait.value}; });
   assert(live.text && live.text.includes('Only when the car is parked'), 'live switch label: ' + live.text); assert.equal(live.switchOn, true, 'on by default'); assert.equal(live.wait, '5', 'Wait before showing defaults to 5 minutes');

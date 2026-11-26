@@ -20,7 +20,8 @@ module.exports=async function firstRun(page){
  assert.equal(await panel.locator('.setup-actions a').getAttribute('href'),'/config/integrations/dashboard?add=deepal_companion');
  await panel.locator('[data-action=retry-setup]').click();
  await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').fetching);
- const firstRunOps=await page.evaluate(()=>window.firstRunCalls);
+ /* The card's own unread badge asks for notifications_unread once a minute on the same connection; it is not a panel request, so it is left out. */
+ const firstRunOps=(await page.evaluate(()=>window.firstRunCalls)).filter(op=>op!=='notifications_unread');
  assert(firstRunOps.every(op=>op==='list'),'Empty state must not request vehicle configuration or history; got: '+[...new Set(firstRunOps)].join(', '));
  assert.equal(await panel.evaluate(root=>Object.keys(root.selected).length),0,'Stale vehicle selection cleared');
  await panel.evaluate(root=>{window.firstRunAdmin=root._hass.user.is_admin;root._hass.user.is_admin=false;root.render();});

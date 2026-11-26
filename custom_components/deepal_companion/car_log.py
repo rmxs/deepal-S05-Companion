@@ -32,9 +32,10 @@ SAVE_DELAY = 30          # seconds to wait before writing, so a burst is saved o
 CONFIRM = 60             # seconds a warning or a lost connection must last before it is logged
 DATA_CONFIRM = 120       # seconds the battery reading must stay unavailable before "data unavailable" is logged
 MIN_SESSION = 120        # a charge shorter than this that gained nothing is the charger doubting, not a charge
-PAGE = 100              # rows per page sent to the page; a reload may ask for more, never above VIEW_LIMIT
+PAGE = 30               # entries per page; "Show older" asks for the next page, never more than VIEW_LIMIT
 HISTORY_DAYS = 10        # how far back the first start reads the recorder (its default keep time)
 HISTORY_CAP = 600        # most rows the one-time history read may add
+WINDOW_NUDGE = 2        # seconds: a window that moves this close to its own door opening or closing is the door frame, not a window change
 GROUP_GAP = 120         # seconds between two door, window or lock rows that still belong to one parking or opening
 DEFAULT_WAIT = 30        # minutes; the same default the "Unlocked" alert uses
 BAD = {"unavailable", "unknown", "", None}
@@ -633,20 +634,61 @@ def day_start(now):
 
 
 def page_of(rows, limit, before=None):
-    """One page of rows (newest first). A page never splits rows that share a time or a charge/preconditioning session,
-    so a group is always whole and the next page can continue from the oldest time shown."""
+    """One page of rows, newest first: about `limit` entries, where a grouped session counts once. Rows older than `before`
+    are skipped. The page is always the complete run of rows newer than its cut, so no time is split and no session is
+    split: a session that straddles the cut pulls the cut down to its oldest row. The next page continues from the
+    oldest time of this page (`before`), so nothing is repeated and nothing is skipped."""
     if before is not None:
         rows = [r for r in rows if r["time"] < before]
-    n = min(limit, len(rows))
-    while 0 < n < len(rows) and rows[n]["time"] == rows[n - 1]["time"]:
-        n += 1
-    page, rest = rows[:n], rows[n:]
-    sessions = {r["session"] for r in page if r.get("session")}
-    if sessions:
-        extra = [r for r in rest if r.get("session") in sessions]
-        page = sorted(page + extra, key=lambda r: r["time"], reverse=True)
-        rest = [r for r in rest if r.get("session") not in sessions]
-    return page, bool(rest)
+    cut, entries, seen = len(rows), 0, set()
+    for i, row in enumerate(rows):
+        key = ("s", row["session"]) if row.get("session") else ("r", i)
+        if key not in seen:
+            if entries == limit:
+                cut = i
+                break
+            seen.add(key)
+            entries += 1
+    if cut >= len(rows):
+        return rows, False
+    level = rows[cut - 1]["time"]
+    while True:
+        k = next((i for i, r in enumerate(rows) if r["time"] < level), len(rows))
+        sessions = {r["session"] for r in rows[:k] if r.get("session")}
+        low = min((r["time"] for r in rows if r.get("session") in sessions), default=level)
+        if low >= level:
+            break
+        level = low
+    k = next((i for i, r in enumerate(rows) if r["time"] < level), len(rows))
+    return rows[:k], k < len(rows)
+
+
+def merge_door_windows(rows):
+    """Doors have no frame, so a window drops a little when its door opens and rises again when it closes. The car reports
+    that as a window change. A window row within WINDOW_NUDGE seconds of the door row of the same position and direction
+    (opened with opened, closed with closed) is part of the door movement and is left out; a window that moves on its own
+    stays. Nothing is stored; the rows of the log itself are never changed."""
+    def position(row, word):
+        title = row.get("title") or ""
+        for ending in (" opened", " closed"):
+            tail = " " + word + ending
+            if title.endswith(tail):
+                return title[:-len(tail)], ending
+        return None
+    doors = {}
+    for row in rows:
+        if row.get("cat") == "security" and row.get("kind") in ("door_open", "door_closed"):
+            key = position(row, "door")
+            if key:
+                doors.setdefault(key, []).append(row["time"])
+    result = []
+    for row in rows:
+        if row.get("cat") == "security" and row.get("kind") in ("window_open", "window_closed"):
+            key = position(row, "window")
+            if key and any(abs(row["time"] - t) <= WINDOW_NUDGE for t in doors.get(key, ())):
+                continue
+        result.append(row)
+    return result
 
 
 def group_security(rows):
@@ -702,6 +744,12 @@ def status_of(log, runtime):
             "charging": (reading("charging").state == "on") if reading("charging") else False}
 
 
+def count_entries(rows, cat):
+    """Timeline entries of one category, normal (info) ones included. A grouped session is one entry, as the page shows it."""
+    own = [r for r in rows if r["cat"] == cat]
+    return sum(1 for r in own if not r.get("session")) + len({r["session"] for r in own if r.get("session")})
+
+
 async def view(runtime, params=None):
     """What the Car logs page needs: one page of rows newest first, tile counts, a short summary, and what is wrong now.
 
@@ -711,19 +759,19 @@ async def view(runtime, params=None):
     now = time.time()
     base = {"retention_days": RETENTION // 86400, "now": int(now)}
     if log is None:
-        return {"ready": False, "rows": [], "active": [], "more": False, "counts": {}, "summary": {}, "status": {}, "since": int(now), **base}
+        return {"ready": False, "rows": [], "active": [], "more": False, "next_before": None, "counts": {}, "summary": {}, "status": {}, "since": int(now), **base}
     rows = list(log.rows)
     history = getattr(getattr(runtime, "preconditioning", None), "history", None)
     rows += precondition_rows(history, now - RETENTION)
     sessions = await read_sessions(runtime)
     rows += archived_charges(sessions, log.since, list(log.rows))
-    rows = attach_energy(group_security(rows), sessions)
+    rows = attach_energy(group_security(merge_door_windows(rows)), sessions)
     rows.sort(key=lambda r: r["time"], reverse=True)
-    midnight = day_start(now)
-    counts = {cat: sum(1 for r in rows if r["cat"] == cat and r["time"] >= midnight) for cat in ("security", "charging", "others")}
+    window = {"today": day_start(now), "7": now - 7 * 86400}.get(str(params.get("range")), now - RETENTION)
+    in_range = [r for r in rows if r["time"] >= window]
+    counts = {cat: count_entries(in_range, cat) for cat in ("security", "charging", "others")}
     cat = params.get("cat") if params.get("cat") in counts else None
-    window = {"today": midnight, "7": now - 7 * 86400}.get(str(params.get("range")), now - RETENTION)
-    shown = [r for r in rows if r["time"] >= window and (cat is None or r["cat"] == cat)]
+    shown = [r for r in in_range if cat is None or r["cat"] == cat]
     try:
         limit = max(1, min(VIEW_LIMIT, int(params.get("limit") or PAGE)))
     except (TypeError, ValueError):
@@ -736,5 +784,5 @@ async def view(runtime, params=None):
     kwh = sum(number(item.get("kwh")) or 0 for item, ok in zip(sessions, month) if ok)
     summary = {"security": {"locked": status["locked"], "since": int(last_lock["time"]) if last_lock else None},
                "charging": {"count": sum(1 for ok in month if ok), "kwh": round(kwh, 1)}}
-    return {"ready": True, "status": status, "rows": page, "more": more, "counts": counts, "summary": summary, "active": log.active(now),
-            "since": int(log.since), **base}
+    return {"ready": True, "status": status, "rows": page, "more": more, "next_before": page[-1]["time"] if more else None,
+            "counts": counts, "summary": summary, "active": log.active(now), "since": int(log.since), **base}

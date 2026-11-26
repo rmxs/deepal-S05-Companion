@@ -18,7 +18,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.util import dt as dt_util
 
 from .charging import ChargingEngine, OFFLINE_LIMIT, number
-from .const import DEFAULT_PROFILES, DEFAULT_SPIKE_JUMP, DOMAIN, ENERGY_KEYS, RANGES, SIGNAL, update_floor
+from .const import DEEPAL_PLATFORM, DEFAULT_PROFILES, DEFAULT_SPIKE_JUMP, DOMAIN, ENERGY_KEYS, RANGES, SIGNAL, expected_entity, translation_key_of, update_floor, vehicle_entity
 from .pricing import calculate
 from .health import BACKLOG_LIMIT
 
@@ -79,6 +79,7 @@ class VehicleRuntime:
         self.price_cache = {}
         self._pricing_lock = asyncio.Lock()
         self._summary_revision = 0
+        self.signal_revision = 0  # bumped by every change a card has to fetch (settings, costs, a finished charge); plain recordings do not bump it
         self._refresh_lock = asyncio.Lock()
         self._summary_cache = None
         self._summary_flight = None  # the one summary calculation that may be running
@@ -92,6 +93,8 @@ class VehicleRuntime:
         self._backlog_high = False
         self._refresh_task = None
         self._device_id = None
+        self._tk_index = {}  # (domain, translation_key) -> entity id on the vehicle's device, rebuilt on every refresh
+        self._resolved = {}  # logical id -> registry match ("" for none), cleared on every refresh
         self.refresh_delay = 2  # seconds of registry quiet time before mappings are rebuilt
         self.degraded_reason = None
         self._inflight = None  # the archive write currently running in the executor, if any
@@ -141,6 +144,12 @@ class VehicleRuntime:
             await self.preconditioning.start()
         except Exception:  # never block the vehicle when preconditioning data cannot load
             _LOGGER.exception("Preconditioning for %s could not start", self.vehicle)
+        from .charger_limit import ChargerLimit
+        self.charger_limit = ChargerLimit(self)
+        try:
+            await self.charger_limit.start()
+        except Exception:  # never block the vehicle when the charger limit cannot start
+            _LOGGER.exception("Charger limit for %s could not start", self.vehicle)
 
     async def _shutdown(self, _event):
         # A fired listen_once listener is already removed by Home Assistant; unsubscribing it again logs an error.
@@ -161,23 +170,19 @@ class VehicleRuntime:
         registry = er.async_get(self.hass)
         anchor = registry.async_get(self.entities.get("batt", self.entry.options.get("battery_entity", self.entry.data["battery_entity"]))) or next(
             (e for e in registry.entities.values() if e.id == self.entry.unique_id), None)
-        candidates = [e for e in registry.entities.values() if anchor and e.device_id == anchor.device_id and e.device_id]
+        candidates = er.async_entries_for_device(registry, anchor.device_id, include_disabled_entities=True) if anchor and anchor.device_id else []
         self._device_id = anchor.device_id if anchor else None
-        self.entities = {}
-        for role, key in ENERGY_KEYS.items():
-            if key in cfg.get("entities", {}):
-                self.entities[role] = cfg["entities"][key]
-                continue
-            domain, suffix = key.split(".", 1)
-            direct = domain + "." + cfg["prefix"] + "_" + suffix
-            translation = "connected" if suffix == "cloud_connection" else suffix
-            match = next((e.entity_id for e in candidates if e.domain == domain and e.translation_key == translation), None)
-            self.entities[role] = direct if self.hass.states.get(direct) else match or direct
+        index = {}
+        for e in candidates:
+            if getattr(e, "platform", DEEPAL_PLATFORM) == DEEPAL_PLATFORM and e.translation_key:
+                index.setdefault((e.entity_id.split(".", 1)[0], e.translation_key), e.entity_id)
+        self._tk_index, self._resolved = index, {}
+        self.entities = {role: self.resolve_entity(key) for role, key in ENERGY_KEYS.items()}
         # Optional live timer follows the same vehicle and user entity mappings.
         remaining_suffixes = ("remaining_charge_time_h_mm", "remaining_charge_time_hhmm", "remaining_charge_time_formatted", "remaining_charge_time")
         mapped = next((cfg.get("entities", {}).get("sensor." + suffix) for suffix in remaining_suffixes if cfg.get("entities", {}).get("sensor." + suffix)), None)
-        direct = next(("sensor." + cfg["prefix"] + "_" + suffix for suffix in remaining_suffixes if self.hass.states.get("sensor." + cfg["prefix"] + "_" + suffix)), None)
-        match = next((e.entity_id for e in candidates if e.domain == "sensor" and e.translation_key in remaining_suffixes), None)
+        direct = next((entity for entity in (expected_entity(cfg, "sensor." + suffix) for suffix in remaining_suffixes) if self.hass.states.get(entity)), None)
+        match = next((index[("sensor", suffix)] for suffix in remaining_suffixes if ("sensor", suffix) in index), None)
         self.live_entities = {"remaining": mapped or direct or match}
         costs = await self.hub.db("get", self.vehicle, "costs", {})
         profiles = list(costs.get("profiles", [])) + [r.get("profile", {}) for r in costs.get("sessions", {}).values()]
@@ -197,6 +202,23 @@ class VehicleRuntime:
                     self._seen.setdefault(role, good[entity])
         except Exception:  # seeding is a convenience; the live readings still work without it
             _LOGGER.debug("Could not restore last good readings for %s", self.vehicle, exc_info=True)
+
+    def resolve_entity(self, logical):
+        """The car's entity for a logical id such as "climate.cabin_climate", for every backend module.
+        Order: the user's mapping; the English id when it exists; the entity of the vehicle's device with the same
+        translation_key (Home Assistant in another language); else the English id."""
+        config = getattr(self, "config", None) or {}
+        mapped = config.get("entities", {}).get(logical)
+        if mapped:
+            return mapped
+        expected = expected_entity(config, logical)
+        if self.hass.states.get(expected):
+            return expected
+        found = self._resolved.get(logical)
+        if found is None:
+            found = self._tk_index.get((logical.split(".", 1)[0], translation_key_of(logical)), "")
+            self._resolved[logical] = found
+        return found or expected
 
     @callback
     def _event(self, event):
@@ -292,7 +314,7 @@ class VehicleRuntime:
         # At startup a fuel sensor can be registered but not loaded yet: it still means plug-in hybrid.
         registry = er.async_get(self.hass)
         return any(self.hass.states.get(entity) or registry.async_get(entity)
-                   for entity in (self.entities["fuel"], "sensor." + self.config["prefix"] + "_fuel_range"))
+                   for entity in (self.entities["fuel"], vehicle_entity(self, "sensor.fuel_range")))
 
     def _sample(self, entity, now, state, unit, samples, pending):
         previous = self.last_states.get(entity)
@@ -400,6 +422,7 @@ class VehicleRuntime:
                 closed = any(not session["live"] for session in sessions)
                 if closed:
                     self._summary_revision += 1
+                    self.signal_revision += 1
                 clock = time.monotonic()
                 if closed or clock - self._last_signal >= 1:
                     self._last_signal = clock
@@ -480,6 +503,11 @@ class VehicleRuntime:
                 await asyncio.wait_for(self.preconditioning.stop(), self.stop_timeout)
             except Exception:  # noqa: BLE001
                 _LOGGER.warning("Preconditioning state for %s could not be saved", self.vehicle)
+        if hasattr(self, "charger_limit"):
+            try:
+                await asyncio.wait_for(self.charger_limit.stop(), self.stop_timeout)
+            except Exception:  # noqa: BLE001
+                _LOGGER.warning("Charger limit state for %s could not be saved", self.vehicle)
         if hasattr(self, "notifications"):
             # The notification store takes the hub lock, which a stuck archive write may hold; bound it so shutdown cannot hang here.
             try:

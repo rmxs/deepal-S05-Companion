@@ -15,7 +15,7 @@ export async function showDashboardAdd(panel){
   if(native)dialog.open=true;else dialog.showModal();
   const close=()=>{if(!native&&dialog.open)dialog.close();if(native)dialog.open=false;dialog.remove();if(panel._dashboardDialog===dialog)panel._dashboardDialog=null;};
   dialog.addEventListener('closed',close);dialog.addEventListener('close',()=>{dialog.remove();if(panel._dashboardDialog===dialog)panel._dashboardDialog=null;});
-  dialog.querySelector('[data-dashboard-cancel]').addEventListener('click',close);
+  dialog.querySelector('[data-dashboard-cancel]').addEventListener('click',close);const oc=(d,f)=>{let down=false;const out=e=>{if(e.target!==d)return false;const r=d.getBoundingClientRect();return e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom;};d.addEventListener('pointerdown',e=>{down=out(e);});d.addEventListener('click',e=>{if(down&&out(e))f();down=false;});};if(!native)oc(dialog,close);
   const dashboard=dialog.querySelector('[name=dashboard]'),view=dialog.querySelector('[name=dashboard_view]'),save=dialog.querySelector('[data-dashboard-save]'),status=dialog.querySelector('[role=status]'),placement=dialog.querySelector('.dashboard-placement');
   let request=0,current=null,signature='',busy=false;
   const path=()=>dashboard.value==='lovelace'?null:dashboard.value;
@@ -35,7 +35,7 @@ export async function showDashboardAdd(panel){
       if(version!==request||!dialog.isConnected)return;
       current=config;signature=JSON.stringify(config);view.innerHTML=(config.views||[]).map((item,index)=>'<option data-ha-name value="'+index+'">'+escape(item.title||item.path||T('View {0}',index+1))+'</option>').join('');
       view.disabled=false;view.value='0';busy=false;check();window.__DEEPAL_COMPANION_UI.enhanceChoices(dialog,hass);
-    }catch(error){if(version!==request||!dialog.isConnected)return;busy=false;current=null;save.disabled=true;status.textContent=error.message||String(error);}
+    }catch(error){if(version!==request||!dialog.isConnected)return;busy=false;current=null;save.disabled=true;status.textContent=window.__DEEPAL_COMPANION_UI.tError(error.message)||String(error);}
   };
   dashboard.addEventListener('change',load);view.addEventListener('change',check);
   save.addEventListener('click',async()=>{
@@ -54,12 +54,12 @@ export async function showDashboardAdd(panel){
       else target.cards=[...(target.cards||[]),card];
       await hass.callWS({type:'lovelace/config/save',url_path:url,config});
       close();panel.status(T('Card added to dashboard'),'success');
-    }catch(error){if(dialog.isConnected){busy=false;dashboard.disabled=false;view.disabled=false;dialog.querySelector('[data-dashboard-cancel]').disabled=false;check();status.textContent=error.message||String(error);window.__DEEPAL_COMPANION_UI.enhanceChoices(dialog,hass);}}
+    }catch(error){if(dialog.isConnected){busy=false;dashboard.disabled=false;view.disabled=false;dialog.querySelector('[data-dashboard-cancel]').disabled=false;check();status.textContent=window.__DEEPAL_COMPANION_UI.tError(error.message)||String(error);window.__DEEPAL_COMPANION_UI.enhanceChoices(dialog,hass);}}
   });
   try{
     const rows=await hass.callWS({type:'lovelace/dashboards/list'});if(!dialog.isConnected)return;
     const dashboards=[{url_path:'lovelace',title:hass.panels?.lovelace?.title||T('Overview'),mode:'storage'},...rows.filter(row=>row.url_path!=='lovelace'&&row.mode==='storage')];
     dashboard.innerHTML=dashboards.map(row=>'<option data-ha-name value="'+escape(row.url_path)+'">'+escape(row.title||row.url_path)+'</option>').join('');
     dashboard.value=dashboards[0].url_path;window.__DEEPAL_COMPANION_UI.enhanceChoices(dialog,hass);await load();
-  }catch(error){if(dialog.isConnected)status.textContent=error.message||String(error);}
+  }catch(error){if(dialog.isConnected)status.textContent=window.__DEEPAL_COMPANION_UI.tError(error.message)||String(error);}
 }

@@ -176,7 +176,7 @@ const dzInfo=card=>{const c=card._c,out=[];if(c.hidden.includes("info"))return o
   return out;};
 const dzClock='<svg class="i" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 const dzMarkup=(card,kind,d)=>{
-  const c=card._c,num=n=>n===null||n===undefined?"--":String(Math.round(n)),st=d.st,stale=d.off||(d.ageMin!==null&&d.ageMin>180);
+  const c=card._c,num=n=>n===null||n===undefined?"--":String(Math.round(n)),st=d.st,stale=d.off||(d.ageMin!==null&&d.ageMin>180&&!d.cloudOn);
   const tap=c.energy_sheet!==false?' data-ent="'+esc(card._id("sensor.battery_level"))+'" data-energy="1" role="button" tabindex="0" aria-label="'+esc(T("Energy"))+'"':"";
   const tempOf=id=>{const n=card._n(id);return n===null?null:card._fmtNum(n,id==="sensor.cabin_humidity"?0:1)+(id==="sensor.cabin_humidity"?" %":"°C");};
   const inside=tempOf("sensor.inside_temperature"),outside=tempOf("sensor.outside_temperature"),humid=tempOf("sensor.cabin_humidity"),hasClim=card._s("climate.cabin_climate")!==null,clim=card._climateIsOn();
@@ -248,7 +248,7 @@ DeepalS05Card.prototype._render=function(...args){
     const foot=this._el.card.querySelector(":scope>.foot");if(foot)foot.before(button);else this._el.card.append(button); /* the Settings gear sits inside the image now, so it is not a direct child of the card */
   }
   const costs=this._el.card.querySelector('.companion-cost-launch');this._el.costs=costs;
-  costs.style.order=String(this._c.order.indexOf('costs'));costs.toggleAttribute('data-off',this._c.hidden.includes('costs')||this._c.charging_cost===false);
+  costs.style.order=String(this._c.order.indexOf('costs'));costs.toggleAttribute('data-off',this._c.hidden.includes('costs'));
   dzPaint(this,design.kind);
   return result;
 };

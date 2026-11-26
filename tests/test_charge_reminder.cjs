@@ -15,11 +15,25 @@ module.exports=async page=>{
   await card.locator('[data-charge-prompt=assign]').click();await card.locator('.charge-assignment-prompt').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>window.costs.sessions[String(Math.round(window.promptFixture.s/1000))].profile.id),'work');
   await page.evaluate(()=>{window.promptFixture={...window.promptFixture,id:'prompt-three',s:window.promptFixture.s+1000};window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+  await page.evaluate(()=>{window.costs.profiles.find(p=>p.id==='free').default=true;window.promptFixture={...window.promptFixture,id:'prompt-suggested',s:window.promptFixture.s+1000};window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+  await page.waitForFunction(()=>document.querySelector('#mobile').shadowRoot.querySelector('.charge-prompt-profile > select')?.value==='free');
+  assert.equal(await card.locator('[data-charge-prompt=assign]').isDisabled(),false,'The suggested profile can be confirmed in one tap');
+  assert.equal(await page.evaluate(()=>window.costs.sessions[String(Math.round(window.promptFixture.s/1000))]),undefined,'Suggesting a profile never assigns it');
+  await page.evaluate(()=>{delete window.costs.profiles.find(p=>p.id==='free').default;window.promptFixture={...window.promptFixture,id:'prompt-three',s:window.promptFixture.s+1000};window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
   await card.locator('.charge-assignment-prompt').waitFor();
   await page.evaluate(async()=>{const value=structuredClone(window.costs);value.sessions[String(Math.round(window.promptFixture.s/1000))]={profile:value.profiles[0]};await window.testHass.callWS({type:'deepal_companion/request',op:'costs_set',vehicle_id:'car',data:{value}});});
   await card.locator('.charge-assignment-prompt').waitFor({state:'detached'});
   await page.evaluate(()=>{window.promptFixture=null;if(window.reminderHidden===undefined)delete window.views.mobile.hidden;else window.views.mobile.hidden=window.reminderHidden;window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
   await page.evaluate(()=>{document.querySelector('#cards').style.display='none';scrollTo(0,0);});
+  // Recording signals that change nothing a card shows (same revision) do not make the card ask again.
+  await page.evaluate(()=>{const c=document.getElementById('mobile'),original=c._loadRemote;window.__loads=0;c._loadRemote=function(...args){window.__loads++;return original.apply(this,args);};});
+  const fetches=()=>page.evaluate(()=>window.__loads);
+  const ping=async revision=>{await page.evaluate(r=>window.subscribers.forEach(fn=>fn(r===undefined?{vehicle_id:'car'}:{vehicle_id:'car',revision:r})),revision);await page.waitForTimeout(150);};
+  await ping(41);const base=await fetches();
+  await ping(41);await ping(41);assert.equal(await fetches(),base,'The same revision is not fetched again');
+  await ping(42);assert.equal(await fetches(),base+1,'A new revision is fetched once');
+  await ping();assert.equal(await fetches(),base+2,'A signal without a revision (older backend) still fetches');
+  await page.evaluate(()=>{const c=document.getElementById('mobile');delete c._loadRemote;});
   assert.equal(await page.evaluate(()=>window.serviceCalls.length),0,'Prompt actions must not call vehicle services');
   console.log('PASS: charge reminder, dismiss until next session, quick profile assignment and clearing after an assignment on another surface.');
 };

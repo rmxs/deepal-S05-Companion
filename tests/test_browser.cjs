@@ -20,6 +20,7 @@ const server=http.createServer((req,res)=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME||undefined,...(fs.existsSync("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe")?{executablePath:"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"}:{})});
  try {
   const page=await browser.newPage({viewport:{width:1440,height:1050},...(process.env.ENERGY_COST_ONLY?{timezoneId:"Pacific/Honolulu"}:{})}),errors=[];page.on("pageerror",e=>{errors.push(e.message);console.error("BROWSER:",e.stack);});
+  await page.addInitScript(()=>{try{localStorage.setItem('deepal-companion-settings-sections','"all"');}catch(e){}}); /* the settings sections start open in the tests; test_settings_sections.cjs checks the default */
   await page.goto("http://127.0.0.1:"+server.address().port);
   await page.evaluate(()=>{
     window.activeIntervals=new Set();const original=setInterval,clear=clearInterval;
@@ -66,6 +67,8 @@ const server=http.createServer((req,res)=>{
      const activityPage=(limit=5,before=null)=>{const start=before?window.activityRows.findIndex(row=>row.id===before)+1:0,rows=structuredClone(window.activityRows.slice(start,start+limit)),has_more=start+rows.length<window.activityRows.length;return {rows,total:window.activityRows.length,has_more,next_before:has_more?rows.at(-1)?.id:null};};
      if(m.op==='notifications_unread'){(window.unreadCalls??=[]).push(m.data||{});if(m.data?.mark)window.unread=0;return {unread:window.unread??2};}
      if(m.op==='notifications_explain'){(window.explainCalls??=[]).push(m.data);return {rule_id:m.data.rule_id,name:'Unlocked vehicle',verdict:'waiting',summary:'Not sent yet: a condition is not true.',retry_in:null,checked:1,steps:[{id:'check0',status:'pass',title:'Doors are unlocked',detail:'Now: unlocked (changed 3 min ago)',help:'Help for the doors line.'},{id:'check1',status:'block',title:'Power status is off',detail:'Now: on (changed 12 min ago)',help:'Help for the power line.'},{id:'delay',status:'wait',title:'Delay',detail:'2 min left'}]};}
+     if(m.op==="user_hint_get")return {dismissed:window.hintDismissed!==false};
+     if(m.op==="user_hint_dismiss"){(window.hintCalls??=[]).push(m.data);window.hintDismissed=true;return {dismissed:true};}
      if(m.op==="update_rate_get")return {seconds:window.updateRate||0};
      if(m.op==="update_rate_set"){if(!window.testHass.user.is_admin)throw Error("Administrator access is required to change the data update rate");if(![0,300,600].includes(m.data?.seconds))throw Error("Unknown update rate");window.updateRate=m.data.seconds;return {seconds:window.updateRate};}
      if(m.op==="notification_language_get")return {language:window.notificationLanguage||"auto"};
@@ -103,6 +106,7 @@ const server=http.createServer((req,res)=>{
    for(const view_id of ["mobile","tablet","energy"]){const c=document.createElement("deepal-companion-card");c.id=view_id;c.setConfig({type:"custom:deepal-companion-card",vehicle_id:"car",view_id});document.querySelector("#cards").append(c);c.hass=hass;}
   });
   await page.waitForFunction(()=>["mobile","tablet","energy"].every(id=>document.getElementById(id)._built));
+  if(process.env.STALE_ONLY){await require('./test_stale_last_update.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.ENERGY_COST_ONLY){await page.addScriptTag({url:'/deepal_companion/frontend/energy/energy.js'});await require('./test_energy_cost_regressions.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(!process.env.CHARGING_EDITS_ONLY){
   assert.equal(await page.evaluate(()=>document.getElementById("mobile")._el.nfbell.hidden),false,"Visible bell must not depend on push delivery being configured");
@@ -176,7 +180,7 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(language=>{window.testHass.locale.language=language;document.getElementById('full-editor').hass=window.testHass;},language);
     await page.waitForFunction(language=>{
       const label=document.getElementById('full-editor')._s.shadowRoot.querySelector('[data-tab=vehicle]').textContent.trim();
-      return language==='en'?label==='Advanced':label!=='Advanced';
+      return language==='en'?label==='Vehicle':label!=='Vehicle';
     },language);
     await page.waitForTimeout(100);
     const label=await page.evaluate(()=>document.getElementById('full-editor')._s.shadowRoot.querySelector('[data-tab=vehicle]').textContent.trim());
@@ -185,7 +189,10 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{
     const editor=document.getElementById("full-editor");window.testHass.locale.language="el";editor.hass=window.testHass;window.testHass.locale.language="en";editor.hass=window.testHass;
   });
+  await page.evaluate(()=>document.getElementById("full-editor")._s._setTab("advanced")); /* entity mapping lives in the Advanced tab */
   await page.waitForFunction(()=>document.getElementById("full-editor")._s.shadowRoot.textContent.includes("If an entity is not named"));
+  assert.equal(await page.evaluate(()=>[...document.getElementById("full-editor")._s.shadowRoot.querySelectorAll('select[data-set="_mkey"] option')].some(n=>n.value==="binary_sensor.charger_plugged")),false,"A key with a working automatic entity is not offered");
+  await page.evaluate(()=>{const h=window.testHass;h.states={...h.states,"binary_sensor.s05_charger_plugged":{...h.states["binary_sensor.s05_charger_plugged"],state:"unavailable"}};const e=document.getElementById("full-editor");e.hass=h;e._s._render();});
   assert.equal(await page.evaluate(()=>[...document.getElementById("full-editor")._s.shadowRoot.querySelectorAll('select[data-set="_mkey"] option')].find(n=>n.value==="binary_sensor.charger_plugged").textContent),"S05 Charger plugged in");
   await page.evaluate(()=>{
     if(!customElements.get("ha-selector"))customElements.define("ha-selector",class extends HTMLElement{});
@@ -196,7 +203,8 @@ const server=http.createServer((req,res)=>{
     picker.dispatchEvent(new CustomEvent("value-changed",{detail:{value:"binary_sensor.s05_charger_plugged"},bubbles:true}));widget.shadowRoot.querySelector("[data-addent]").click();
   });
   await page.waitForFunction(()=>window.common.entities["binary_sensor.charger_plugged"]==="binary_sensor.s05_charger_plugged");
-  const editorTabs=await page.evaluate(()=>document.getElementById("full-editor")._s.shadowRoot.querySelectorAll("[data-tab]").length);assert.equal(editorTabs,7);
+  await page.evaluate(()=>{const h=window.testHass;h.states={...h.states,"binary_sensor.s05_charger_plugged":{...h.states["binary_sensor.s05_charger_plugged"],state:"off"}};});
+  const editorTabs=await page.evaluate(()=>document.getElementById("full-editor")._s.shadowRoot.querySelectorAll("[data-tab]").length);assert.equal(editorTabs,6);
   await page.evaluate(()=>document.getElementById("full-editor")._s.onPatch({car_color:"grey"}));
   await page.waitForFunction(()=>window.views.mobile.car_color==="grey");
   await page.evaluate(()=>{
@@ -208,7 +216,7 @@ const server=http.createServer((req,res)=>{
   await page.waitForFunction(()=>document.getElementById("editor-preview")._c?.car_color==="white");
   await page.locator("#full-editor [data-companion-view=energy]").click();
   await page.waitForFunction(()=>document.getElementById("editor-preview")._c?.car_color==="silver");
-  assert.equal(await page.evaluate(()=>document.getElementById("full-editor")._s.shadowRoot.querySelectorAll("[data-tab]").length),7);
+  assert.equal(await page.evaluate(()=>document.getElementById("full-editor")._s.shadowRoot.querySelectorAll("[data-tab]").length),6);
   await page.evaluate(()=>{
     window.delayPatchMS=120;
     const card=document.createElement("deepal-companion-card");card.id="race-card";card.setConfig({type:"custom:deepal-companion-card",vehicle_id:"car",view_id:"mobile"});document.body.append(card);card.hass=window.testHass;
@@ -228,23 +236,37 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{const panel=document.createElement("deepal-companion-panel");document.querySelector("#panel").append(panel);panel.hass=window.testHass;});
   try{await page.waitForFunction(()=>!!document.querySelector("deepal-companion-panel").settings?._cfg);}catch(error){console.error('Panel boot:',await page.evaluate(()=>({message:document.querySelector('deepal-companion-panel').message,stage:document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.stage')?.textContent})));throw error;}
   assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelectorAll("deepal-companion-card").length),1);
-  assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").settings.shadowRoot.querySelectorAll("[data-tab]").length),7);
+  assert.equal(await page.evaluate(()=>document.querySelector("deepal-companion-panel").settings.shadowRoot.querySelectorAll("[data-tab]").length),6);
   const p=page.locator("deepal-companion-panel");
   /* 0.1.6: the Profile box starts closed; the checks below use its fields, so open it the way a user does (the arrow beside the badge) */
   assert.equal(await page.evaluate(()=>!!document.querySelector("deepal-companion-panel").shadowRoot.querySelector(".profile-setup.ps-closed")),true,"The Profile box starts closed");
   await page.evaluate(()=>document.querySelector("deepal-companion-panel").shadowRoot.querySelector("[data-profile-toggle]").click());
   await page.waitForFunction(()=>!document.querySelector("deepal-companion-panel").shadowRoot.querySelector(".profile-setup.ps-closed"));
+  if(process.env.PREVIEW_MODULE){await require(path.resolve(process.env.PREVIEW_MODULE))(page);assert.equal(errors.length,0,errors.join(', '));return;} /* design previews: a throwaway module renders the real card and saves screenshots; nothing is asserted about the UI */
+  if(process.env.CHARGER_CARD_ONLY){await runModule(page,"test_charger_card_row.cjs");assert.equal(errors.length,0,errors.join(', '));return;}
+  if(process.env.SEATS_ONLY){await runModule(page,"test_seat_indicators.cjs");assert.equal(errors.length,0,errors.join(', '));return;}
+  if(process.env.CHARGER_PAGE_ONLY){await runModule(page,"test_charger_page.cjs");assert.equal(errors.length,0,errors.join(', '));return;}
+  if(process.env.CHARGING_LAYOUT_ONLY){await runModule(page,"test_charging_page_layout.cjs");assert.equal(errors.length,0,errors.join(', '));return;}
+  if(process.env.TYRE_TOP_ONLY){await runModule(page,"test_tyre_top_view.cjs");assert.equal(errors.length,0,errors.join(', '));return;}
+  if(process.env.PAGE_HEAD_ONLY){await runModule(page,"test_page_headers.cjs");assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGE_COST_ONLY){await require('./test_charge_cost_live.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.PRECOND_UI_ONLY){runStandalone('test_preconditioning_ui.cjs');return;}
+if(process.env.CLIMATE_LINE_ONLY){runStandalone('test_climate_running_line.cjs');return;}
+if(process.env.CAR_LOG_ONLY){runStandalone('test_car_log_page.cjs');return;}
+  if(process.env.PRECOND_NOTIFY_LINK_ONLY){await require('./test_preconditioning_notify_link.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.PANEL_RECOVERY_ONLY){await require('./test_panel_recovery.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.PRECOND_HERO_ONLY){await require('./test_precondition_hero.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGE_TARGET_ONLY){await require('./test_charge_target.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.UPDATE_RATE_ONLY){await require('./test_update_rate_box.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_LANGUAGE_ONLY){await require('./test_notification_language.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_MOBILE_ONLY){await require('./test_notification_mobile.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_PERSISTENCE_ONLY){await require('./test_notification_persistence.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.NOTIFY_RECOMMENDED_ONLY){await require('./test_notifications_recommended.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGING_BLOCKS_ONLY){await require('./test_charging_blocks.cjs')(page);await require('./test_charge_reminder.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.CHARGING_EDITS_ONLY){await require('./test_charging_edits.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.FIRST_RUN_ONLY){await require('./test_first_run.cjs')(page);await require('./test_image_loading.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.TILE_ONLY){await require('./test_tile_settings.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
+  if(process.env.SECTIONS_ONLY){await require('./test_settings_sections.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.STAT_ONLY){await require('./test_stat_history.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.ACCENT_ONLY){await require('./test_accent_colour.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.SETTINGS_ONLY){await require('./settings_roundtrip.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
@@ -253,7 +275,7 @@ const server=http.createServer((req,res)=>{
   if(process.env.FEATURE_ONLY){await require('./test_feature_updates.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.QA_ONLY){await runModule(page,"test_field_choices.cjs");await runModule(page,"test_end_user_qa.cjs");return;}
   if(process.env.LANG_ONLY){await page.addScriptTag({path:__dirname+'/page_mocks.js'});await require('./test_language_sweep.cjs')(page);return;}
-  if(process.env.NAV_ONLY){await runModule(page,"test_boot_loading.cjs");await runModule(page,"test_preview_controls.cjs");await runModule(page,"test_tab_navigation.cjs");await runModule(page,"test_local_notifications.cjs");await require("./layout_validation.cjs")(page);return;}
+  if(process.env.NAV_ONLY){await runModule(page,"test_boot_loading.cjs");await runModule(page,"test_preview_controls.cjs");await runModule(page,"test_tab_navigation.cjs");await runModule(page,"test_panel_mobile.cjs");await runModule(page,"test_local_notifications.cjs");await require("./layout_validation.cjs")(page);return;}
   if(process.env.NOTIFY_FEATURES_ONLY){await require('./test_notification_features.cjs')(page);assert.equal(errors.length,0,errors.join('\n'));return;}
   if(process.env.NOTIFY_ONLY){await runModule(page,"test_local_notifications.cjs");return;}
   if(process.env.CHART_ONLY){await runModule(page,"test_charging_dashboard.cjs");return;}
@@ -393,7 +415,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await p.locator(".dashboard-guide,.legacy-card-note").count(),0);
   assert.equal(await p.locator("header [data-action=add-dashboard]").count(),1);
   await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.stage').classList.contains('is-loading'));
-  assert.deepEqual(await page.evaluate(()=>[...document.querySelector("deepal-companion-panel").shadowRoot.querySelector("main").children].map(n=>n.className)),["box profile-setup","box live-preview","stage"]);
+  assert.deepEqual(await page.evaluate(()=>[...document.querySelector("deepal-companion-panel").shadowRoot.querySelector("main").children].map(n=>n.className)),["box profile-setup","box live-preview pv-closed","stage","mobile-support"]);
   assert.equal(await page.evaluate(()=>window.serviceCalls.length),0);
   await runModule(page,"test_charging_dashboard.cjs");
   await runModule(page,"test_charging_edits.cjs");
@@ -417,8 +439,10 @@ const server=http.createServer((req,res)=>{
   await require("./settings_roundtrip.cjs")(page);
   await require("./layout_validation.cjs")(page);
   await runModule(page,"test_mobile_shell.cjs");
-  await runModule(page,"test_tab_navigation.cjs");
+  await runModule(page,"test_tab_navigation.cjs");await runModule(page,"test_panel_mobile.cjs");
   runStandalone("test_preconditioning_ui.cjs");
+  runStandalone("test_car_log_page.cjs");
+  runStandalone("test_climate_running_line.cjs");
   const before=await page.evaluate(()=>window.subscribers.length);
   await page.evaluate(()=>document.querySelector("deepal-companion-panel").remove());
   await page.waitForTimeout(100);
@@ -431,7 +455,17 @@ const server=http.createServer((req,res)=>{
     await page.waitForTimeout(100);
   }
   assert.deepEqual(await page.evaluate(()=>({subscriptions:subscribers.length,intervals:activeIntervals.size})),baseline,"Repeated panel openings must release timers and subscriptions");
+  /* These pages change the open page and the mocked backend, so they run after the checks above. */
+  const freshPanel=async()=>{await page.evaluate(()=>{document.querySelector("deepal-companion-panel")?.remove();location.hash="";const panel=document.createElement("deepal-companion-panel");document.querySelector("#panel").append(panel);panel.hass=window.testHass;});await page.waitForFunction(()=>!!document.querySelector("deepal-companion-panel")?.settings);};
+  await freshPanel();await runModule(page,"test_precondition_hero.cjs");
+  await freshPanel();await runModule(page,"test_panel_recovery.cjs");
+  await freshPanel();await runModule(page,"test_page_headers.cjs");
+  await runModule(page,"test_tyre_top_view.cjs");
+  await runModule(page,"test_seat_indicators.cjs");
+  await runModule(page,"test_charger_card_row.cjs");
+  await freshPanel();await runModule(page,"test_charger_page.cjs");
+  await freshPanel();await runModule(page,"test_charging_page_layout.cjs");
   assert.equal(errors.length,0,errors.join("\n"));
-  console.log("PASS: retained card and 7 organized settings menus; 3 independent cards; visual card profile picker and native preview events; application settings without a card/modal; direct charger settings, profile duplication and archive.");
+  console.log("PASS: retained card and 5 organized settings menus; 3 independent cards; visual card profile picker and native preview events; application settings without a card/modal; direct charger settings, profile duplication and archive.");
  } finally {await browser.close();server.close();}
 })().catch(error=>{console.error(error);server.close();process.exitCode=1;});

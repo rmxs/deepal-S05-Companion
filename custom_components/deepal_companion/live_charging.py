@@ -12,7 +12,7 @@ import re
 import time
 import uuid
 
-from .const import update_floor
+from .const import update_floor, vehicle_entity
 from .phone_text import tr
 
 DEFAULT = {"enabled": False, "devices": [], "min_interval": 300,
@@ -69,6 +69,11 @@ def card_defaults():
     return _DEFAULTS
 
 
+async def async_preload(hass):
+    """Read defaults.json once in the executor, so nothing reads the file inside the event loop later."""
+    await hass.async_add_executor_job(card_defaults)
+
+
 def palette_color(config, setting):
     """The colour a live notification state uses: the level colour (red, orange, yellow or green) the user chose for `setting`
     in the card's colour settings, taken from their saved palette, otherwise from the card defaults."""
@@ -80,7 +85,7 @@ def palette_color(config, setting):
         value = source.get("lvl_" + str(level))
         if isinstance(value, str) and _COLOR.fullmatch(value):
             return value
-    return defaults.get("tile_icon_color") if _COLOR.fullmatch(str(defaults.get("tile_icon_color"))) else "#63cba3"  # only if defaults.json is unreadable
+    return "#63cba3"  # only if defaults.json is unreadable
 
 
 def stamp(state):
@@ -126,8 +131,7 @@ class LiveCharging:
     def get(self, role, logical=None):
         entity = getattr(self.runtime, "entities", {}).get(role) or getattr(self.runtime, "live_entities", {}).get(role)
         if logical:
-            entity = self.runtime.config.get("entities", {}).get(logical) or entity
-            entity = entity or logical.replace(".", "." + self.runtime.config.get("prefix", "s05") + "_", 1)
+            entity = self.runtime.config.get("entities", {}).get(logical) or entity or vehicle_entity(self.runtime, logical)
         return self.hass.states.get(entity) if entity else None
 
     def snapshot(self, now, options):
@@ -237,6 +241,9 @@ class LiveCharging:
         for device in list(active):
             if not enabled or device not in options["devices"] or stopped:
                 if now - self.last_attempt.get(device, 0) < options["min_interval"]:
+                    continue
+                if not self.state.get("tag"):  # a restored block without a tag: nothing to clear under a known tag
+                    del active[device]
                     continue
                 result = await self.send(device, {"message": "clear_notification", "data": {"tag": self.state["tag"]}})
                 self.last_attempt[device] = now

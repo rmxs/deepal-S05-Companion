@@ -51,9 +51,10 @@ export const notificationLayoutCss=`
 .design-root .ha-card{padding:var(--cp-block-p)}
 .design-root .live-tag{margin-left:8px;font-size:9px;font-weight:700;letter-spacing:.06em;padding:1px 6px;border-radius:999px;vertical-align:middle}
 /* segmented choices: 36 px options inside a 44 px group, like every other segmented control */
-.design-root button:is(.preset-btn.preset-btn,.quiet-mode-btn.quiet-mode-btn){height:36px!important;min-height:36px!important;border-radius:11px!important;font-size:12.5px!important}
 .design-root{--nf-field:44px;--nf-action:var(--cp-ctl-h,40px);--nf-radius:var(--cp-ctl-r,12px);--nf-gap:12px;font-size:13px;line-height:1.5}
 .design-root button{box-sizing:border-box;height:var(--nf-action);min-height:var(--nf-action);padding:8px 12px;border-radius:var(--nf-radius);font-size:13px;line-height:20px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:normal}
+/* Segmented choices (quiet mode, filter presets) keep the Settings .seg button size, not the design button size above. */
+.design-root .seg>button{height:auto;min-height:0;padding:7px 6px;border-radius:11px;font-size:12.5px;line-height:inherit}
 .design-root input:not([type=checkbox]),.design-root select{box-sizing:border-box;height:var(--nf-field);min-height:var(--nf-field);max-height:var(--nf-field);font-size:16px;line-height:20px;padding:10px 12px;border-radius:var(--nf-radius);font-weight:400}
 .design-root input[type=number]{font-variant-numeric:tabular-nums;text-align:center;font-weight:600}
 .design-root label:has(>input.peer){width:44px;min-width:44px;height:44px;min-height:44px;padding:0;flex:none}
@@ -136,7 +137,7 @@ export function arrangeNotifications(root){
   q('#tab-overview').parentElement.classList.add('notification-internal-tabs');
   q('.font-bold.tracking-wide.uppercase').classList.add('notification-page-heading');
   q('#master-status-badge').hidden=true;q('#master-action-label').hidden=true;
-  q('.design-controlbar h2').textContent='Notifications';
+  q('.design-controlbar h2').textContent=window.__DEEPAL_COMPANION_UI?.t?window.__DEEPAL_COMPANION_UI.t('Master switch'):'Master switch';
   const matrix=q('.alert-row').parentElement.parentElement.parentElement;matrix.classList.add('notification-matrix');
   for(const row of qa('.alert-row')){row.parentElement.classList.add('notification-alert-grid');row.parentElement.parentElement.classList.add('notification-category');}
   const master=q('#master-panel-toggle');master.setAttribute('aria-label','Enable notifications');

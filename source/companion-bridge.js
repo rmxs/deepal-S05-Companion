@@ -90,7 +90,7 @@ DeepalS05Card.prototype.setConfig = function(config) {
   if(previous&&previous.vehicle_id===config.vehicle_id&&previous.view_id===config.view_id){this._compInput=config;return;}
   if(previous?.vehicle_id&&this._compDirty&&this._rawHass){
     companionQueueWrite(this,this._rawHass,{...previous},{patch:{...this._local},reset:!!this._compReset})
-      .catch(error=>{this._compPreviousSaveError=error.message||String(error);if(this._c)this._toast(this._compPreviousSaveError,"error");});
+      .catch(error=>{this._compPreviousSaveError=tError(error.message||String(error));if(this._c)this._toast(this._compPreviousSaveError,"error");});
   }
   clearTimeout(this._compTimer);
   this._compUnsubscribe?.();this._compUnsubscribe=null;
@@ -143,19 +143,26 @@ DeepalS05Card.prototype._loadRemote = async function() {
     }
     if (!this._compUnsubscribe && this.isConnected) {
       const unsubscribe = await this._rawHass.connection.subscribeMessage(
-        message => { if (message.vehicle_id === this._companion.vehicle_id) this._loadRemote(); },
+        message => {
+          if (message.vehicle_id !== this._companion.vehicle_id) return;
+          /* A recording signal that changes nothing a card shows carries the same revision: skip the request (settings, costs and finished charges raise it). */
+          if (message.revision !== undefined && message.revision === this._compSeenRevision) return;
+          this._compSeenRevision = message.revision; this._loadRemote();
+        },
         {type:"deepal_companion/subscribe"}
       );
       if(this.isConnected&&generation===this._compGeneration)this._compUnsubscribe=unsubscribe;else unsubscribe();
     }
   } catch (error) {
     if(generation!==this._compGeneration)return;
+    this._compSeenRevision = undefined; /* a failed load must not hide the next signal */
     if (!this._c) {
       console.error("Deepal Companion could not load", error);
-      this.shadowRoot.innerHTML = '<ha-card style="padding:18px"><p style="margin:0 0 12px">Deepal Companion couldn’t load. Check that Home Assistant is reachable and try again.</p><button class="companion-retry" style="padding:8px 14px;cursor:pointer">Try again</button></ha-card>';
+      const tr = (key) => window.__DEEPAL_COMPANION_UI?.t?.(key) ?? key, esc = (text) => String(text).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      this.shadowRoot.innerHTML = '<ha-card style="padding:18px"><p style="margin:0 0 12px">' + esc(tr("Deepal Companion couldn’t load. Check that Home Assistant is reachable and try again.")) + '</p><button class="companion-retry" style="padding:8px 14px;cursor:pointer">' + esc(tr("Try again")) + '</button></ha-card>';
       this.shadowRoot.querySelector(".companion-retry")?.addEventListener("click", () => this._loadRemote());
     }
-    else this._toast(readableError(error).message, "error");
+    else this._toast(tError(readableError(error).message), "error");
   } finally {
     if(generation===this._compGeneration){this._compFetching = false;
     if (this._compAgain) { this._compAgain = false; queueMicrotask(()=>this._loadRemote()); }}
@@ -193,7 +200,7 @@ DeepalS05Card.prototype._doSaveYaml = async function() {
       queueMicrotask(()=>this._loadRemote());
     } else {
     this._remoteErr = true; this._compDirty = true;
-    this._toast(T("Settings could not be saved") + ": " + (error.message || String(error)), "error");
+    this._toast(T("Settings could not be saved") + ": " + tError(error.message || String(error)), "error");
     }
   } finally {
     if(generation===this._compGeneration){this._compSaving = false;

@@ -4,7 +4,7 @@ const assert=require('assert');
 module.exports=async page=>{
  const panel=page.locator('deepal-companion-panel'),widget=panel.locator('deepal-companion-settings');
  const openAdvanced=async()=>{await panel.evaluate(p=>p.navigateMode('settings'));await page.waitForFunction(()=>!!document.querySelector('deepal-companion-panel').shadowRoot.querySelector('.profile-setup'),null,{timeout:8000});
-  await widget.locator('[data-tab="vehicle"]').click();await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').settings._tabLoading);
+  await widget.locator('[data-tab="advanced"]').click();await page.waitForFunction(()=>!document.querySelector('deepal-companion-panel').settings._tabLoading);
   await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').settings.shadowRoot.querySelectorAll('[data-update-rate]').length===3,null,{timeout:8000});};
  const state=()=>widget.evaluate(w=>[...w.shadowRoot.querySelectorAll('[data-update-rate]')].map(b=>({t:b.textContent,on:b.classList.contains('on'),d:b.disabled,o:b.scrollWidth>b.clientWidth+1})));
  try{
@@ -28,7 +28,7 @@ module.exports=async page=>{
   assert.equal(await panel.evaluate(p=>!!p.shadowRoot.querySelector('.local-notifications').shadowRoot.querySelector('.deepal-rate-box')),false,'The Notifications page has no update rate box');
   await page.evaluate(()=>{window.testHass.user.is_admin=false;});
   await openAdvanced();
-  await widget.locator('[data-tab="layout"]').click();await widget.locator('[data-tab="vehicle"]').click();
+  await widget.locator('[data-tab="layout"]').click();await widget.locator('[data-tab="advanced"]').click();
   await page.waitForFunction(()=>document.querySelector('deepal-companion-panel').settings.shadowRoot.querySelectorAll('[data-update-rate]').length===3,null,{timeout:8000});
   assert.deepEqual((await state()).map(r=>r.d),[true,true,true],'Disabled for non-administrators');
   assert.equal(await page.evaluate(()=>window.testHass.callWS({type:'deepal_companion/request',op:'update_rate_set',data:{seconds:0}}).then(()=>false,()=>true)),true,'A non-administrator must not change the rate');

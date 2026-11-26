@@ -10,6 +10,7 @@ import re
 import time
 import uuid
 
+from .const import expected_entity, vehicle_entity
 from .phone_text import tr
 
 SERVICE = re.compile(r"^mobile_app_[a-z0-9_]+$")
@@ -21,14 +22,13 @@ DEFAULT = {"enabled": False, "rules": []}
 PARKED_PRESETS = ("unlocked", "open", "lights", "climate", "comfort")
 
 
-def migrate_parked(config, vehicle_config, has_entity):
+def migrate_parked(config, vehicle_config, has_entity, resolve=None):
     """Update saved alerts that still use the old "parked" check (power status off for a fixed time) to the current one:
     the car is off, or it is on but the odometer has not changed. Nothing has to be saved again by hand. Only the saved
     condition changes; the user's times, texts and switches stay as they are. Returns True when something changed."""
     changed = False
-    prefix, mapped = vehicle_config.get("prefix", "s05"), vehicle_config.get("entities", {})
-    power = mapped.get("sensor.power_status") or f"sensor.{prefix}_power_status"
-    odo = mapped.get("sensor.total_odometer") or f"sensor.{prefix}_total_odometer"
+    resolve = resolve or (lambda logical: vehicle_config.get("entities", {}).get(logical) or expected_entity(vehicle_config, logical))
+    power, odo = resolve("sensor.power_status"), resolve("sensor.total_odometer")
     if not has_entity(power) or not has_entity(odo):
         return changed
     old = re.compile(r"\(is_state\('" + re.escape(power) + r"', 'off'\) and \(now\(\) - states\." + re.escape(power) + r"\.last_changed\)\.total_seconds\(\) >= \d+\)")
@@ -179,11 +179,32 @@ def merge_config(base, theirs, mine):
     return {**merged, "rules": [rules[ident] for ident in order]}
 
 
+def apply_silent(data):
+    """The quiet-hours look of a push: passive, no sound, low priority. Shared by the alerts and the Charger limit messages."""
+    data["push"] = {"interruption-level": "passive", "sound": "none"}
+    data.update(importance="low", priority="normal", channel="Deepal Companion Silent")
+    return data
+
+
 def quiet_now(quiet, minute):
     if not quiet["enabled"] or quiet["from"] == quiet["to"]:
         return False
     start, end = quiet["from"], quiet["to"]
     return start <= minute < end if start < end else minute >= start or minute < end
+
+
+LIMIT_GUARDED = ("charge_done", "plugged_idle", "charge_interrupted")  # the charger was stopped on purpose: these would only repeat what the Charger limit says
+_OWN_NUMBER = re.compile(r"(\| float\(0\) >= )(\d+)(?![\d.])\)")  # the battery level compared with the alert's own number (not the 0.5 A current check)
+
+
+def limit_condition(rule, goal):
+    """The saved "Charging reached target" condition with the alert's own number replaced by the charging target (1-99 %).
+    Rules saved before the alert followed the target carry the number as text, so it is swapped when the rule is evaluated:
+    nothing has to be saved again. A condition that already follows the target (or has no number) is returned unchanged."""
+    condition = rule.get("condition", "")
+    if rule.get("preset") != "charge_target" or "charge_target_pct" in condition or not 1 <= goal <= 99:
+        return condition
+    return _OWN_NUMBER.sub(lambda m: m[1] + str(goal) + ")", condition, count=1)
 
 
 class NotificationEngine:
@@ -200,7 +221,8 @@ class NotificationEngine:
         from homeassistant.helpers.event import async_track_time_interval
         from datetime import timedelta
         self.config = validate(await self.db("get", self.runtime.vehicle, "local_notifications", DEFAULT))
-        if migrate_parked(self.config, self.runtime.config, lambda entity: self.hass.states.get(entity) is not None):
+        if migrate_parked(self.config, self.runtime.config, lambda entity: self.hass.states.get(entity) is not None,
+                          lambda logical: vehicle_entity(self.runtime, logical)):
             await self.db("put", self.runtime.vehicle, "local_notifications", self.config)
         self.state = await self.db("get", self.runtime.vehicle, "local_notification_state", {})
         self.history = await self.db("get", self.runtime.vehicle, "local_notification_history", [])
@@ -333,8 +355,36 @@ class NotificationEngine:
         except Exception as error:
             raise ValueError("Notification template: " + str(error)[:300]) from error
 
+    def limit_quiet(self):
+        """True while the quiet hours of the first enabled alert that has quiet hours switched on are running. The Charger limit
+        uses it for its own non-critical messages (it has no quiet hours of its own)."""
+        rule = next((r for r in self.config.get("rules", []) if r.get("enabled") and (r.get("quiet") or {}).get("enabled")), None)
+        if rule is None:
+            return False
+        from homeassistant.util import dt as dt_util
+        return quiet_now(rule["quiet"], dt_util.now().strftime("%H:%M"))
+
+    def limit_vars(self):
+        """What the Charger limit is doing, for the alert conditions: the charging target (0 = none), whether the charger is
+        stopped on purpose, and whether it is stopped or about to be. The last two are True only when the limit will really
+        tell the phones itself (master switch on, a phone chosen), so no alert is lost when it cannot."""
+        limiter = getattr(self.runtime, "charger_limit", None)
+        try:
+            target = limiter.target() if limiter is not None else max(0, min(100, int(float(self.runtime.config.get("charge_target") or 0))))
+        except Exception:  # noqa: BLE001 - a bad value must never stop the alerts
+            target = 0
+        stopped = stopping = False
+        if limiter is not None:
+            try:
+                delivers = limiter.delivers()
+                stopped = bool(delivers and limiter.holds())
+                stopping = bool(delivers and limiter.stopping())
+            except Exception:  # noqa: BLE001
+                stopped = stopping = False
+        return {"charge_target_pct": target, "limit_stopped": stopped, "limit_stopping": stopping}
+
     async def context(self, rule, index=1):
-        context = {"repeat": {"index": index}}
+        context = {"repeat": {"index": index}, **self.limit_vars()}
         for key, template in rule["variables"].items():
             context[key] = await self.render(template, context)
         return context
@@ -345,7 +395,12 @@ class NotificationEngine:
         for key, example in (samples or {}).items():
             if key in context and not str(context[key]).strip():
                 context[key] = example
-        active = str(await self.render(rule["condition"], context)).strip().lower() == "true"
+        active = str(await self.render(limit_condition(rule, context["charge_target_pct"]), context)).strip().lower() == "true"
+        # Also for alerts saved before the guard existed (their condition has no limit_stopped): no second message for a stop the Charger limit already reported.
+        if active and rule.get("preset") in LIMIT_GUARDED and context["limit_stopped"]:
+            active = False
+        if active and rule.get("preset") == "charge_target" and context["limit_stopping"]:
+            active = False
         # Simple {name} placeholders coexist with advanced HA {{ templates }}.
         def simple(text):
             return re.sub(r"(?<!\{)\{([a-zA-Z_]\w*)\}(?!\})", lambda m: str(context.get(m[1], m[0])), text)
@@ -435,8 +490,7 @@ class NotificationEngine:
             if data["push"].get("sound") == "default":
                 data["push"]["sound"] = {"name": "default", "critical": 1, "volume": 1.0}
         if silent:
-            data["push"] = {"interruption-level": "passive", "sound": "none"}
-            data.update(importance="low", priority="normal", channel="Deepal Companion Silent")
+            apply_silent(data)
         data.setdefault("importance", "low" if soft else "max" if severity == "critical" else "high")
         if not soft:
             data.setdefault("priority", "high")
@@ -510,8 +564,7 @@ class NotificationEngine:
                     if lock_action:
                         if "lock" not in rule["buttons"]:
                             return
-                        cfg = self.runtime.config
-                        entity = cfg.get("entities", {}).get("lock.doors", "lock." + cfg["prefix"] + "_doors")
+                        entity = vehicle_entity(self.runtime, "lock.doors")
                         try:
                             async with asyncio.timeout(15):
                                 await self.hass.services.async_call("lock", "lock", {"entity_id": entity}, blocking=True)

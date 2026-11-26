@@ -33,6 +33,9 @@ const server=http.createServer((q,r)=>{const u=new URL(q.url,"http://x");const r
  await page.evaluate(()=>card.shadowRoot.querySelector(".tile[data-plan]").click());await page.waitForTimeout(400);
  ok("info tile opens plan popup only", await q(()=>card._planSheet===true&&!card._enSheet&&!!card.shadowRoot.querySelector(".cpp input[data-plan-t=start]")));
  ok("popup prefilled", await q(()=>card.shadowRoot.querySelector("[data-plan-t=start]").value==="23:00"&&card.shadowRoot.querySelector("[data-plan-t=end]").value==="07:00"));
+ ok("car time zone line shows the zone", await q(()=>{const t=card.shadowRoot.querySelector(".cptz");return !!t&&t.textContent.includes("Car time zone")&&t.textContent.includes("GMT+02:00")}));
+ ok("car time zone line comes after the Save plan button", await q(()=>{const s=card.shadowRoot.querySelector(".cpsave"),t=card.shadowRoot.querySelector(".cptz");return !!s&&!!t&&!!(s.compareDocumentPosition(t)&Node.DOCUMENT_POSITION_FOLLOWING)}));
+ ok("car time zone line is small and outside the time fields", await q(()=>{const t=card.shadowRoot.querySelector(".cptz");return !!t&&parseFloat(getComputedStyle(t).fontSize)<=12&&!t.closest(".cpq")}));
  await page.evaluate(()=>{card.shadowRoot.querySelector("[data-plan-sw]").click()});
  await page.evaluate(()=>{const i=card.shadowRoot.querySelector("[data-plan-t=end]");i.value="06:30";i.dispatchEvent(new Event("input"))});
  await page.evaluate(()=>card.shadowRoot.querySelector("[data-plan-save]").click());await page.waitForTimeout(300);
@@ -43,7 +46,7 @@ const server=http.createServer((q,r)=>{const u=new URL(q.url,"http://x");const r
  await q(()=>card._closeSheet());
  ok("button hidden when plan_button is false", await q(()=>{card._c.plan_button=false;card._force();return true}) && await page.waitForTimeout(300).then(()=>q(()=>!card.shadowRoot.querySelector(".t2w > .cpb"))));
  await q(()=>{card._c.plan_button=true;card._planSheet=true;card._planDraft=null;card._force()});await page.waitForTimeout(400);
- ok("label says Plan is on + sub", await q(()=>{const r=card.shadowRoot.querySelector(".cpr");return r.textContent.includes("Plan is on")&&r.textContent.includes("Charging 23:00–07:00")}));
+ ok("label says Plan is on + sub", await q(()=>{const r=card.shadowRoot.querySelector(".cpr");return r.textContent.includes("Scheduled charging")&&r.textContent.includes("Charging 23:00–07:00")}));
  await q(()=>{const st=document.createElement("style");st.textContent="input[type=time]::-webkit-datetime-edit{min-width:120px}";card.shadowRoot.append(st)});
  ok("fields do not overlap", await q(()=>{const [a,b]=[...card.shadowRoot.querySelectorAll(".cpq input")].map(i=>i.getBoundingClientRect());return a.right<=b.left&&b.right<=card.shadowRoot.querySelector(".cpp").getBoundingClientRect().right+1}));
  await q(()=>{card._planSheet=false;card._enSheet=false;card._force()});await page.waitForTimeout(300);

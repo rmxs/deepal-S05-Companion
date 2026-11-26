@@ -17,10 +17,10 @@ module.exports=async page=>{
   const choose=async value=>{await block.locator('select').evaluate((select,v)=>select._compPicker.dispatchEvent(new CustomEvent('value-changed',{detail:{value:v},bubbles:true})),value);};
   const chipText=async()=>(await chip.textContent()).trim();
   const key=()=>page.evaluate(()=>String(Math.round(window.pageRows[0].s/1000)));
-  const original=await page.evaluate(()=>({hidden:window.views.mobile.hidden,curve:window.views.mobile.charge_curve,selector:window.views.mobile.charge_cost_selector,battery:window.testHass.states['sensor.s05_battery_level'].state}));
+  const original=await page.evaluate(()=>({hidden:window.views.mobile.hidden,selector:window.views.mobile.charge_cost_selector,battery:window.testHass.states['sensor.s05_battery_level'].state}));
   try{
     await page.evaluate(()=>{
-      window.views.mobile.hidden=[];window.views.mobile.charge_curve=false;delete window.views.mobile.charge_cost_selector;window.costs.sessions={};
+      window.views.mobile.hidden=['curve'];delete window.views.mobile.charge_cost_selector;window.costs.sessions={};
       const s=Date.now()-36e5;window.pageRows=[{id:'live-1',s,e:Date.now(),live:true,from:50,to:70,kwh:3.7,capacity:18.4,dc:false,pricing:{energy:null,cost:null,estimated:true},assignment:null}];
       window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));
     });
@@ -102,7 +102,7 @@ module.exports=async page=>{
     await page.evaluate(()=>{delete window.views.mobile.charge_cost_selector;window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
 
     /* 7. with the curve on, the cost is one slim bar at the foot of the curve, with icon-only buttons */
-    await page.evaluate(()=>{window.costs.sessions[String(Math.round(window.pageRows[0].s/1000))]={start:window.pageRows[0].s,capacity:18.4,profile:structuredClone(window.costs.profiles[0]),energy:null,total:null};window.views.mobile.charge_curve=true;window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+    await page.evaluate(()=>{window.costs.sessions[String(Math.round(window.pageRows[0].s/1000))]={start:window.pageRows[0].s,capacity:18.4,profile:structuredClone(window.costs.profiles[0]),energy:null,total:null};window.views.mobile.hidden=(window.views.mobile.hidden||[]).filter(x=>x!=='curve');window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
     await setCharging(true,73);
     const inCurve=card.locator('.charging-curve-block [data-curve-cost] .charge-cost-live');await inCurve.waitFor();
     assert.equal(await card.locator('.charge-cost-live').count(),1,'One cost bar');
@@ -112,7 +112,7 @@ module.exports=async page=>{
     assert.equal(await card.locator('.charging-curve-block .curve-note').count(),0,'The live curve carries no long note');
     const curveHeight=await card.locator('.charging-curve-block .curve-chart').evaluate(n=>Math.round(n.getBoundingClientRect().height/n.getBoundingClientRect().width*560));
     assert(curveHeight<=230,'The live curve is short, got '+curveHeight);
-    await page.evaluate(()=>{window.views.mobile.charge_curve=false;window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
+    await page.evaluate(()=>{window.views.mobile.hidden=[...(window.views.mobile.hidden||[]),'curve'];window.subscribers.forEach(fn=>fn({vehicle_id:'car'}));});
     await card.locator('.charging-curve-block').waitFor({state:'detached'});
 
     /* 8. the charge stops: the strip and the chip go away; no vehicle command is ever sent */
@@ -137,22 +137,23 @@ module.exports=async page=>{
     assert.equal(await page.evaluate(()=>window.calls.filter(m=>m.op==='sessions_page').length),previewFetches,'The preview never asks the backend for a session');
     await preview.locator('text=No costs were saved').first().waitFor();
 
-    /* 10. Status is drawn on the image: it is a line of the Vehicle image row, without its own row, arrows or handle */
+    /* 10. Status is its own tile right after the Vehicle image tile: no number, arrows or handle, and it moves with the image */
     await panel.evaluate(async p=>{await p.select('car','mobile');p.settings.tab='layout';p.settings._render();});
-    const settings=panel.locator('deepal-companion-settings'),status=settings.locator('.row[data-id=hero] .pin-sub');
+    const settings=panel.locator('deepal-companion-settings'),status=settings.locator('.row.status-tile');
     await status.waitFor();
-    assert.equal(await settings.locator('.row[data-id=status]').count(),0,'Status has no row of its own');
-    assert.equal(await status.locator('[data-mv],.grip').count(),0,'Status has no arrows or handle');
+    assert.equal(await status.count(),1,'Status has one tile');
+    assert.equal(await status.locator('[data-mv],.grip,.pos').count(),0,'Status has no arrows, handle or number');
     const order=()=>panel.evaluate(p=>p.settings._cfg.order.slice());
     const saved=await order();assert.equal(saved.filter(x=>x==='status').length,1);
+    assert.equal(await settings.locator('.row[data-id=hero] + .row.status-tile').count(),1,'Status sits right after the Vehicle image');
     await settings.locator('[data-mv="sec|hero|1"]').dispatchEvent('click');await panel.evaluate(p=>p.queue);
-    let list=await order();assert.equal(list.indexOf('hero'),1,'The Vehicle image moved down');assert.equal(list.filter(x=>x==='status').length,1,'Status is kept once');
+    let list=await order();assert.equal(list.indexOf('hero'),1,'The Vehicle image moved down');assert.equal(list.indexOf('status'),2,'Status moved with the image');
     await settings.locator('[data-mv="sec|hero|-1"]').dispatchEvent('click');await panel.evaluate(p=>p.queue);
-    list=await order();assert.deepEqual(list,saved,'Moving back restores the saved order');
+    list=await order();assert.equal(list.indexOf('status'),list.indexOf('hero')+1,'Status is still after the image');
   }finally{
     await page.evaluate(o=>{delete window.views.mobile.order;
       delete window.pageRows;window.costs.sessions={};window.costsConflict=false;window.testHass.user={...window.testHass.user,is_admin:true};
-      for(const [key,value] of [['hidden',o.hidden],['charge_curve',o.curve],['charge_cost_selector',o.selector]]){if(value===undefined)delete window.views.mobile[key];else window.views.mobile[key]=value;}
+      for(const [key,value] of [['hidden',o.hidden],['charge_cost_selector',o.selector]]){if(value===undefined)delete window.views.mobile[key];else window.views.mobile[key]=value;}
       const states=window.testHass.states,now=new Date().toISOString();
       for(const [id,value] of [['sensor.s05_ac_charge_current',0],['sensor.s05_charge_current',0],['binary_sensor.s05_charging','off'],['binary_sensor.s05_charger_plugged','off'],['sensor.s05_battery_level',o.battery]])if(states[id])states[id]={...states[id],state:String(value),last_changed:now,last_updated:now};
       const mobile=document.getElementById('mobile');if(mobile){mobile._ccSeen=0;mobile.hass=window.testHass;}

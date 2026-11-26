@@ -104,5 +104,19 @@
   "Stopped by you.": "Interrotto da te.",
   "Stopped by the schedule.": "Interrotto dalla programmazione.",
   "Recovered after a Home Assistant restart.": "Ripristinato dopo un riavvio di Home Assistant.",
-  "Command timed out": "Comando scaduto (tempo massimo superato)"
+  "Command timed out": "Comando scaduto (tempo massimo superato)",
+  "Charging reached target · {0}%": "Obiettivo di ricarica raggiunto · {0}%",
+  "Dry run: would stop charging at {0}%": "Prova: fermerebbe la ricarica al {0}%",
+  "Charger released": "Caricatore sbloccato",
+  "Charging limit paused": "Limite di ricarica in pausa",
+  "The charger could not be stopped": "Impossibile fermare il caricatore",
+  "The charger was switched off at the charging target.": "Il caricatore è stato spento all'obiettivo di ricarica.",
+  "Nothing was changed on the charger.": "Nessuna modifica al caricatore.",
+  "You restarted the charger, so the limit waits until the next plug-in.": "Hai riavviato il caricatore, quindi il limite attende il prossimo collegamento.",
+  "The charging target changed, so charging may continue.": "L'obiettivo di ricarica è cambiato, la ricarica può continuare.",
+  "The car was unplugged.": "L'auto è stata scollegata.",
+  "The charger limit is no longer live.": "Il limite del caricatore non è più attivo.",
+  "The charger settings changed.": "Le impostazioni del caricatore sono cambiate.",
+  "The charger could not be released": "Il caricatore non è stato sbloccato",
+  "The charger could not be put back to charging. Companion will keep trying.": "Non è stato possibile riattivare la ricarica del caricatore. Companion continuerà a riprovare."
 }
