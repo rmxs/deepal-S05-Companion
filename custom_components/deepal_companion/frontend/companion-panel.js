@@ -127,7 +127,8 @@ class DeepalCompanionPanel extends HTMLElement {
     this.fetching=true;
     try{
       /* A socket that died without closing never answers: give up after 12 s so the refresh lock is released and the retry below can run. */
-      const rows=await Promise.race([this._hass.callWS({type:"deepal_companion/request",op:"list"}),new Promise((_,no)=>setTimeout(()=>no(new Error("timeout")),12000))]).catch(error=>{throw (window.__DEEPAL_COMPANION_UI?.readableError||(value=>value))(error);});
+      /* the 12 s guard is cleared once the answer arrives, so a closed panel is not kept alive by the pending timer */
+      let guard;const rows=await Promise.race([this._hass.callWS({type:"deepal_companion/request",op:"list"}),new Promise((_,no)=>{guard=setTimeout(()=>no(new Error("timeout")),12000);})]).finally(()=>clearTimeout(guard)).catch(error=>{throw (window.__DEEPAL_COMPANION_UI?.readableError||(value=>value))(error);});
       if(!this.isConnected)return;
       const signature=JSON.stringify(rows.map(v=>({id:v.id,name:v.name,views:v.views.map(p=>({id:p.id,name:p.name}))})));
       const changed=signature!==this.listSignature;
