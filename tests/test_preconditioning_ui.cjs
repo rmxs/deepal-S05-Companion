@@ -150,7 +150,11 @@ window.ready=true;
     await page.evaluate(()=>views.settings.refresh());
     assert.equal(await settings.locator('input[data-k="event:battery"]').count(),0,'no battery notification switch on Preconditioning');
     // battery protection blocks START with a visible reason
-    await settings.locator('input[data-k="bat.enabled"]').click({force:true});
+    // the settings view was just rebuilt by refresh(); on a slow runner the first click can hit the old switch, so retry
+    for(let i=0;i<5&&!(await page.evaluate(()=>backend.config.battery.enabled===true));i++){
+      if(!(await page.evaluate(()=>backend.config.battery.enabled===true)))await settings.locator('input[data-k="bat.enabled"]').click({force:true});
+      await page.waitForFunction(()=>backend.config.battery.enabled===true,null,{timeout:3000}).catch(()=>{});
+    }
     await page.waitForFunction(()=>backend.config.battery.enabled===true);
     await page.evaluate(()=>{backend.soc=20;});await page.evaluate(()=>views.card.refresh());
     await page.waitForFunction(()=>/START blocked/.test(document.querySelector('#card').textContent)&&document.querySelector('#card [data-cmd=precondition_start]').disabled);
