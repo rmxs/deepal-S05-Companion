@@ -49,7 +49,7 @@ for(const file of ["charging-curve.js","companion-card.js","energy/energy.js","n
 const walk=(dir)=>fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(dir+"/"+e.name):[dir+"/"+e.name]);
 const all=walk(front);
 for(const f of all.filter(x=>x.endsWith(".js.gz")&&!fs.existsSync(x.slice(0,-3))))fs.unlinkSync(f);
-for(const f of all.filter(x=>x.endsWith(".js")))fs.writeFileSync(f+".gz",z.gzipSync(fs.readFileSync(f)));
+for(const f of all.filter(x=>x.endsWith(".js"))){const lf=fs.readFileSync(f,"utf8").replace(/\r\n/g,"\n");fs.writeFileSync(f,lf);fs.writeFileSync(f+".gz",z.gzipSync(Buffer.from(lf,"utf8")));}
 for(const f of walk(front).filter(x=>x.endsWith(".js"))){
  if(!z.gunzipSync(fs.readFileSync(f+".gz")).equals(fs.readFileSync(f)))throw new Error("Compressed copy differs from "+f);
 }

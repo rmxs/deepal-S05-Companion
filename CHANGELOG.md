@@ -31,6 +31,7 @@
 ### Checks
 - **Tests and CI:** the notifications test now sets the wide viewport it asserts, so NAV_ONLY no longer fails when the phone-width dashboard module runs before it. CI also runs SECTIONS_ONLY, NOTIFY_FEATURES_ONLY, PRECOND_NOTIFY_LINK_ONLY, PRECOND_UI_ONLY, STALE_ONLY and CHARGE_TARGET_ONLY, five standalone frontend checks, and compares every committed `.gz` with its `.js` before the build.
 - **Tests and CI:** CI now runs the recommended-notifications and energy-cost tests (NOTIFY_RECOMMENDED_ONLY, ENERGY_COST_ONLY); the repeated navigation step is removed, and the boot-loading check now runs in the full browser run.
+- The compressed frontend copies (.gz) are now built from the same line endings as the .js files, so the CI check that compares them passes on every machine.
 
 ## 2.0.1-b2 — Beta
 
