@@ -647,6 +647,7 @@
     "Next 7 days": "Επόμενες 7 ημέρες",
     "{0} weeks ago": "{0} εβδομάδες πριν",
     "Recorder limit: history goes back about {0} days.": "Όριο του recorder: το ιστορικό φτάνει περίπου {0} ημέρες πίσω.",
+    "Recorder limit: history goes back about 1 day.": "Όριο του recorder: το ιστορικό φτάνει περίπου {0} ημέρα πίσω.",
     "Tap the chart to see the values at that moment.": "Πάτησε το γράφημα για τις τιμές της στιγμής.",
     "Estimated petrol used: filtered fuel level drop during drives × {0} L tank. Small refills and delayed readings may be missed.": "Βενζίνη: πτώση της στάθμης κατά τις διαδρομές × δεξαμενή {0} L.",
     "h": "ω",
@@ -2257,6 +2258,23 @@
     "Choose a valid charger command": "Επιλέξτε μια έγκυρη εντολή φορτιστή",
     "The charger's stop and start options are not set": "Οι επιλογές διακοπής και έναρξης του φορτιστή δεν έχουν οριστεί",
     "The charger's start button is not set": "Το κουμπί έναρξης του φορτιστή δεν έχει οριστεί",
-    "The charger did not start": "Ο φορτιστής δεν ξεκίνησε"
+    "The charger did not start": "Ο φορτιστής δεν ξεκίνησε",
+    "The charger could not be stopped: {0} is unavailable": "Ο φορτιστής δεν μπόρεσε να σταματήσει: το {0} δεν είναι διαθέσιμο",
+    "The charger could not be stopped: {0} did not change (reads {1})": "Ο φορτιστής δεν μπόρεσε να σταματήσει: το {0} δεν άλλαξε (δείχνει {1})",
+    "The charger could not be stopped: power still {0} W from {1}": "Ο φορτιστής δεν μπόρεσε να σταματήσει: ισχύς ακόμα {0} W από {1}",
+    "The charger could not be stopped: {0} still reads {1}": "Ο φορτιστής δεν μπόρεσε να σταματήσει: το {0} δείχνει ακόμα {1}",
+    "The charger did not stop": "Ο φορτιστής δεν σταμάτησε",
+    "Show all…": "Εμφάνιση όλων…",
+    "Test stop": "Δοκιμή διακοπής",
+    "Testing the stop…": "Δοκιμή διακοπής…",
+    "This stops charging now to test the settings, then starts it again.": "Η φόρτιση σταματά τώρα για δοκιμή των ρυθμίσεων και μετά ξεκινά ξανά.",
+    "Stopped in {0} s.": "Διακόπηκε σε {0} s.",
+    "Charging restarted.": "Η φόρτιση ξεκίνησε ξανά.",
+    "Charging could not be restarted. Companion will keep trying.": "Η φόρτιση δεν ξεκίνησε ξανά. Το Companion θα συνεχίσει να προσπαθεί.",
+    "Choose the stop control first.": "Επιλέξτε πρώτα τον έλεγχο διακοπής.",
+    "A stop test is already running.": "Μια δοκιμή διακοπής εκτελείται ήδη.",
+    "The charger limit is stopping the charger now. Try again later.": "Το όριο φορτιστή σταματά τώρα τον φορτιστή. Δοκιμάστε ξανά αργότερα.",
+    "Plug in and start charging to test.": "Συνδέστε το αυτοκίνητο και ξεκινήστε τη φόρτιση για δοκιμή.",
+    "Home Assistant restarted": "Το Home Assistant επανεκκινήθηκε"
   }
 };

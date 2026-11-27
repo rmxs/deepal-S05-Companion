@@ -19,6 +19,27 @@ jobs:
       - run: python -m pip install -r requirements-test.txt
       - run: python -m unittest discover -s tests -v
       - run: npm ci --ignore-scripts
+      # Run before the build: it reads the checked-out (committed) files, so a committed .gz that no longer matches
+      # its .js is caught. Home Assistant serves the .gz when present, so a stale one would reach users.
+      - name: Every .gz matches its .js
+        run: |
+          python - <<'PY'
+          import gzip, pathlib, sys
+          root = pathlib.Path('custom_components/deepal_companion/frontend')
+          bad = []
+          for js in sorted(root.rglob('*.js')):
+              gz = js.with_suffix('.js.gz')
+              if not gz.exists():
+                  bad.append(f'{js}: no .gz next to it')
+              elif gzip.decompress(gz.read_bytes()) != js.read_bytes():
+                  bad.append(f'{js}: .gz differs from the .js')
+          for gz in sorted(root.rglob('*.js.gz')):
+              if not gz.with_suffix('').exists():
+                  bad.append(f'{gz}: no .js next to it')
+          if bad:
+              sys.exit('Compressed copies out of date:\n' + '\n'.join(bad))
+          print('every .gz matches its .js')
+          PY
       - run: npm run build
       - name: Generated files match the source
         run: git diff --exit-code -- custom_components/deepal_companion ':(exclude)*.gz'
@@ -50,6 +71,47 @@ jobs:
       - run: npm run test:browser
         env:
           LANG_ONLY: '1'
+      - name: Frontend checks that need no browser
+        run: |
+          node tests/test_advanced_conditions.cjs
+          node tests/test_session_strings_translated.cjs
+      - name: Frontend pages that start their own browser
+        run: |
+          node tests/test_charge_plan_full.cjs
+          node tests/test_notification_colours.cjs
+          node tests/test_pending_button.cjs
+      - name: Open settings sections (SECTIONS_ONLY)
+        run: npm run test:browser
+        env:
+          SECTIONS_ONLY: '1'
+      - name: Notification features (NOTIFY_FEATURES_ONLY)
+        run: npm run test:browser
+        env:
+          NOTIFY_FEATURES_ONLY: '1'
+      - name: Preconditioning page and notification link (PRECOND_NOTIFY_LINK_ONLY)
+        run: npm run test:browser
+        env:
+          PRECOND_NOTIFY_LINK_ONLY: '1'
+      - name: Preconditioning page layout (PRECOND_UI_ONLY, also covers seg_parity)
+        run: npm run test:browser
+        env:
+          PRECOND_UI_ONLY: '1'
+      - name: Stale last update (STALE_ONLY)
+        run: npm run test:browser
+        env:
+          STALE_ONLY: '1'
+      - name: Charge target (CHARGE_TARGET_ONLY)
+        run: npm run test:browser
+        env:
+          CHARGE_TARGET_ONLY: '1'
+      - name: Recommended notifications (NOTIFY_RECOMMENDED_ONLY)
+        run: npm run test:browser
+        env:
+          NOTIFY_RECOMMENDED_ONLY: '1'
+      - name: Energy cost regressions (ENERGY_COST_ONLY)
+        run: npm run test:browser
+        env:
+          ENERGY_COST_ONLY: '1'
   hassfest:
     runs-on: ubuntu-latest
     steps:

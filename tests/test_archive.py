@@ -181,13 +181,6 @@ class ArchiveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.db.patch_config("two", self.views[0]["id"], {"car_color": "red"})
 
-    def test_profile_reset_keeps_other_views(self):
-        self.db.patch_config("one", self.views[0]["id"], {"hero_space": "airy"})
-        self.db.patch_config("one", self.views[1]["id"], {"hero_space": "compact"})
-        self.db.patch_config("one", self.views[0]["id"], {}, True)
-        self.assertNotIn("hero_space", self.db.config("one", self.views[0]["id"])["config"])
-        self.assertEqual(self.db.config("one", self.views[1]["id"])["config"]["hero_space"], "compact")
-
     def test_persistent_readings_and_boundary(self):
         for stamp, state in ((100, 80), (200, 79), (300, 78)):
             self.db.sample("one", "sensor.batt", stamp, state, "%")
@@ -402,7 +395,9 @@ class PricingTests(unittest.TestCase):
 
     def test_all_power_and_energy_units_are_converted(self):
         for unit, source, reading, expected in (("W", "power", 2000, 2), ("kW", "power", 2, 2),
-                                                ("Wh", "total", 2000, 2), ("kWh", "total", 2, 2)):
+                                                ("MW", "power", .002, 2), ("mW", "power", 2000000, 2),
+                                                ("Wh", "total", 2000, 2), ("kWh", "total", 2, 2), ("kwh", "total", 2, 2),
+                                                ("MWh", "total", .002, 2), ("mWh", "total", 2000000, 2)):
             rows = [[i * 600000, reading * i / 6] for i in range(7)] if source == "total" else [[i * 600000, reading] for i in range(7)]
             result = calculate(self.g, {"profile": {**self.profile, "source": source}}, rows, unit)
             self.assertAlmostEqual(result["energy"], expected, msg=str((unit, result)))

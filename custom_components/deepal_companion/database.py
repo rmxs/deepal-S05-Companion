@@ -251,7 +251,7 @@ class Database(HistoryStorage):
                     "revision": [car["revision"], v["revision"]],
                     "config": {**local, **shared}}
 
-    def patch_config(self, vehicle, view, patch, reset=False, expected_revision=None):
+    def patch_config(self, vehicle, view, patch, expected_revision=None):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             v = db.execute("SELECT * FROM views WHERE vehicle=? AND id=?", (vehicle, view)).fetchone()
@@ -262,7 +262,7 @@ class Database(HistoryStorage):
                 raise ValueError("Settings changed elsewhere. Reload before saving.")
             common = json.loads(car["config"])
             original = json.loads(car["config"])
-            local = {} if reset else normalise_view(json.loads(v["config"]))
+            local = normalise_view(json.loads(v["config"]))
             for key, value in patch.items():
                 if key in SHARED_KEYS:
                     common[key] = value

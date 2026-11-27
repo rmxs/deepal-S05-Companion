@@ -350,6 +350,8 @@ async def request(hass, connection, msg):
                     result["entities"] = ctl.entities_of(ctl.config["device_id"])
             elif op == "charger_limit_resume":
                 result = await ctl.resume()
+            elif op == "charger_limit_test":
+                result = ctl.start_test()
             else:
                 raise ValueError("Unknown charger limit operation")
         elif op == "health_get":
@@ -403,7 +405,7 @@ async def request(hass, connection, msg):
                 raise ValueError("Invalid entity prefix")
             if "entities" in patch and (not isinstance(patch["entities"], dict) or any(not ENTITY.fullmatch(v) for v in patch["entities"].values())):
                 raise ValueError("Invalid entity mapping")
-            result = await hub.db("patch_config", vehicle, msg.get("view_id"), patch, bool(data.get("reset")), expected_revision)
+            result = await hub.db("patch_config", vehicle, msg.get("view_id"), patch, expected_revision)
             shared = set(patch) & SHARED_KEYS
             if shared & {"prefix", "entities"}:
                 await _refresh_after_write(runtime)  # the entity mapping may have changed: rebuild it

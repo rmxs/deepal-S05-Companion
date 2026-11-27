@@ -20,8 +20,9 @@ module.exports=async page=>{
     h.states['sensor.charge_energy_once']={state:'12.4',attributes:{friendly_name:'Charge Energy Once',unit_of_measurement:'kWh'}};
     window.__cl={config:{mode:'off',device_id:null,control:null,on_stops:true,power:null,energy:null,profile:'auto',stop_option:null,start_option:null,start_button:null,status:null},command:null,phase:'off',target:80,soc:62,plugged:true,charging:true,control:{entity:null,state:null,name:null},device:null,failed:null,last:null,engaged:false,now:Date.now()/1000,
       devices:[{id:'d1',name:'V2C Trydan'},{id:'d2',name:'Garage wallbox'}],entities:[],sets:[],resumes:0,
-      all_controls:[{entity:'lock.door',name:'lock.door'},{entity:'switch.garage_pump',name:'Garage pump'},{entity:'input_boolean.charge_stop',name:'Stop charging'},{entity:'switch.v2c_charge',name:'V2C charge'}],
-      power_sensors:[{entity:'sensor.power_total',name:'Power Total'}],energy_sensors:[{entity:'sensor.charge_energy_once',name:'Charge Energy Once'}]};
+      all_controls:[{entity:'lock.door',name:'lock.door',fit:false},{entity:'switch.garage_pump',name:'Garage pump',fit:false},{entity:'input_boolean.charge_stop',name:'Stop charging',fit:true},{entity:'switch.v2c_charge',name:'V2C charge',fit:true}],
+      test:{last:null,block:'not_charging',block_text:'Plug in and start charging to test.'},tests:0,
+      power_sensors:[{entity:'sensor.power_total',name:'Power Total',fit:true},{entity:'sensor.grid_power',name:'Grid power',fit:false}],energy_sensors:[{entity:'sensor.charge_energy_once',name:'Charge Energy Once'}]};
     const ents={d1:[{entity:'lock.v2c_lock',name:'V2C lock'},{entity:'switch.v2c_charge',name:'V2C charge'}],d2:[{entity:'switch.wb_pause',name:'Pause'}]};
     const snap=()=>JSON.parse(JSON.stringify(window.__cl));
     const FEYREE={entity:'select.wb_toggle',name:'Toggle charging'};
@@ -39,6 +40,7 @@ module.exports=async page=>{
         if('power' in v)c.config.power=v.power;if('energy' in v)c.config.energy=v.energy;
         if('mode' in v)c.config.mode=v.mode;
         c.phase=c.config.mode==='off'?'off':'waiting';return snap();}
+      if(m.op==='charger_limit_test'){window.__cl.tests++;window.__cl.test={last:{result:'running',started:window.__cl.now,finished:null},block:'running',block_text:'A stop test is already running.'};return snap();}
       if(m.op==='charger_limit_resume'){window.__cl.resumes++;window.__cl.phase='paused';window.__cl.engaged=false;return snap();}
       return orig(m);};
   });
@@ -107,6 +109,31 @@ module.exports=async page=>{
   assert.equal(await S('[data-val=control]').getAttribute('data-muted'),'false','a live value is not muted');
   await S('[data-f=on_stops] button').nth(1).click();
   await page.waitForFunction(()=>window.__cl.config.on_stops===false);
+  /* Test stop: off with a short reason while the car is not charging; confirm first; the result shows when the backend has it */
+  assert.equal(await S('.cl-tbtn').textContent(),'Test stop');
+  assert.equal(await S('.cl-tbtn').isDisabled(),true,'not charging: the test button is off');
+  assert.equal(await S('.cl-testmsg').textContent(),'Plug in and start charging to test.','and says why');
+  await page.evaluate(()=>{window.__cl.test={last:null,block:null,block_text:null};});
+  await panel.evaluate(root=>root.localBoard.refresh());
+  await page.waitForFunction(box=>!document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' .cl-tbtn').disabled,BOX);
+  assert.equal(await S('.cl-testmsg').isHidden(),true,'charging: nothing to explain');
+  await S('.cl-tbtn').click();
+  await panel.locator('dialog.companion-confirm [data-no]').click();
+  assert.equal(await page.evaluate(()=>window.__cl.tests),0,'Cancel sends nothing');
+  await S('.cl-tbtn').click();
+  assert.equal(await panel.locator('dialog.companion-confirm p').textContent(),'This stops charging now to test the settings, then starts it again.');
+  await panel.locator('dialog.companion-confirm [data-yes]').click();
+  await page.waitForFunction(()=>window.__cl.tests===1);
+  await page.waitForFunction(box=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' .cl-testmsg').textContent==='Testing the stop\u2026',BOX);
+  assert.equal(await S('.cl-tbtn').isDisabled(),true,'off while the test runs');
+  await page.evaluate(()=>{window.__cl.test={last:{result:'ok',took:12,restarted:true,started:window.__cl.now,finished:window.__cl.now},block:null,block_text:null};});
+  await page.waitForFunction(box=>/Stopped in 12 s/.test(document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' .cl-testmsg').textContent),BOX,{timeout:6000});
+  assert.equal(await S('.cl-testmsg').textContent(),'\u2713 Stopped in 12 s. Charging restarted.','the result comes in by itself while the test runs');
+  assert.equal(await S('.cl-testmsg').getAttribute('data-tone'),'ok');
+  await page.evaluate(()=>{window.__cl.test={last:{result:'failed',reason:{key:'The charger could not be stopped: power still {0} W from {1}',args:[7200,'sensor.power_total']},restarted:false,started:window.__cl.now,finished:window.__cl.now},block:null,block_text:null};});
+  await panel.evaluate(root=>root.localBoard.refresh());
+  await page.waitForFunction(box=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' .cl-testmsg').dataset.tone==='bad',BOX);
+  assert.equal(await S('.cl-testmsg').textContent(),'The charger could not be stopped: power still 7200 W from sensor.power_total \u00b7 Charging could not be restarted. Companion will keep trying.','a failure names the reason and a failed restart');
   /* the live value follows the entity: the 5 s timer repaints only the value span, never the select */
   await page.evaluate(()=>{window.testHass.states['switch.v2c_charge'].state='on';});
   await page.waitForFunction(box=>document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' [data-val=control]').textContent==='On',BOX,{timeout:8000});
@@ -116,15 +143,23 @@ module.exports=async page=>{
   /* 'Choose another...' is the last option of the device's controls; it lists every lock, switch and input_boolean (name and entity id), and the pick is saved as the stop control */
   assert.deepEqual(await S('#cl-control option').evaluateAll(os=>os.map(o=>o.value)),['','lock.v2c_lock','switch.v2c_charge','__other__'],'the device controls, then Choose another last');
   await S('#cl-control').selectOption('__other__');
+  await page.waitForFunction(box=>!!document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' #cl-control option[value="__all__"]'),BOX);
+  assert.deepEqual(await S('#cl-control option').allTextContents(),['Choose the control','Stop charging (input_boolean.charge_stop)','V2C charge (switch.v2c_charge)','Show all\u2026'],'only what looks like a charger, then Show all last');
+  await S('#cl-control').selectOption('__all__');
   await page.waitForFunction(box=>!!document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' #cl-control option[value="switch.garage_pump"]'),BOX);
-  assert.deepEqual(await S('#cl-control option').allTextContents(),['Choose the control','lock.door','Garage pump (switch.garage_pump)','Stop charging (input_boolean.charge_stop)','V2C charge (switch.v2c_charge)'],'every lock, switch and input_boolean, with its name and entity id');
+  assert.equal(await page.evaluate(()=>window.__cl.sets.some(v=>Object.values(v).includes('__all__'))),false,'Show all is never saved');
+  assert.deepEqual(await S('#cl-control option').allTextContents(),['Choose the control','lock.door','Garage pump (switch.garage_pump)','Stop charging (input_boolean.charge_stop)','V2C charge (switch.v2c_charge)'],'Show all: every lock, switch and input_boolean, with its name and entity id');
   await S('#cl-control').selectOption('switch.garage_pump');
   await page.waitForFunction(()=>window.__cl.config.control==='switch.garage_pump');
   assert.deepEqual(await page.evaluate(()=>window.__cl.sets.at(-1)),{control:'switch.garage_pump'},'the pick is saved as the stop control on its own');
   assert.equal(await S('#cl-control').inputValue(),'switch.garage_pump','a control from another device stays selected');
 
   /* the power and energy sensors: None first, then every sensor of that class; choosing None saves null */
-  assert.deepEqual(await S('#cl-power option').allTextContents(),['None / not used','Power Total'],'none first, then every power sensor');
+  assert.deepEqual(await S('#cl-power option').allTextContents(),['None / not used','Power Total','Show all\u2026'],'none first, then the power sensors that fit, then Show all');
+  await S('#cl-power').selectOption('__all__');
+  await page.waitForFunction(box=>!!document.querySelector('deepal-companion-panel').shadowRoot.querySelector(box+' #cl-power option[value="sensor.grid_power"]'),BOX);
+  assert.deepEqual(await S('#cl-power option').allTextContents(),['None / not used','Power Total','Grid power'],'Show all lists every power sensor');
+  assert.equal(await S('#cl-power').inputValue(),'','Show all keeps the chosen value (none)');
   assert.deepEqual(await S('#cl-energy option').allTextContents(),['None / not used','Charge Energy Once'],'none first, then every energy sensor');
   assert.equal(await S('[data-val=power]').isHidden(),true,'no live value while None / not used is selected');
   await S('#cl-power').selectOption('sensor.power_total');

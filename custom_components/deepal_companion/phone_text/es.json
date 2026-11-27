@@ -118,5 +118,18 @@
   "The charger limit is no longer live.": "El límite del cargador ya no está activo.",
   "The charger settings changed.": "Cambiaron los ajustes del cargador.",
   "The charger could not be released": "No se pudo liberar el cargador",
-  "The charger could not be put back to charging. Companion will keep trying.": "No se pudo volver a poner el cargador en carga. Companion seguirá intentándolo."
+  "The charger could not be put back to charging. Companion will keep trying.": "No se pudo volver a poner el cargador en carga. Companion seguirá intentándolo.",
+  "The charger could not be stopped: {0} is unavailable": "No se pudo parar el cargador: {0} no está disponible",
+  "The charger could not be stopped: {0} did not change (reads {1})": "No se pudo parar el cargador: {0} no cambió (indica {1})",
+  "The charger could not be stopped: power still {0} W from {1}": "No se pudo parar el cargador: potencia aún {0} W de {1}",
+  "The charger could not be stopped: {0} still reads {1}": "No se pudo parar el cargador: {0} aún indica {1}",
+  "The charger stopped later": "El cargador se paró más tarde",
+  "The charger reads stopped now, so the earlier failure is cleared.": "El cargador indica parado ahora, así que el fallo anterior se ha borrado.",
+  "The charger did not stop": "El cargador no se paró",
+  "Charger stop test: ok": "Prueba de parada del cargador: OK",
+  "Charger stop test: failed ({0})": "Prueba de parada del cargador: fallida ({0})",
+  "Stopped in {0} s.": "Parado en {0} s.",
+  "Charging restarted.": "Carga reanudada.",
+  "Charging could not be restarted. Companion will keep trying.": "No se pudo reanudar la carga. Companion lo seguirá intentando.",
+  "Home Assistant restarted": "Home Assistant reiniciado"
 }

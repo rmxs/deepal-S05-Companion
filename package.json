@@ -1,6 +1,6 @@
 {
   "name": "deepal-companion",
-  "version": "2.0.1-b2",
+  "version": "2.0.1-b3",
   "private": true,
   "description": "Development tools only; Home Assistant installation needs no Node or npm.",
   "scripts": {

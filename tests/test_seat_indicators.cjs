@@ -32,6 +32,7 @@ module.exports=async page=>{
     assert(Math.hypot(nx-cx,ny-cy)>=rad-1,'chips stay clear of the round power knob at '+w+' px: '+JSON.stringify(q));
     assert(!hit(q.cmf,q.tt)&&!hit(q.cmf,q.ts),'chips stay clear of the title and the temperature at '+w+' px');
     assert(q.cmf[0]>=q.tile[0]&&q.cmf[2]<=q.tile[2]&&q.cmf[3]<=q.tile[3]+1,'chips stay inside the tile at '+w+' px');
+    if(w===390)assert(q.tile[3]-q.cmf[3]<=16,'chips sit at the bottom of the tile at '+w+' px: '+JSON.stringify(q));
   }
   /* a tap opens the Seats popup, not Climate */
   await page.evaluate(()=>{const c=document.getElementById('mobile');c._view=null;c.shadowRoot.querySelector('.t2.tempc .cmf').click();});

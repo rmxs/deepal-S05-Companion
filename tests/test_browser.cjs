@@ -281,6 +281,7 @@ if(process.env.CAR_LOG_ONLY){runStandalone('test_car_log_page.cjs');return;}
   if(process.env.CHART_ONLY){await runModule(page,"test_charging_dashboard.cjs");return;}
   if(process.env.FILTER_ONLY){await runModule(page,"test_session_filters.cjs");return;}
   if(process.env.FIELD_ONLY){await runModule(page,"test_field_choices.cjs");return;}
+  await runModule(page,"test_boot_loading.cjs");
   await require("./settings_menus.cjs")(page);
   await runModule(page,"test_tile_settings.cjs");
   await runModule(page,"test_accent_colour.cjs");

@@ -601,6 +601,7 @@
     "Next 7 days": "Nächste 7 Tage",
     "{0} weeks ago": "vor {0} Wochen",
     "Recorder limit: history goes back about {0} days.": "Begrenzung des Recorders: Der Verlauf reicht etwa {0} Tage zurück.",
+    "Recorder limit: history goes back about 1 day.": "Begrenzung des Recorders: Der Verlauf reicht etwa {0} Tag zurück.",
     "Tap the chart to see the values at that moment.": "Tippen Sie auf das Diagramm, um die Werte zu diesem Zeitpunkt zu sehen.",
     "Estimated petrol used: filtered fuel level drop during drives × {0} L tank. Small refills and delayed readings may be missed.": "Geschätzter Benzinverbrauch: gefilterter Kraftstoffabfall während Fahrten × {0} L Tank. Kleine Nachtankungen und verzögerte Messwerte können fehlen.",
     "h": "h",
@@ -2257,6 +2258,23 @@
     "Choose a valid charger command": "Wählen Sie einen gültigen Ladegerät-Befehl",
     "The charger's stop and start options are not set": "Die Stopp- und Start-Optionen des Ladegeräts sind nicht festgelegt",
     "The charger's start button is not set": "Die Start-Taste des Ladegeräts ist nicht festgelegt",
-    "The charger did not start": "Das Ladegerät wurde nicht gestartet"
+    "The charger did not start": "Das Ladegerät wurde nicht gestartet",
+    "The charger could not be stopped: {0} is unavailable": "Das Ladegerät konnte nicht gestoppt werden: {0} ist nicht verfügbar",
+    "The charger could not be stopped: {0} did not change (reads {1})": "Das Ladegerät konnte nicht gestoppt werden: {0} hat sich nicht geändert (zeigt {1})",
+    "The charger could not be stopped: power still {0} W from {1}": "Das Ladegerät konnte nicht gestoppt werden: Leistung noch {0} W von {1}",
+    "The charger could not be stopped: {0} still reads {1}": "Das Ladegerät konnte nicht gestoppt werden: {0} zeigt noch {1}",
+    "The charger did not stop": "Das Ladegerät wurde nicht gestoppt",
+    "Show all…": "Alle anzeigen…",
+    "Test stop": "Stopp testen",
+    "Testing the stop…": "Stopp wird getestet…",
+    "This stops charging now to test the settings, then starts it again.": "Das Laden wird jetzt gestoppt, um die Einstellungen zu testen, und danach wieder gestartet.",
+    "Stopped in {0} s.": "Gestoppt in {0} s.",
+    "Charging restarted.": "Laden wieder gestartet.",
+    "Charging could not be restarted. Companion will keep trying.": "Das Laden konnte nicht wieder gestartet werden. Companion versucht es weiter.",
+    "Choose the stop control first.": "Wählen Sie zuerst den Stopp-Schalter.",
+    "A stop test is already running.": "Ein Stopp-Test läuft bereits.",
+    "The charger limit is stopping the charger now. Try again later.": "Die Ladegrenze stoppt das Ladegerät gerade. Versuchen Sie es später erneut.",
+    "Plug in and start charging to test.": "Schließen Sie das Fahrzeug an und starten Sie das Laden, um zu testen.",
+    "Home Assistant restarted": "Home Assistant neu gestartet"
   }
 };

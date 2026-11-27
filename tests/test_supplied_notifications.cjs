@@ -1,5 +1,8 @@
 const assert=require('assert'),path=require('path');
 module.exports=async page=>{
+ /* The alert-grid check below is a wide-screen one, and a module before this one may leave the page at phone width
+    (test_panel_mobile.cjs ends at 390 px), so set the viewport this module asserts instead of relying on the caller. */
+ await page.setViewportSize({width:1440,height:1050});
  const panel=page.locator('deepal-companion-panel');await panel.locator('[data-mode=notifications]').click();const board=panel.locator('.supplied-notification-design');await board.waitFor();
  const before=await page.evaluate(()=>window.apiCalls.length),overview=board.locator('#view-overview'),detail=board.locator('#view-detail');
  assert(await overview.isVisible());assert.equal(await detail.isVisible(),false);assert.equal(await board.locator('#master-panel-toggle').isChecked(),false);

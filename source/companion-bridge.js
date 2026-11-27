@@ -89,14 +89,14 @@ DeepalS05Card.prototype.setConfig = function(config) {
   const previous=this._companion;
   if(previous&&previous.vehicle_id===config.vehicle_id&&previous.view_id===config.view_id){this._compInput=config;return;}
   if(previous?.vehicle_id&&this._compDirty&&this._rawHass){
-    companionQueueWrite(this,this._rawHass,{...previous},{patch:{...this._local},reset:!!this._compReset})
+    companionQueueWrite(this,this._rawHass,{...previous},{patch:{...this._local}})
       .catch(error=>{this._compPreviousSaveError=tError(error.message||String(error));if(this._c)this._toast(this._compPreviousSaveError,"error");});
   }
   clearTimeout(this._compTimer);
   this._compUnsubscribe?.();this._compUnsubscribe=null;
   this._compGeneration=(this._compGeneration||0)+1;
   this._compChargePrompt=null;this.shadowRoot.querySelector('.charge-assignment-prompt')?.remove();
-  this._compFetching=false;this._compAgain=false;this._compSaving=false;this._compDirty=false;this._compReset=false;
+  this._compFetching=false;this._compAgain=false;this._compSaving=false;this._compDirty=false;
   this._local={};this._remoteErr=false;this._compLastLoaded=false;this._hview=null;
   this._companion = { vehicle_id: config.vehicle_id, view_id: config.view_id };
   this._compInput = config;
@@ -169,33 +169,31 @@ DeepalS05Card.prototype._loadRemote = async function() {
   }
 };
 DeepalS05Card.prototype._lsKey = function() { return "deepal-companion-view:" + this._companion?.view_id; };
-DeepalS05Card.prototype._saveYaml = function(reset) {
+DeepalS05Card.prototype._saveYaml = function() {
   this._compDirty = true;
-  if (reset) this._compReset = true;
   clearTimeout(this._compTimer);
   this._compTimer = setTimeout(()=>this._doSaveYaml(), 300);
 };
 DeepalS05Card.prototype._doSaveYaml = async function() {
   if (this._compSaving || !this._rawHass || !this._compDirty) return;
-  const patch = { ...this._local }, reset = !!this._compReset;
+  const patch = { ...this._local };
   const generation=this._compGeneration,owner={...this._companion};
-  this._compReset = false; this._compSaving = true;
+  this._compSaving = true;
   try {
-    const response = await companionQueueWrite(this,this._rawHass,owner,{patch,reset});
+    const response = await companionQueueWrite(this,this._rawHass,owner,{patch});
     if(generation!==this._compGeneration)return;
     // Remove only settings that still equal the saved snapshot.
     for (const key of Object.keys(patch)) if (JSON.stringify(this._local[key]) === JSON.stringify(patch[key])) delete this._local[key];
-    this._compDirty = Object.keys(this._local).length > 0 || this._compReset;
+    this._compDirty = Object.keys(this._local).length > 0;
     this._yaml = {...response.config,type:"custom:deepal-companion-card",...this._companion};
     this._c = mergeConfig(this._yaml, this._local);
     this._compConfigSignature = JSON.stringify({...response,charge_prompt:undefined});
     this._remoteErr = false;
-    if(reset){this._built=false;this._force();}
   } catch (error) {
     if(generation!==this._compGeneration)return;
     if(/changed elsewhere/i.test(error.message||"")){
       // Another editor saved first: drop this stale copy and show what is stored now.
-      this._local={};this._compDirty=false;this._compReset=false;this._remoteErr=false;this._compConfigSignature=null;
+      this._local={};this._compDirty=false;this._remoteErr=false;this._compConfigSignature=null;
       this._toast(T("Settings changed elsewhere and were reloaded. Please repeat your change."), "error");
       queueMicrotask(()=>this._loadRemote());
     } else {

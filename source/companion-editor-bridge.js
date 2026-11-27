@@ -1,5 +1,6 @@
 /* Preserve the original complete HA editor; change only its persistence boundary. */
-DeepalS05Settings.prototype.disconnectedCallback = function() { I18N.prune(); };
+const originalSettingsDisconnected = DeepalS05Settings.prototype.disconnectedCallback;
+DeepalS05Settings.prototype.disconnectedCallback = function() { originalSettingsDisconnected?.call(this); I18N.prune(); };
 DeepalS05CardEditor.prototype.disconnectedCallback = function() {
   this._editorGeneration=(this._editorGeneration||0)+1;
   I18N.prune();

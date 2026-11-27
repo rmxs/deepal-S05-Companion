@@ -138,6 +138,9 @@ def charger_limit_checks(cl):
     fix = "Open Charging, Charger limit, and check the charger."
     phase = cl.phase()
     if phase == "failed":
+        reason = cl.state.get("failed_reason")
+        if isinstance(reason, dict) and reason.get("key"):  # the reason with its values, so the panel can translate it
+            return [item("charger_limit", "error", "Charger limit", Msg(reason["key"], *(reason.get("args") or [])), fix)]
         return [item("charger_limit", "error", "Charger limit", Msg("The charger could not be stopped: {0}", str(cl.state.get("failed") or "unknown reason")), fix)]
     if cl.state.get("release_pending"):
         return [item("charger_limit", "warning", "Charger limit", "The charger could not be released", fix)]

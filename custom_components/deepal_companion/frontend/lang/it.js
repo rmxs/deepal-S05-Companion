@@ -601,6 +601,7 @@
     "Next 7 days": "Prossimi 7 giorni",
     "{0} weeks ago": "{0} settimane fa",
     "Recorder limit: history goes back about {0} days.": "Limite del registratore: la cronologia risale a circa {0} giorni.",
+    "Recorder limit: history goes back about 1 day.": "Limite del registratore: la cronologia risale a circa {0} giorno.",
     "Tap the chart to see the values at that moment.": "Tocca il grafico per vedere i valori in quel momento.",
     "Estimated petrol used: filtered fuel level drop during drives × {0} L tank. Small refills and delayed readings may be missed.": "Benzina stimata usata: calo filtrato del livello carburante durante i viaggi × serbatoio di {0} L. Ricariche piccole e letture in ritardo possono non essere rilevate.",
     "h": "h",
@@ -2257,6 +2258,23 @@
     "Choose a valid charger command": "Scegli un comando valido per il caricatore",
     "The charger's stop and start options are not set": "Le opzioni di arresto e di avvio del caricatore non sono impostate",
     "The charger's start button is not set": "Il pulsante di avvio del caricatore non è impostato",
-    "The charger did not start": "Il caricatore non si è avviato"
+    "The charger did not start": "Il caricatore non si è avviato",
+    "The charger could not be stopped: {0} is unavailable": "Impossibile fermare il caricatore: {0} non è disponibile",
+    "The charger could not be stopped: {0} did not change (reads {1})": "Impossibile fermare il caricatore: {0} non è cambiato (indica {1})",
+    "The charger could not be stopped: power still {0} W from {1}": "Impossibile fermare il caricatore: potenza ancora {0} W da {1}",
+    "The charger could not be stopped: {0} still reads {1}": "Impossibile fermare il caricatore: {0} indica ancora {1}",
+    "The charger did not stop": "Il caricatore non si è fermato",
+    "Show all…": "Mostra tutto…",
+    "Test stop": "Prova arresto",
+    "Testing the stop…": "Prova dell'arresto…",
+    "This stops charging now to test the settings, then starts it again.": "Questo ferma ora la ricarica per provare le impostazioni, poi la riavvia.",
+    "Stopped in {0} s.": "Fermata in {0} s.",
+    "Charging restarted.": "Ricarica riavviata.",
+    "Charging could not be restarted. Companion will keep trying.": "Impossibile riavviare la ricarica. Companion continuerà a provare.",
+    "Choose the stop control first.": "Scegli prima il controllo di arresto.",
+    "A stop test is already running.": "Una prova di arresto è già in corso.",
+    "The charger limit is stopping the charger now. Try again later.": "Il limite del caricatore sta fermando il caricatore ora. Riprova più tardi.",
+    "Plug in and start charging to test.": "Collega l'auto e avvia la ricarica per provare.",
+    "Home Assistant restarted": "Home Assistant riavviato"
   }
 };

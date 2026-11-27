@@ -335,6 +335,113 @@ class FailureTests(Base):
         self.assertIsNone(self.cl.state["failed"])
 
 
+class SlowStopTests(Base):
+    """A slow charger or power sensor: the stop is watched longer before it counts as failed, and clears itself later."""
+
+    def slow_power(self, delay):
+        """The power sensor keeps reading 7200 W for `delay` seconds after the charger was stopped."""
+        since = {"t": None}
+
+        def get(entity):
+            if entity == "sensor.charger_power":
+                if not self.world.stopped():
+                    since["t"] = None
+                    return st("7200", {"unit_of_measurement": "W"})
+                since["t"] = self.now if since["t"] is None else since["t"]
+                return st("7200" if self.now - since["t"] < delay else "0", {"unit_of_measurement": "W"})
+            return World.get(self.world, entity)
+        self.world.get = get
+
+    async def test_a_slow_power_drop_inside_the_extra_watch_is_a_stop_without_a_new_command(self):
+        self.slow_power(cl.MAX_ATTEMPTS * (cl.VERIFY + cl.RETRY_DELAY) + 120)
+        await self.reach()
+        self.assertEqual(self.cl.phase(), "stopped")
+        self.assertIsNone(self.cl.state["failed"])
+        self.assertEqual(self.world.control, "locked")
+        self.assertEqual([c[1] for c in self.world.calls], ["lock"] * cl.MAX_ATTEMPTS, "no command is sent while watching")
+        self.assertEqual(self.engine.records[-1][2]["title"], "Charging reached target · 80%")
+        self.assertEqual(self.cl.state["last_attempt"]["result"], "stopped_after_wait")
+
+    async def test_a_power_drop_after_the_extra_watch_fails_with_the_power_reason(self):
+        self.slow_power(10 ** 6)
+        await self.reach()
+        self.assertEqual(self.cl.phase(), "failed")
+        reason = "The charger could not be stopped: power still 7200 W from sensor.charger_power"
+        self.assertEqual(self.cl.state["failed"], reason)
+        self.assertEqual(self.engine.records[-1][2]["message"], reason)
+        health = importlib.import_module("dcpkg.health")
+        check = health.charger_limit_checks(self.cl)[0]
+        self.assertEqual((check["status"], check["detail"]), ("error", reason))
+        self.assertEqual((check["detail_key"], check["args"]), (cl.REASONS["power"], ["7200", "sensor.charger_power"]))
+
+    async def test_a_control_that_does_not_change_names_the_control_and_its_state(self):
+        self.world.stuck = True
+        await self.reach()
+        self.assertEqual(self.cl.state["failed"], "The charger could not be stopped: lock.garage_charger_lock did not change (reads unlocked)")
+        self.assertEqual(self.cl.state["last_attempt"]["check"], "control lock.garage_charger_lock did not change (reads unlocked, expected locked)")
+
+    async def test_a_service_error_and_an_unavailable_control_are_named(self):
+        self.world.fail = 99
+        await self.reach()
+        self.assertEqual(self.cl.state["failed"], "The charger could not be stopped: charger offline")
+        self.cl.state.update(failed=None, failed_reason=None)
+
+        async def gone(domain, service, data):
+            self.world.calls.append((domain, service, data["entity_id"]))
+            self.world.control = "unavailable"
+        self.cl.call = gone
+        self.world.control = "unlocked"
+        await self.cl.stop_charging(80)
+        self.assertEqual(self.cl.state["failed"], "The charger could not be stopped: lock.garage_charger_lock is unavailable")
+
+    async def test_a_charger_that_reads_stopped_later_clears_the_failure_and_holds_the_stop(self):
+        self.world.stuck = True
+        await self.reach()
+        self.assertEqual(self.cl.phase(), "failed")
+        self.world.stuck = False
+        self.world.control = "locked"  # the charger applied the stop at last
+        with self.assertLogs("dcpkg.charger_limit", "WARNING") as logs:
+            await self.tick(5)
+        self.assertIn("reads stopped now", "\n".join(logs.output))
+        self.assertIsNone(self.cl.state["failed"])
+        self.assertIsNone(self.cl.state["failed_reason"])
+        self.assertEqual(self.cl.phase(), "stopped")
+        self.assertTrue(self.cl.state["engaged"])
+        self.assertEqual(self.engine.records[-1][2]["title"], "The charger stopped later")
+        self.assertEqual(self.cl.state["last_attempt"]["result"], "stopped_later")
+        health = importlib.import_module("dcpkg.health")
+        self.assertEqual(health.charger_limit_checks(self.cl)[0]["status"], "ok")
+        self.world.plugged = False  # held as ours: unplugging releases it
+        await self.tick(5)
+        self.assertEqual(self.world.control, "unlocked")
+
+    async def test_a_failure_is_logged_with_the_record_and_kept_for_diagnostics(self):
+        self.slow_power(10 ** 6)
+        with self.assertLogs("dcpkg.charger_limit", "WARNING") as logs:
+            await self.reach()
+        self.assertIn("power still 7200 W from sensor.charger_power", "\n".join(logs.output))
+        record = self.store["charger_limit_state"]["last_attempt"]  # saved with the state
+        self.assertEqual((record["result"], record["control"], record["expected_stop"], record["power_entity"]),
+                         ("failed", CONTROL, "locked", "sensor.charger_power"))
+        self.assertEqual(len(record["tries"]), cl.MAX_ATTEMPTS)
+        first = record["tries"][0]
+        self.assertEqual((first["before"]["control"], first["after"]["control"]), ("unlocked", "locked"))
+        self.assertLessEqual(len(first["samples"]), cl.KEEP_SAMPLES)
+        self.assertEqual((first["samples"][-1]["power"], first["samples"][-1]["unit"], first["samples"][-1]["power_w"]), ("7200", "W", 7200.0))
+        self.assertGreaterEqual(record["watch"]["until"] - record["watch"]["from"], cl.WATCH_MORE)
+        diagnostics = importlib.import_module("dcpkg.diagnostics")
+
+        async def db(op, *args):
+            return {"sessions": 0, "active": None} if op == "summary" else None
+        hass = SimpleNamespace(data={diagnostics.DOMAIN: SimpleNamespace(db=db, vehicles={"car": SimpleNamespace(charger_limit=self.cl)})})
+        out = await diagnostics.async_get_config_entry_diagnostics(hass, SimpleNamespace(unique_id="car"))
+        self.assertEqual(out["charger_limit"]["config"]["control"], CONTROL)
+        self.assertEqual(out["charger_limit"]["last_attempt"]["reason"]["key"], cl.REASONS["power"])
+        self.assertEqual(out["charger_limit"]["state"]["failed"], self.cl.state["failed"])
+        out = await diagnostics.async_get_config_entry_diagnostics(hass, SimpleNamespace(unique_id="other"))
+        self.assertIsNone(out["charger_limit"])
+
+
 class AlertFlagTests(Base):
     """What the alerts read from the limit: stopped on purpose, about to stop, and whether it will tell the phones itself."""
 
@@ -547,13 +654,13 @@ class ChoiceListTests(unittest.TestCase):
         self.ctl = cl.ChargerLimit(runtime)
 
     def test_every_lock_switch_and_input_boolean_is_listed_sorted_by_name(self):
-        self.assertEqual(cl.controls(self.hass), [{"entity": "lock.door", "name": "lock.door"},
-                                                  {"entity": "switch.garage_pump", "name": "Pump"},
-                                                  {"entity": "input_boolean.charge_stop", "name": "Stop charging"}])
+        self.assertEqual(cl.controls(self.hass), [{"entity": "lock.door", "name": "lock.door", "fit": False},
+                                                  {"entity": "switch.garage_pump", "name": "Pump", "fit": False},
+                                                  {"entity": "input_boolean.charge_stop", "name": "Stop charging", "fit": True}])
 
     def test_the_power_and_energy_lists_hold_only_their_device_class(self):
         choices = self.ctl.choices()
-        self.assertEqual(choices["power_sensors"], [{"entity": "sensor.power_total", "name": "Power Total"}])
+        self.assertEqual(choices["power_sensors"], [{"entity": "sensor.power_total", "name": "Power Total", "fit": True}])
         self.assertEqual(choices["energy_sensors"], [{"entity": "sensor.forward_energy_total", "name": "Forward energy"}])
         self.assertEqual(len(choices["all_controls"]), 3)
 
@@ -1208,3 +1315,169 @@ class CommandProfileSaveTests(CommandBase):
         self.assertEqual((self.cl.config["profile"], self.cl.config["stop_option"], self.cl.config["start_option"]), ("feyree", "Stop charging", "Start charging"))
         await self.cl.save({"control": "lock.garage_charger_lock"})
         self.assertEqual((self.cl.config["profile"], self.cl.config["stop_option"]), ("auto", None))
+
+
+# -- the pickers: only entities that look like a charger's, 'Show all' lists everything ------------------------------------------------
+def fake_states(*entries):
+    """(entity_id, friendly name, attributes) -> Home Assistant states for the pickers."""
+    states = [SimpleNamespace(entity_id=e, state="off", attributes={"friendly_name": n, **(a or {})}) for e, n, a in entries]
+    return SimpleNamespace(states=SimpleNamespace(async_all=lambda: states, get=lambda x: next((s for s in states if s.entity_id == x), None)))
+
+
+class PickerFilterTests(unittest.TestCase):
+    def test_a_control_fits_by_a_charger_word_in_any_language_and_never_a_child_lock(self):
+        for entity, name in (("switch.wallbox_pause", "Pause"), ("lock.evse", "EVSE"), ("switch.cargador_garaje", "Cargador"),
+                             ("switch.wb", "Ladegerät sperren"), ("switch.wb", "Blocco caricatore"), ("switch.wb", "Φορτιστής"),
+                             ("select.tuya_ev_charger_toggle", "Toggle"), ("switch.feyree_relay", "Relay"), ("switch.smart_plug", "Plug"),
+                             ("switch.garage", "Enchufe garaje"), ("button.wb_stop", "Stop charging")):
+            self.assertTrue(cl.control_fits(entity, name), entity + " " + name)
+        self.assertFalse(cl.control_fits("switch.wallbox_child_lock", "Child lock"))
+        self.assertFalse(cl.control_fits("switch.wb", "Kindersicherung Ladegerät"))
+        self.assertFalse(cl.control_fits("switch.garage_pump", "Pump"))
+        self.assertFalse(cl.control_fits("light.wallbox_led", "Wallbox LED"), "only locks, switches, input_booleans, selects and buttons")
+        self.assertTrue(cl.control_fits("switch.relay_1", "Relay 1 Garage V2C Trydan"), "the device name counts")
+
+    def test_a_power_sensor_fits_unless_it_is_named_for_the_house_grid_or_solar(self):
+        self.assertTrue(cl.power_fits("sensor.wallbox_power", "Power"))
+        for entity, name in (("sensor.house_power", "House"), ("sensor.grid_import_power", "Grid"), ("sensor.solar_power", "Solar"),
+                             ("sensor.inverter_ac_power", "Inverter")):
+            self.assertFalse(cl.power_fits(entity, name), entity)
+        self.assertTrue(cl.power_fits("sensor.home_wallbox_power", "Home wallbox"), "a charger word wins")
+
+    def test_the_lists_carry_fit_and_keep_everything_for_show_all(self):
+        hass = fake_states(("switch.wallbox_pause", "Wallbox pause", None), ("switch.wallbox_child_lock", "Wallbox child lock", None),
+                           ("switch.garage_pump", "Pump", None), ("lock.s05_doors", "Doors", None),
+                           ("sensor.wallbox_power", "Wallbox power", {"device_class": "power", "unit_of_measurement": "W"}),
+                           ("sensor.grid_power", "Grid power", {"unit_of_measurement": "kW"}),
+                           ("sensor.s05_power", "Car power", {"unit_of_measurement": "kW"}),
+                           ("sensor.wallbox_current", "Current", {"unit_of_measurement": "A"}))
+        ctl = cl.controls(hass, {"lock.s05_doors"})
+        self.assertEqual({c["entity"]: c["fit"] for c in ctl}, {"switch.wallbox_pause": True, "switch.wallbox_child_lock": False, "switch.garage_pump": False},
+                         "the car's own control is never listed, the others are listed with fit")
+        power_list = cl.sensors(hass, "power", {"sensor.s05_power"})
+        self.assertEqual({p["entity"]: p["fit"] for p in power_list}, {"sensor.wallbox_power": True, "sensor.grid_power": False, "sensor.s05_power": False},
+                         "a unit alone makes a power sensor; the car's and the grid's are listed only under Show all")
+
+    def test_a_child_lock_of_the_charger_device_is_not_fit_and_buttons_fit_by_their_command(self):
+        runtime = SimpleNamespace(hass=fake_states(), config={"prefix": "s05", "entities": {}}, hub=None, vehicle="car", notifications=None, preconditioning=None)
+        ctl = cl.ChargerLimit(runtime)
+        entries = [{"entity_id": "lock.wb_lock", "name": "Charger lock", "device_class": ""},
+                   {"entity_id": "switch.wb_child_lock", "name": "Child lock", "device_class": ""},
+                   {"entity_id": "button.wb_start_charging", "name": "Start charging", "device_class": ""},
+                   {"entity_id": "button.wb_restart", "name": "Reboot", "device_class": ""}]
+        with mock.patch.object(cl, "device_entries", lambda hass, device_id: entries):
+            self.assertEqual({e["entity"]: e["fit"] for e in ctl.entities_of("dev")}, {"lock.wb_lock": True, "switch.wb_child_lock": False, "button.wb_start_charging": True})
+            self.assertEqual({e["entity"]: e["fit"] for e in ctl.entities_of("dev", "button")}, {"button.wb_start_charging": True, "button.wb_restart": False})
+
+
+# -- 'Test stop': the real stop path, a report, then charging again; never a phone message, never the sticky failure ----------------------
+class StopTestTests(Base):
+    async def run_test(self):
+        snap = self.cl.start_test()
+        self.assertEqual(snap["test"]["last"]["result"], "running")
+        await self.cl._test_task
+        await asyncio.sleep(0)
+        return self.cl.state["stop_test"]
+
+    def assertQuiet(self):
+        self.assertIsNone(self.cl.state["failed"], "a test never sets the sticky failure")
+        self.assertEqual(self.engine.sent, [], "a test never sends a phone message")
+
+    async def test_a_stop_that_works_reports_the_time_and_starts_charging_again(self):
+        test = await self.run_test()
+        self.assertEqual((test["result"], test["restarted"]), ("ok", True))
+        self.assertEqual(test["took"], 0)
+        self.assertEqual(self.world.calls, [("lock", "lock", CONTROL), ("lock", "unlock", CONTROL)])
+        self.assertEqual(self.world.control, "unlocked")
+        self.assertFalse(self.cl.state["release_pending"])
+        self.assertFalse(self.cl.state["engaged"])
+        self.assertQuiet()
+        self.assertEqual(self.engine.records[-1][2]["title"], "Charger stop test: ok")
+        self.assertEqual(self.engine.records[-1][2]["message"], "Stopped in 0 s. Charging restarted.")
+        record = self.cl.diagnostics()["state"]["stop_test"]["record"]
+        self.assertEqual((record["test"], record["result"], record["control"]), (True, "stopped", CONTROL), "the diagnostic record is kept")
+        self.assertEqual(self.cl.snapshot()["test"]["last"]["result"], "ok")
+
+    async def test_a_stop_that_changes_nothing_names_the_reason_and_does_not_send_again(self):
+        self.world.stuck = True
+        test = await self.run_test()
+        self.assertEqual(test["result"], "failed")
+        self.assertEqual(test["reason"], {"key": cl.REASONS["unchanged"], "args": [CONTROL, "unlocked"]})
+        self.assertEqual(self.world.calls, [("lock", "lock", CONTROL)], "one command, then the extra watch; the control already allows charging")
+        self.assertTrue(test["restarted"])
+        self.assertQuiet()
+        self.assertEqual(self.engine.records[-1][2]["title"], "Charger stop test: failed (The charger could not be stopped: %s did not change (reads unlocked))" % CONTROL)
+
+    async def test_a_service_error_is_reported_without_the_long_watch(self):
+        self.world.fail = 1
+        start = self.now
+        test = await self.run_test()
+        self.assertEqual(test["reason"], {"key": cl.REASONS["error"], "args": ["charger offline"]})
+        self.assertLess(self.now - start, cl.VERIFY, "no waiting after an error")
+        self.assertQuiet()
+
+    async def test_a_restart_that_fails_is_reported_and_kept_pending(self):
+        real = self.world.call
+
+        async def call(domain, service, data):
+            if service == "unlock":
+                self.world.calls.append((domain, service, data["entity_id"]))
+                raise RuntimeError("charger offline")
+            await real(domain, service, data)
+        self.cl.call = call
+        test = await self.run_test()
+        self.assertEqual((test["result"], test["restarted"]), ("ok", False))
+        self.assertTrue(self.cl.state["release_pending"], "Companion keeps trying to start the charger")
+        self.assertEqual(self.engine.records[-1][2]["message"], "Stopped in 0 s. Charging could not be restarted. Companion will keep trying.")
+        self.assertQuiet()
+        self.cl.call = real
+        await self.tick(cl.INTERVAL)
+        self.assertFalse(self.cl.state["release_pending"])
+        self.assertEqual(self.world.control, "unlocked")
+
+    async def test_it_refuses_when_not_charging_busy_without_a_control_or_already_running(self):
+        self.world.plugged = False
+        with self.assertRaisesRegex(ValueError, "Plug in and start charging to test."):
+            self.cl.start_test()
+        self.world.plugged, self.world.car_charging = True, False
+        with self.assertRaisesRegex(ValueError, "Plug in and start charging"):
+            self.cl.start_test()
+        self.assertEqual(self.cl.snapshot()["test"]["block"], "not_charging")
+        self.world.car_charging = True
+        self.cl._stopping = True
+        with self.assertRaisesRegex(ValueError, "stopping the charger now"):
+            self.cl.start_test()
+        self.cl._stopping = False
+        self.cl.state["engaged"] = True
+        with self.assertRaisesRegex(ValueError, "stopping the charger now"):
+            self.cl.start_test()
+        self.cl.state["engaged"] = False
+        self.assertIsNone(self.cl.test_block())
+        self.cl.start_test()
+        with self.assertRaisesRegex(ValueError, "already running"):
+            self.cl.start_test()
+        await self.cl._test_task
+        self.cl.config["control"] = None
+        self.assertEqual(self.cl.test_block(), "no_control")
+        self.assertEqual(self.world.calls, [("lock", "lock", CONTROL), ("lock", "unlock", CONTROL)], "only the one test touched the charger")
+
+    async def test_a_test_interrupted_by_a_restart_is_failed_and_charging_is_started_again(self):
+        self.world.control = "locked"
+        self.store["charger_limit_state"] = {"release_pending": True, "release_config": {"control": CONTROL, "on_stops": True},
+                                             "stop_test": {"result": "running", "started": T0}}
+        again = cl.ChargerLimit(self.runtime, clock=lambda: self.now, sleep=self.cl.sleep, call=self.world.call)
+        again._listen = lambda: None
+        await again.load()
+        again.config = self.cl.config
+        self.assertEqual(again.state["stop_test"]["result"], "failed")
+        await again.evaluate()
+        self.assertEqual(self.world.control, "unlocked")
+
+
+class CommandStopTestTests(CommandBase):
+    async def test_a_feyree_charger_is_stopped_and_started_with_its_options(self):
+        self.cl.start_test()
+        await self.cl._test_task
+        self.assertEqual(self.world.sent, [("select", "select_option", "Stop charging"), ("select", "select_option", "Start charging")])
+        self.assertEqual((self.cl.state["stop_test"]["result"], self.cl.state["stop_test"]["restarted"]), ("ok", True))
+        self.assertEqual(self.engine.sent, [])

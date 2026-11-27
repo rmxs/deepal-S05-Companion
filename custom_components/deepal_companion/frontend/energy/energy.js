@@ -519,7 +519,7 @@ class ChargingCosts {
       const g=this.model?.chg.find(row=>String(row.s)===button.dataset.start);if(!g)return;
       button.disabled=true;
       try{
-        const module=await import('/deepal_companion/frontend/charging-curve.js?v=2.0.1-b2&rev=20261126-02');if(!this.host.isConnected)return;
+        const module=await import('/deepal_companion/frontend/charging-curve.js?v=2.0.1-b3&rev=20261127-01');if(!this.host.isConnected)return;
         this.curveDialog?.remove();
         this.curveDialog=module.openCurveDialog(this.host.getRootNode(),this.card._hass,async()=>{
           if(g.id&&!String(g.id).startsWith('recorder_')){const data=await this.card._hass.companionRequest('session_curve',{session_id:g.id});return {...data,mode:data.mode||(typeof g.dc==='boolean'?(g.dc?'DC':'AC'):null)};}
@@ -804,7 +804,8 @@ EN.panel = (d, card, options = {}) => {
     const n = d.querySelector(".en-nav"); if (!n) return;
     const now=Date.now(),t0=wkStart(off,now),t1=wkEnd(off,now)-1, fm = { format: (t) => K.haFmt(get()).dm(t) };
     const noPrev = !options.chartOnly && limitT !== null && limitT > t0, days = limitT !== null ? Math.max(1, Math.round((Date.now() - limitT) / 86400000)) : 0;
-    const pillSnap = window.__DEEPAL_COMPANION_UI?.pillSnap?.(n); n.innerHTML = `<div class="seg" role="group" aria-label="${esc(T("Period"))}"><button data-period="7" data-k="period" class="${period === 7 ? "on" : ""}" aria-pressed="${period === 7}">${esc(T("Weekly"))}</button><button data-period="30" data-k="period" class="${period === 30 ? "on" : ""}" aria-pressed="${period === 30}">${esc(T("Monthly"))}</button></div><div class="en-dates"><button class="btn" data-wk="-1" aria-label="${esc(T("Previous period"))}"${noPrev ? " disabled" : ""}>${ico("chevl")}</button><div class="en-wk"><b>${esc(fm.format(t0))} – ${esc(fm.format(t1))}</b><small>${esc(T(off === 0 ? "Last {0} days" : "{0}-day period", period))}</small></div><button class="btn" data-wk="1" aria-label="${esc(T("Next period"))}"${off >= 0 ? " disabled" : ""}>${ico("chevr")}</button></div>${noPrev ? `<p class="hint en-lim">${esc(T("Recorder limit: history goes back about {0} days.", days))}</p>` : ""}`;
+    const limitNote = days === 1 ? "Recorder limit: history goes back about 1 day." : "Recorder limit: history goes back about {0} days.";
+    const pillSnap = window.__DEEPAL_COMPANION_UI?.pillSnap?.(n); n.innerHTML = `<div class="seg" role="group" aria-label="${esc(T("Period"))}"><button data-period="7" data-k="period" class="${period === 7 ? "on" : ""}" aria-pressed="${period === 7}">${esc(T("Weekly"))}</button><button data-period="30" data-k="period" class="${period === 30 ? "on" : ""}" aria-pressed="${period === 30}">${esc(T("Monthly"))}</button></div><div class="en-dates"><button class="btn" data-wk="-1" aria-label="${esc(T("Previous period"))}"${noPrev ? " disabled" : ""}>${ico("chevl")}</button><div class="en-wk"><b>${esc(fm.format(t0))} – ${esc(fm.format(t1))}</b><small>${esc(T(off === 0 ? "Last {0} days" : "{0}-day period", period))}</small></div><button class="btn" data-wk="1" aria-label="${esc(T("Next period"))}"${off >= 0 ? " disabled" : ""}>${ico("chevr")}</button></div>${noPrev ? `<p class="hint en-lim">${esc(T(limitNote, days))}</p>` : ""}`;
     window.__DEEPAL_COMPANION_UI?.pillApply?.(n,pillSnap);
 
   };

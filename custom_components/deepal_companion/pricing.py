@@ -4,6 +4,19 @@ from __future__ import annotations
 from .charging import number
 
 
+# The units the integration converts by itself, as charger_limit.py lists them. An exact spelling wins, so "MW" is
+# megawatt and "mW" milliwatt; other spellings are matched lower case. A unit that is not listed is never guessed.
+POWER_UNITS = {"mw": .000001, "MW": 1000.0, "w": .001, "kw": 1.0}  # -> kW
+ENERGY_UNITS = {"wh": .001, "kwh": 1.0, "mwh": .000001, "MWh": 1000.0}  # -> kWh; an exact spelling wins, so "MWh" is megawatt-hour and "mWh" milliwatt-hour
+
+
+def unit_factor(unit, power):
+    """The multiplier that turns a reading into kW (power) or kWh (energy); None for a unit that is not listed."""
+    units = POWER_UNITS if power else ENERGY_UNITS
+    text = str(unit or "").strip()
+    return units.get(text, units.get(text.lower()))
+
+
 def nonnegative(value):
     if value in (None, ""):
         return None
@@ -20,7 +33,7 @@ def calculate(session, record=None, readings=None, unit=""):
     kind = profile.get("source", "battery")
     if energy is None and kind != "battery":
         power = kind == "power"
-        factor = ({"W": .001, "kW": 1} if power else {"Wh": .001, "kWh": 1}).get(unit)
+        factor = unit_factor(unit, power)
         rows = [(t, n) for t, v in (readings or []) if (n := nonnegative(v)) is not None and t <= session["e"]]
         before = [r for r in rows if r[0] <= session["s"]]
         if factor is not None and before and session["s"] - before[-1][0] <= 20 * 60e3:

@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.0.1-b3 — Beta
+
+### Fixed
+- **Charger limit: a slow stop is no longer a failure:** after its three tries the limit now keeps watching the charger for up to 5 more minutes, without sending the command again. If the control reads stopped and the power drops below 50 W in that time, the stop counts as done. Before, a charger or power sensor that answered slowly was reported as "The charger did not stop" and the control was let go.
+- **Charger limit: a failure clears itself:** when the limit had reported that it could not stop the charger and the charger later reads stopped, the failure is cleared on its own, the activity log says "The charger stopped later", and the stop is held like a normal one (unplugging or a higher target lets go of it). Before, the error stayed until a setting was changed.
+- **Charger limit: the reason is named:** a failed stop now says why — the control is unavailable, the control did not change (with what it reads), the power is still a number of watts (with the sensor), the status still reads charging, or the error text of the command. Health, the activity log and the phone message show it, and the log has a warning with every try.
+- **Charger limit in Download diagnostics:** the diagnostics file now includes the charger limit settings (entity ids only) and a record of the last stop: times, charger type, expected stop state, the control, power (value and unit) and status read before, during and after each try and during the extra watch, and which check failed. Home Assistant needs a restart for this.
+- **Energy sheet wording:** with a recorder that keeps about one day of history, the hint now reads “history goes back about 1 day”, not “about 1 days”. German, Greek, Spanish and Italian use the singular too.
+- **Charging costs units:** a power or energy sensor in MW, mW or MWh is converted like W, kW, Wh and kWh, and a unit written in another case (for example `kwh`) is read too. Before, such a meter was ignored and the battery estimate was used instead.
+- **Milliwatt-hour is not megawatt-hour:** a sensor reporting `mWh` was read with the lowercase `mwh` key as megawatt-hour, a billion times too large. `mWh` is now a milli unit and only the exact spelling `MWh` is megawatt-hour; the unit test covers both.
+- **Closed dashboard page is released:** the editor bridge replaced the settings page's `disconnectedCallback` instead of extending it, so the resize observer that fits the tiles was never disconnected. It now calls the original first, then frees the translation watchers.
+- **Dashboard page memory:** a closed dashboard page now also unregisters its language watcher; before, the mutation observer kept the removed page in memory until another dashboard registered or the language changed.
+- **Choice fields after reopening:** a `deepal-companion-choice` that was removed and inserted again translates its labels again; it watches its labels on connect instead of in the constructor, where a later `watch()` pruned it.
+- **Design style names translated:** Card profile default, Mobile, Tablet, Energy and Modern Cockpit now use the dashboard's translation like the other options.
+- **Temperature and Energy lines aligned:** the Energy tile's two range rows sat about 1 px higher than the Temperature tile's text. "115" now starts on the same line as "Inside", and "492" on the same line as the 22 °C value, with the same 14.9 px between the two rows on both tiles (measured at 390 px and 320 px).
+- **Comfort chips at the bottom of the Temperature tile:** the seat-heating, seat-ventilation and steering-wheel chips were drawn in the text flow right under the inside temperature; on a normal-width tile they are now pinned to the bottom-left, on the same left and bottom line as its text, so the temperature stays alone at the top. On a very narrow card (a 320 px card) they stay under the text, because the round power knob covers that corner there.
+
+### Changed
+- Stop test and picker texts translated (de, el, es, it)
+- **Charger limit: Test stop:** a new "Test stop" button under "Stops charging when it is" stops the charger now, the same way the real limit does (same check, same diagnostic record), shows how many seconds the stop took or why it failed, and then starts charging again (the start option, the opposite switch position or unlock). It asks first, works only while the car is plugged in and charging (otherwise it says why), and never runs while the limit itself is stopping the charger. A test never sends a phone message and never leaves the "could not stop" error; the activity log gets "Charger stop test: ok" or "Charger stop test: failed (reason)". If charging cannot be started again, Companion keeps trying, as after a real stop. Home Assistant needs a restart.
+- **Charger limit: shorter pickers:** "Choose another…" for the stop control now lists only locks, switches, selects and buttons that look like a charger (a charger, wallbox, EVSE, plug or socket name, device or integration, in the five languages), never a child lock; the power sensor list leaves out sensors named for the house, the grid or solar and the car's own sensors, and now also offers sensors that only have a W or kW unit. The start and stop button pickers of a button charger list only buttons named like a command. A last "Show all…" option lists everything, and a chosen entity always stays in the list.
+- Charger stop reasons translated (de, el, es, it).
+- **More icons for your own sensors:** five new hand-drawn icons in the card's line style — **car** (front view), **charger** (charge point: bolt on a post), **switch** (toggle switch), **socket** (earth slot above two holes) and **garage door** (roll-up door panel) — and the existing **power** symbol and **car (side view)** are now offered in the icon picker too. Every shape was checked in the picker at real size next to the older icons; the first drafts of switch (read as a screen tile), socket (read as a smiley), charger (read as a fuel pump) and garage door (looked like a second garage) were redrawn.
+- **Warning colour from the palette:** the Health warning dot and the unpriced cost figure use the `--ds-warn` token instead of the hardcoded ambers `#f5b301` and `#e6b15c`.
+- **44 px controls:** the dashboard's base button, the archived-curve button and the start hint's copy button are at least 44 px high, and the shared control height `--cp-ctl-h` is 44 px so buttons match the 44 px inputs beside them.
+- **One radius token:** `--ctl-r` now follows `--cp-ctl-r` instead of repeating `12px`.
+- **Unused reset removed:** the settings save path no longer carries a reset flag (`_saveYaml(reset)`, `_compReset`, `config_patch`, `patch_config`). Nothing in the card, the dashboard or the editor could set it.
+
+### Checks
+- **Tests and CI:** the notifications test now sets the wide viewport it asserts, so NAV_ONLY no longer fails when the phone-width dashboard module runs before it. CI also runs SECTIONS_ONLY, NOTIFY_FEATURES_ONLY, PRECOND_NOTIFY_LINK_ONLY, PRECOND_UI_ONLY, STALE_ONLY and CHARGE_TARGET_ONLY, five standalone frontend checks, and compares every committed `.gz` with its `.js` before the build.
+- **Tests and CI:** CI now runs the recommended-notifications and energy-cost tests (NOTIFY_RECOMMENDED_ONLY, ENERGY_COST_ONLY); the repeated navigation step is removed, and the boot-loading check now runs in the full browser run.
+
 ## 2.0.1-b2 — Beta
 
 ### Fixed

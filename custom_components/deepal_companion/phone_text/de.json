@@ -118,5 +118,18 @@
   "The charger limit is no longer live.": "Die Ladegrenze ist nicht mehr aktiv.",
   "The charger settings changed.": "Die Ladegerät-Einstellungen wurden geändert.",
   "The charger could not be released": "Das Ladegerät konnte nicht freigegeben werden",
-  "The charger could not be put back to charging. Companion will keep trying.": "Das Ladegerät konnte nicht wieder auf Laden gestellt werden. Companion versucht es weiter."
+  "The charger could not be put back to charging. Companion will keep trying.": "Das Ladegerät konnte nicht wieder auf Laden gestellt werden. Companion versucht es weiter.",
+  "The charger could not be stopped: {0} is unavailable": "Das Ladegerät konnte nicht gestoppt werden: {0} ist nicht verfügbar",
+  "The charger could not be stopped: {0} did not change (reads {1})": "Das Ladegerät konnte nicht gestoppt werden: {0} hat sich nicht geändert (zeigt {1})",
+  "The charger could not be stopped: power still {0} W from {1}": "Das Ladegerät konnte nicht gestoppt werden: Leistung noch {0} W von {1}",
+  "The charger could not be stopped: {0} still reads {1}": "Das Ladegerät konnte nicht gestoppt werden: {0} zeigt noch {1}",
+  "The charger stopped later": "Das Ladegerät hat später doch gestoppt",
+  "The charger reads stopped now, so the earlier failure is cleared.": "Das Ladegerät zeigt jetzt gestoppt, der frühere Fehler ist damit behoben.",
+  "The charger did not stop": "Das Ladegerät wurde nicht gestoppt",
+  "Charger stop test: ok": "Stopp-Test des Ladegeräts: OK",
+  "Charger stop test: failed ({0})": "Stopp-Test des Ladegeräts: fehlgeschlagen ({0})",
+  "Stopped in {0} s.": "Gestoppt in {0} s.",
+  "Charging restarted.": "Laden wieder gestartet.",
+  "Charging could not be restarted. Companion will keep trying.": "Das Laden konnte nicht wieder gestartet werden. Companion versucht es weiter.",
+  "Home Assistant restarted": "Home Assistant neu gestartet"
 }

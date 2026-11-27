@@ -38,7 +38,12 @@ const styles=`
 .cl .cl-hint{margin:0;font-size:12px;line-height:1.5;color:var(--ds-fg2,var(--secondary-text-color))}
 .cl .cl-polhint{margin:2px 0 0;min-width:0;font-size:11px;line-height:1.3;overflow-wrap:anywhere;color:var(--ds-fg2,var(--secondary-text-color))}
 .cl .cl-pick{display:grid;gap:var(--cl-gap);min-width:0;margin-top:6px}
-.cl .cl-act{justify-self:stretch;min-height:44px;border-radius:14px;border:1px solid var(--cp-off-line);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer;padding:0 14px}
+.cl .cl-act,.cl .cl-tbtn{justify-self:stretch;min-height:44px;border-radius:14px;border:1px solid var(--cp-off-line);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer;padding:0 14px}
+/* Test stop: the button and one short line beside it (why it is off, running, or the last result); wraps under the button on a narrow screen */
+.cl .cl-test{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;min-width:0;margin-top:6px}
+.cl .cl-tbtn{flex:none}.cl .cl-tbtn:disabled{opacity:.55;cursor:default}
+.cl .cl-testmsg{flex:1 1 140px;min-width:0;margin:0;font-size:11px;line-height:1.3;overflow-wrap:anywhere;color:var(--ds-fg2,var(--secondary-text-color))}
+.cl .cl-testmsg[data-tone=ok]{color:rgb(var(--ds-ok,52,211,153))}.cl .cl-testmsg[data-tone=warn]{color:rgb(var(--ds-warn,250,204,21))}.cl .cl-testmsg[data-tone=bad]{color:rgb(var(--ds-bad,248,113,113))}
 .cl .cl-slide{display:grid;gap:2px;min-width:0}
 .cl .cl-slide input[type=range]{height:36px}
 .cl input[type=range]{-webkit-appearance:none;appearance:none;display:block;width:100%;height:44px;margin:0;padding:0;background:transparent;--p:0%}
@@ -79,15 +84,38 @@ export async function mountCharger(panel,stage,options={}){
     +'<div class="cl-row" data-r="energy"><div class="cl-lh"><label for="cl-energy"></label><span class="cl-val" data-val="energy"></span></div><select id="cl-energy" data-f="energy"></select></div>'
     +'</div>'
     +'<div class="cl-row" data-r="polarity"><span class="cl-label"></span><div class="seg" role="group" data-f="on_stops"></div><p class="cl-polhint"></p>'
-    +'<div class="cl-pick" hidden><div class="cl-row"><div class="cl-lh"><label for="cl-stopopt"></label></div><select id="cl-stopopt" data-f="stop_option"></select></div><div class="cl-row"><div class="cl-lh"><label for="cl-startopt"></label></div><select id="cl-startopt" data-f="start_option"></select></div></div></div>'
+    +'<div class="cl-pick" hidden><div class="cl-row"><div class="cl-lh"><label for="cl-stopopt"></label></div><select id="cl-stopopt" data-f="stop_option"></select></div><div class="cl-row"><div class="cl-lh"><label for="cl-startopt"></label></div><select id="cl-startopt" data-f="start_option"></select></div></div>'
+    +'<div class="cl-test" hidden><button type="button" class="cl-tbtn"></button><p class="cl-testmsg" role="status"></p></div></div>'
     +'<button type="button" class="cl-act" hidden></button>'
     +'<div class="cl-mode"><div class="cl-row" data-r="mode"><span class="cl-label"></span><div class="seg" role="group" data-f="mode"></div></div><p class="cl-hint"></p></div>'
     +'</div></section>';
   stage.append(host);
   const q=s=>host.querySelector(s);
-  let dead=false,busy=false,again=false,timer=null,liveTimer=null,data=null,saving=false,pickAll=false;const owner={...panel.selected};
+  let dead=false,busy=false,again=false,timer=null,liveTimer=null,testTimer=null,data=null,saving=false,pickAll=false;const owner={...panel.selected};
   const uiNoun=e=>String(e||'').startsWith('lock.');
   const ctlLabel=e=>e.name&&e.name!==e.entity?e.name+' ('+e.entity+')':e.entity;
+  /* the pickers list what looks like the charger's (the backend's fit flag; a list without it shows everything); the chosen
+     entity always stays, and a last 'Show all…' option lists everything for that picker until another charger is chosen */
+  const showAll=new Set(),ALL='__all__';
+  function fitting(list,key,...keep){
+    const all=list||[];if(showAll.has(key))return {list:all,more:false};
+    const out=all.filter(e=>e.fit!==false||keep.includes(e.entity));return {list:out,more:out.length<all.length};
+  }
+  const more=r=>r.more?[[ALL,T('Show all…')]]:[];
+  /* the Test stop line: running, the last result (for an hour), or why the button is off */
+  const TEST_FRESH_S=3600;
+  function paintTest(cfg,locked){
+    const box=q('.cl-test'),btn=q('.cl-tbtn'),msg=q('.cl-testmsg'),test=data.test||null;
+    box.hidden=!admin||!cfg.control||!test;if(box.hidden)return;
+    const last=test.last,running=last?.result==='running',fresh=last&&last.finished&&(Number(data.now)||0)-last.finished<TEST_FRESH_S;
+    btn.textContent=T('Test stop');btn.disabled=locked||running||!!test.block;
+    let text='',tone='';
+    if(running)text=T('Testing the stop…');
+    else if(fresh&&last.result==='ok'){text='✓ '+T('Stopped in {0} s.',last.took)+' '+T(last.restarted?'Charging restarted.':'Charging could not be restarted. Companion will keep trying.');tone=last.restarted?'ok':'warn';}
+    else if(fresh&&last.result==='failed'){const r=last.reason||{};text=T(r.key||'The charger did not stop',...(r.args||[]))+(last.restarted===false?' · '+T('Charging could not be restarted. Companion will keep trying.'):'');tone='bad';}
+    else if(test.block_text)text=T(test.block_text);
+    msg.textContent=text;msg.dataset.tone=tone;msg.hidden=!text;
+  }
   /* the Settings .seg markup: the first button's data-k keys the group's sliding pill (draw() snapshots and applies it) */
   function seg(el,options,value,disabled){
     el.querySelectorAll(':scope > button').forEach(b=>b.remove());
@@ -150,9 +178,10 @@ export async function mountCharger(panel,stage,options={}){
     /* the device's own controls, or every lock, switch and input_boolean once 'Choose another...' is picked or the control is not on this device */
     const deviceCtls=data.entities||[],wide=pickAll||(!!cfg.control&&!deviceCtls.some(e=>e.entity===cfg.control));
     const ctlSel=q('#cl-control');
-    fill(ctlSel,wide?(data.all_controls||[]).map(e=>[e.entity,ctlLabel(e)]):[...deviceCtls.map(e=>[e.entity,e.name]),['__other__',T('Choose another…')]],cfg.control,T('Choose the control'));ctlSel.disabled=locked;
-    const powSel=q('#cl-power'),enSel=q('#cl-energy');
-    fill(powSel,(data.power_sensors||[]).map(e=>[e.entity,e.name]),cfg.power,T('None / not used'));powSel.disabled=locked;
+    const wideCtls=fitting(data.all_controls,'control',cfg.control),ownCtls=deviceCtls.filter(e=>e.fit!==false||e.entity===cfg.control);
+    fill(ctlSel,wide?[...wideCtls.list.map(e=>[e.entity,ctlLabel(e)]),...more(wideCtls)]:[...ownCtls.map(e=>[e.entity,e.name]),['__other__',T('Choose another…')]],cfg.control,T('Choose the control'));ctlSel.disabled=locked;
+    const powSel=q('#cl-power'),enSel=q('#cl-energy'),pows=fitting(data.power_sensors,'power',cfg.power);
+    fill(powSel,[...pows.list.map(e=>[e.entity,e.name]),...more(pows)],cfg.power,T('None / not used'));powSel.disabled=locked;
     fill(enSel,(data.energy_sensors||[]).map(e=>[e.entity,e.name]),cfg.energy,T('None / not used'));enSel.disabled=locked;
     const lock=uiNoun(cfg.control);
     polRow.querySelector('.cl-label').textContent=T('Stops charging when it is');q('.cl-polhint').textContent=T(data.control_guess?'Companion guessed this from the names. Check that this position stops charging.':'Choose the position that stops charging.');
@@ -164,7 +193,7 @@ export async function mountCharger(panel,stage,options={}){
       q('.cl-polhint').hidden=!cmd.identified;
       if(cmd.identified)q('.cl-polhint').textContent=T('Stops with “{0}” · restarts with “{1}”',cmd.stop,cmd.start);
       else{
-        const btn=cmd.kind==='button',list=btn?(cmd.buttons||[]).map(e=>[e.entity,e.name]):(cmd.options||[]).map(o=>[o,o]);
+        const btn=cmd.kind==='button',btns=fitting(cmd.buttons,'cmd',cfg.control,cfg.start_button),list=btn?[...btns.list.map(e=>[e.entity,e.name]),...more(btns)]:(cmd.options||[]).map(o=>[o,o]);
         q('label[for=cl-stopopt]').textContent=T('Stop command');q('label[for=cl-startopt]').textContent=T('Start command');
         const a=q('#cl-stopopt'),b=q('#cl-startopt');
         fill(a,list,btn?cfg.control:cfg.stop_option,T('Choose the command'));fill(b,list,btn?cfg.start_button:cfg.start_option,T('Choose the command'));a.disabled=b.disabled=locked;
@@ -174,14 +203,30 @@ export async function mountCharger(panel,stage,options={}){
     q('[data-r=mode] .cl-label').textContent=T('Mode');
     q('.cl-hint').textContent=goal>=100?T('A limit at 100% does nothing. Choose a lower target.'):goal>0?T('Dry run only tells you what it would do. The card shows the same target.'):T('Choose where charging should stop.');
     paintValues();
+    paintTest(cfg,locked);
     const act=q('.cl-act');act.hidden=!(admin&&data.phase==='stopped');act.textContent=T('Charge anyway');act.disabled=saving;
     window.__DEEPAL_COMPANION_UI?.pillApply?.(host,snap);
   }
   async function load(){
     if(dead)return;if(busy){again=true;return;}busy=true;
-    try{data=await panel.request('charger_limit_get',{},owner);if(!dead&&!saving){if(q('select:focus'))paintValues();else draw();}}
+    try{data=await panel.request('charger_limit_get',{},owner);if(!dead&&!saving){if(q('select:focus')){paintValues();paintTest(data.config,!admin||saving);}else draw();}}
     catch(error){if(!dead)q('.cl-chip').textContent=/Unknown Companion operation/i.test(error.message||'')?T('Restart Home Assistant to load the updated Companion backend.'):(window.__DEEPAL_COMPANION_UI.tError(error.message)||String(error));}
-    finally{busy=false;if(!dead&&again){again=false;load();}}
+    finally{busy=false;if(!dead&&again){again=false;load();}follow();}
+  }
+  /* while a stop test runs, ask every 2 s so its result shows as soon as it is known */
+  const TEST_POLL_MS=2000;
+  function follow(){
+    if(dead||testTimer||data?.test?.last?.result!=='running')return;
+    testTimer=setTimeout(()=>{testTimer=null;load();},TEST_POLL_MS);
+  }
+  async function runTest(){
+    const ask=window.__DEEPAL_COMPANION_UI?.confirm,title=T('Test stop'),text=T('This stops charging now to test the settings, then starts it again.');
+    const ok=ask?await ask(title,text,title):window.confirm(text);
+    if(!ok||dead)return;
+    saving=true;draw();
+    try{const result=await panel.request('charger_limit_test',{},owner);data={...data,...result};}
+    catch(error){panel.status?.(window.__DEEPAL_COMPANION_UI?.tError?.(error.message)||error.message||String(error),'error');}
+    finally{saving=false;if(!dead){draw();follow();}}
   }
   async function save(value){
     if(!admin||dead)return;saving=true;draw();
@@ -199,7 +244,8 @@ export async function mountCharger(panel,stage,options={}){
   host.addEventListener('change',event=>{
     if(event.target.id==='cl-target'){setTarget(Number(event.target.value));return;}
     const f=event.target.dataset?.f,v=event.target.value||null;
-    if(f==='device_id'){pickAll=false;save({device_id:v});}
+    if(v===ALL){showAll.add(f==='stop_option'||f==='start_option'?'cmd':f);draw();return;}
+    if(f==='device_id'){pickAll=false;showAll.clear();save({device_id:v});}
     else if(f==='control'){if(v==='__other__'){pickAll=true;draw();return;}save({control:v});}
     else if(f==='profile')save({profile:v});
     else if(f==='stop_option'||f==='start_option'){const k=data?.command?.kind==='button'?(f==='stop_option'?'control':'start_button'):f;save({[k]:v});}
@@ -208,6 +254,7 @@ export async function mountCharger(panel,stage,options={}){
   });
   host.addEventListener('click',async event=>{
     const b=event.target.closest('button');if(!b||b.disabled)return;
+    if(b.classList.contains('cl-tbtn')){runTest();return;}
     if(b.classList.contains('cl-act')){saving=true;draw();try{const result=await panel.request('charger_limit_resume',{},owner);data={...data,...result};panel.status?.(T('Saved'),'success');}catch(error){panel.status?.(error.message||String(error),'error');}finally{saving=false;draw();load();}return;}
     const f=b.parentElement?.dataset?.f;if(!f)return;
     if(f==='target'){setTarget(Number(b.dataset.v));return;}
@@ -216,5 +263,5 @@ export async function mountCharger(panel,stage,options={}){
   await load();
   if(!dead)timer=setInterval(()=>{if(!document.hidden)load();},REFRESH_MS);
   if(!dead)liveTimer=setInterval(()=>{if(!document.hidden)paintValues();},5000);
-  return {busy:false,dirty:false,flush:async()=>{},refresh:load,destroy(){dead=true;clearInterval(timer);clearInterval(liveTimer);host.remove();}};
+  return {busy:false,dirty:false,flush:async()=>{},refresh:load,destroy(){dead=true;clearInterval(timer);clearInterval(liveTimer);clearTimeout(testTimer);host.remove();}};
 }

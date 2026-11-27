@@ -118,5 +118,18 @@
   "The charger limit is no longer live.": "Το όριο φορτιστή δεν είναι πλέον ενεργό.",
   "The charger settings changed.": "Οι ρυθμίσεις του φορτιστή άλλαξαν.",
   "The charger could not be released": "Ο φορτιστής δεν μπόρεσε να απελευθερωθεί",
-  "The charger could not be put back to charging. Companion will keep trying.": "Ο φορτιστής δεν μπόρεσε να επανέλθει σε φόρτιση. Η Companion θα συνεχίσει να προσπαθεί."
+  "The charger could not be put back to charging. Companion will keep trying.": "Ο φορτιστής δεν μπόρεσε να επανέλθει σε φόρτιση. Η Companion θα συνεχίσει να προσπαθεί.",
+  "The charger could not be stopped: {0} is unavailable": "Ο φορτιστής δεν μπόρεσε να σταματήσει: το {0} δεν είναι διαθέσιμο",
+  "The charger could not be stopped: {0} did not change (reads {1})": "Ο φορτιστής δεν μπόρεσε να σταματήσει: το {0} δεν άλλαξε (δείχνει {1})",
+  "The charger could not be stopped: power still {0} W from {1}": "Ο φορτιστής δεν μπόρεσε να σταματήσει: ισχύς ακόμα {0} W από {1}",
+  "The charger could not be stopped: {0} still reads {1}": "Ο φορτιστής δεν μπόρεσε να σταματήσει: το {0} δείχνει ακόμα {1}",
+  "The charger stopped later": "Ο φορτιστής σταμάτησε αργότερα",
+  "The charger reads stopped now, so the earlier failure is cleared.": "Ο φορτιστής δείχνει πλέον σταματημένος, οπότε η προηγούμενη αποτυχία διαγράφηκε.",
+  "The charger did not stop": "Ο φορτιστής δεν σταμάτησε",
+  "Charger stop test: ok": "Δοκιμή διακοπής φορτιστή: OK",
+  "Charger stop test: failed ({0})": "Δοκιμή διακοπής φορτιστή: απέτυχε ({0})",
+  "Stopped in {0} s.": "Διακόπηκε σε {0} s.",
+  "Charging restarted.": "Η φόρτιση ξεκίνησε ξανά.",
+  "Charging could not be restarted. Companion will keep trying.": "Η φόρτιση δεν ξεκίνησε ξανά. Το Companion θα συνεχίσει να προσπαθεί.",
+  "Home Assistant restarted": "Το Home Assistant επανεκκινήθηκε"
 }
