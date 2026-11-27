@@ -281,7 +281,6 @@ if(process.env.CAR_LOG_ONLY){runStandalone('test_car_log_page.cjs');return;}
   if(process.env.CHART_ONLY){await runModule(page,"test_charging_dashboard.cjs");return;}
   if(process.env.FILTER_ONLY){await runModule(page,"test_session_filters.cjs");return;}
   if(process.env.FIELD_ONLY){await runModule(page,"test_field_choices.cjs");return;}
-  await runModule(page,"test_boot_loading.cjs");
   await require("./settings_menus.cjs")(page);
   await runModule(page,"test_tile_settings.cjs");
   await runModule(page,"test_accent_colour.cjs");
@@ -466,6 +465,7 @@ if(process.env.CAR_LOG_ONLY){runStandalone('test_car_log_page.cjs');return;}
   await runModule(page,"test_charger_card_row.cjs");
   await freshPanel();await runModule(page,"test_charger_page.cjs");
   await freshPanel();await runModule(page,"test_charging_page_layout.cjs");
+  await freshPanel();await runModule(page,"test_boot_loading.cjs");
   assert.equal(errors.length,0,errors.join("\n"));
   console.log("PASS: retained card and 5 organized settings menus; 3 independent cards; visual card profile picker and native preview events; application settings without a card/modal; direct charger settings, profile duplication and archive.");
  } finally {await browser.close();server.close();}
